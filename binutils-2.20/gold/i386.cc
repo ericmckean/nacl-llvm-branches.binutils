@@ -67,8 +67,7 @@ class Target_i386 : public Target_freebsd<32, false>
   // Process the relocations to determine unreferenced sections for 
   // garbage collection.
   void
-  gc_process_relocs(const General_options& options,
-                    Symbol_table* symtab,
+  gc_process_relocs(Symbol_table* symtab,
                     Layout* layout,
                     Sized_relobj<32, false>* object,
                     unsigned int data_shndx,
@@ -82,8 +81,7 @@ class Target_i386 : public Target_freebsd<32, false>
 
   // Scan the relocations to look for symbol adjustments.
   void
-  scan_relocs(const General_options& options,
-	      Symbol_table* symtab,
+  scan_relocs(Symbol_table* symtab,
 	      Layout* layout,
 	      Sized_relobj<32, false>* object,
 	      unsigned int data_shndx,
@@ -97,7 +95,7 @@ class Target_i386 : public Target_freebsd<32, false>
 
   // Finalize the sections.
   void
-  do_finalize_sections(Layout*);
+  do_finalize_sections(Layout*, const Input_objects*, Symbol_table*);
 
   // Return the value to use for a dynamic which requires special
   // treatment.
@@ -119,8 +117,7 @@ class Target_i386 : public Target_freebsd<32, false>
 
   // Scan the relocs during a relocatable link.
   void
-  scan_relocatable_relocs(const General_options& options,
-			  Symbol_table* symtab,
+  scan_relocatable_relocs(Symbol_table* symtab,
 			  Layout* layout,
 			  Sized_relobj<32, false>* object,
 			  unsigned int data_shndx,
@@ -190,8 +187,7 @@ class Target_i386 : public Target_freebsd<32, false>
   struct Scan
   {
     inline void
-    local(const General_options& options, Symbol_table* symtab,
-	  Layout* layout, Target_i386* target,
+    local(Symbol_table* symtab, Layout* layout, Target_i386* target,
 	  Sized_relobj<32, false>* object,
 	  unsigned int data_shndx,
 	  Output_section* output_section,
@@ -199,8 +195,7 @@ class Target_i386 : public Target_freebsd<32, false>
 	  const elfcpp::Sym<32, false>& lsym);
 
     inline void
-    global(const General_options& options, Symbol_table* symtab,
-	   Layout* layout, Target_i386* target,
+    global(Symbol_table* symtab, Layout* layout, Target_i386* target,
 	   Sized_relobj<32, false>* object,
 	   unsigned int data_shndx,
 	   Output_section* output_section,
@@ -446,7 +441,9 @@ const Target::Target_info Target_i386::i386_info =
   elfcpp::SHN_UNDEF,	// small_common_shndx
   elfcpp::SHN_UNDEF,	// large_common_shndx
   0,			// small_common_section_flags
-  0			// large_common_section_flags
+  0,			// large_common_section_flags
+  NULL,			// attributes_section
+  NULL			// attributes_vendor
 };
 
 // Get the GOT section, creating it if necessary.
@@ -464,25 +461,25 @@ Target_i386::got_section(Symbol_table* symtab, Layout* layout)
       os = layout->add_output_section_data(".got", elfcpp::SHT_PROGBITS,
 					   (elfcpp::SHF_ALLOC
 					    | elfcpp::SHF_WRITE),
-					   this->got_);
-      os->set_is_relro();
+					   this->got_, false, true, true,
+					   false);
 
-      // The old GNU linker creates a .got.plt section.  We just
-      // create another set of data in the .got section.  Note that we
-      // always create a PLT if we create a GOT, although the PLT
-      // might be empty.
       this->got_plt_ = new Output_data_space(4, "** GOT PLT");
-      os = layout->add_output_section_data(".got", elfcpp::SHT_PROGBITS,
+      os = layout->add_output_section_data(".got.plt", elfcpp::SHT_PROGBITS,
 					   (elfcpp::SHF_ALLOC
 					    | elfcpp::SHF_WRITE),
-					   this->got_plt_);
-      os->set_is_relro();
+					   this->got_plt_, false, false, false,
+					   true);
 
       // The first three entries are reserved.
       this->got_plt_->set_current_data_size(3 * 4);
 
+      // Those bytes can go into the relro segment.
+      layout->increase_relro(3 * 4);
+
       // Define _GLOBAL_OFFSET_TABLE_ at the start of the PLT.
       symtab->define_in_output_data("_GLOBAL_OFFSET_TABLE_", NULL,
+				    Symbol_table::PREDEFINED,
 				    this->got_plt_,
 				    0, 0, elfcpp::STT_OBJECT,
 				    elfcpp::STB_LOCAL,
@@ -503,7 +500,8 @@ Target_i386::rel_dyn_section(Layout* layout)
       gold_assert(layout != NULL);
       this->rel_dyn_ = new Reloc_section(parameters->options().combreloc());
       layout->add_output_section_data(".rel.dyn", elfcpp::SHT_REL,
-				      elfcpp::SHF_ALLOC, this->rel_dyn_);
+				      elfcpp::SHF_ALLOC, this->rel_dyn_, true,
+				      false, false, false);
     }
   return this->rel_dyn_;
 }
@@ -578,7 +576,8 @@ Output_data_plt_i386::Output_data_plt_i386(Layout* layout,
 {
   this->rel_ = new Reloc_section(false);
   layout->add_output_section_data(".rel.plt", elfcpp::SHT_REL,
-				  elfcpp::SHF_ALLOC, this->rel_);
+				  elfcpp::SHF_ALLOC, this->rel_, true,
+				  false, false, false);
 }
 
 void
@@ -763,7 +762,7 @@ Target_i386::make_plt_entry(Symbol_table* symtab, Layout* layout, Symbol* gsym)
       layout->add_output_section_data(".plt", elfcpp::SHT_PROGBITS,
 				      (elfcpp::SHF_ALLOC
 				       | elfcpp::SHF_EXECINSTR),
-				      this->plt_);
+				      this->plt_, false, false, false, false);
     }
 
   this->plt_->add_entry(gsym);
@@ -782,6 +781,7 @@ Target_i386::define_tls_base_symbol(Symbol_table* symtab, Layout* layout)
     {
       bool is_exec = parameters->options().output_is_executable();
       symtab->define_in_output_segment("_TLS_MODULE_BASE_", NULL,
+				       Symbol_table::PREDEFINED,
 				       tls_segment, 0, 0,
 				       elfcpp::STT_TLS,
 				       elfcpp::STB_LOCAL,
@@ -884,8 +884,7 @@ Target_i386::Scan::unsupported_reloc_local(Sized_relobj<32, false>* object,
 // Scan a relocation for a local symbol.
 
 inline void
-Target_i386::Scan::local(const General_options&,
-			 Symbol_table* symtab,
+Target_i386::Scan::local(Symbol_table* symtab,
 			 Layout* layout,
 			 Target_i386* target,
 			 Sized_relobj<32, false>* object,
@@ -1175,8 +1174,7 @@ Target_i386::Scan::unsupported_reloc_global(Sized_relobj<32, false>* object,
 // Scan a relocation for a global symbol.
 
 inline void
-Target_i386::Scan::global(const General_options&,
-			  Symbol_table* symtab,
+Target_i386::Scan::global(Symbol_table* symtab,
 			  Layout* layout,
 			  Target_i386* target,
 			  Sized_relobj<32, false>* object,
@@ -1492,8 +1490,7 @@ Target_i386::Scan::global(const General_options&,
 // Process relocations for gc.
 
 void
-Target_i386::gc_process_relocs(const General_options& options,
-                               Symbol_table* symtab,
+Target_i386::gc_process_relocs(Symbol_table* symtab,
                                Layout* layout,
                                Sized_relobj<32, false>* object,
                                unsigned int data_shndx,
@@ -1507,7 +1504,6 @@ Target_i386::gc_process_relocs(const General_options& options,
 {
   gold::gc_process_relocs<32, false, Target_i386, elfcpp::SHT_REL,
 		          Target_i386::Scan>(
-    options,
     symtab,
     layout,
     this,
@@ -1524,8 +1520,7 @@ Target_i386::gc_process_relocs(const General_options& options,
 // Scan relocations for a section.
 
 void
-Target_i386::scan_relocs(const General_options& options,
-			 Symbol_table* symtab,
+Target_i386::scan_relocs(Symbol_table* symtab,
 			 Layout* layout,
 			 Sized_relobj<32, false>* object,
 			 unsigned int data_shndx,
@@ -1546,7 +1541,6 @@ Target_i386::scan_relocs(const General_options& options,
 
   gold::scan_relocs<32, false, Target_i386, elfcpp::SHT_REL,
 		    Target_i386::Scan>(
-    options,
     symtab,
     layout,
     this,
@@ -1563,7 +1557,10 @@ Target_i386::scan_relocs(const General_options& options,
 // Finalize the sections.
 
 void
-Target_i386::do_finalize_sections(Layout* layout)
+Target_i386::do_finalize_sections(
+    Layout* layout,
+    const Input_objects*,
+    Symbol_table*)
 {
   // Fill in some more dynamic tags.
   Output_data_dynamic* const odyn = layout->dynamic_data();
@@ -2537,8 +2534,7 @@ Target_i386::Relocatable_size_for_reloc::get_size_for_reloc(
 // Scan the relocs during a relocatable link.
 
 void
-Target_i386::scan_relocatable_relocs(const General_options& options,
-				     Symbol_table* symtab,
+Target_i386::scan_relocatable_relocs(Symbol_table* symtab,
 				     Layout* layout,
 				     Sized_relobj<32, false>* object,
 				     unsigned int data_shndx,
@@ -2558,7 +2554,6 @@ Target_i386::scan_relocatable_relocs(const General_options& options,
 
   gold::scan_relocatable_relocs<32, false, elfcpp::SHT_REL,
       Scan_relocatable_relocs>(
-    options,
     symtab,
     layout,
     object,

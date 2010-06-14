@@ -47,71 +47,6 @@ class Sized_target;
 template<int size, bool big_endian>
 class Sized_relobj;
 
-// This class specifies an input section.  It is used as a key type
-// for maps.
-
-class Input_section_specifier
-{
- public:
-  Input_section_specifier(const Relobj* relobj, unsigned int shndx)
-    : relobj_(relobj), shndx_(shndx)
-  { }
-   
-  // Return Relobj of this.
-  const Relobj*
-  relobj() const
-  { return this->relobj_; }
-
-  // Return section index of this.
-  unsigned int
-  shndx() const
-  { return this->shndx_; }
-
-  // Whether this equals to another specifier ISS.
-  bool
-  eq(const Input_section_specifier& iss) const
-  { return this->relobj_ == iss.relobj_ && this->shndx_ == iss.shndx_; }
-
-  // Compute a hash value of this.
-  size_t
-  hash_value() const
-  { return this->string_hash(this->relobj_->name().c_str()) ^ this->shndx_; }
-
-  // Functors for containers.
-  struct equal_to
-  {
-    bool
-    operator()(const Input_section_specifier& iss1,
-	       const Input_section_specifier& iss2) const
-    { return iss1.eq(iss2); }
-  };
- 
-  struct hash
-  {
-    size_t
-    operator()(const Input_section_specifier& iss) const
-    { return iss.hash_value(); }
-  };
-
- private:
-  // For portability, we use our own string hash function instead of assuming
-  // __gnu_cxx::hash or std::tr1::hash is available.  This is the same hash
-  // function used in Stringpool_template::string_hash.
-  static size_t
-  string_hash(const char* s)
-  {
-    size_t h = 5381;
-    while (*s != '\0')
-      h = h * 33 + *s++;
-    return h;
-  }
-
-  // An object.
-  const Relobj* relobj_;
-  // A section index. 
-  unsigned int shndx_;
-};
-
 // An abtract class for data which has to go into the output file.
 
 class Output_data
@@ -2360,6 +2295,35 @@ class Output_section : public Output_data
   set_is_relro_local()
   { this->is_relro_local_ = true; }
 
+  // True if this must be the last relro section.
+  bool
+  is_last_relro() const
+  { return this->is_last_relro_; }
+
+  // Record that this must be the last relro section.
+  void
+  set_is_last_relro()
+  {
+    gold_assert(this->is_relro_);
+    this->is_last_relro_ = true;
+  }
+
+  // True if this must be the first section following the relro sections.
+  bool
+  is_first_non_relro() const
+  {
+    gold_assert(!this->is_relro_);
+    return this->is_first_non_relro_;
+  }
+
+  // Record that this must be the first non-relro section.
+  void
+  set_is_first_non_relro()
+  {
+    gold_assert(!this->is_relro_);
+    this->is_first_non_relro_ = true;
+  }
+
   // True if this is a small section: a section which holds small
   // variables.
   bool
@@ -2386,6 +2350,27 @@ class Output_section : public Output_data
   bool
   is_large_data_section()
   { return this->is_large_section_ && this->type_ != elfcpp::SHT_NOBITS; }
+
+  // True if this is the .interp section which goes into the PT_INTERP
+  // segment.
+  bool
+  is_interp() const
+  { return this->is_interp_; }
+
+  // Record that this is the interp section.
+  void
+  set_is_interp()
+  { this->is_interp_ = true; }
+
+  // True if this is a section used by the dynamic linker.
+  bool
+  is_dynamic_linker_section() const
+  { return this->is_dynamic_linker_section_; }
+
+  // Record that this is a section used by the dynamic linker.
+  void
+  set_is_dynamic_linker_section()
+  { this->is_dynamic_linker_section_ = true; }
 
   // Return whether this section should be written after all the input
   // sections are complete.
@@ -2554,10 +2539,10 @@ class Output_section : public Output_data
   get_input_sections(uint64_t address, const std::string& fill,
 		     std::list<Simple_input_section>*);
 
-  // Add an input section from a script.
+  // Add a simple input section.
   void
-  add_input_section_for_script(const Simple_input_section& input_section,
-			       off_t data_size, uint64_t addralign);
+  add_simple_input_section(const Simple_input_section& input_section,
+			   off_t data_size, uint64_t addralign);
 
   // Set the current size of the output section.
   void
@@ -2580,10 +2565,44 @@ class Output_section : public Output_data
   void
   restore_states();
 
+  // Discard states.
+  void
+  discard_states();
+
   // Convert existing input sections to relaxed input sections.
   void
   convert_input_sections_to_relaxed_sections(
       const std::vector<Output_relaxed_input_section*>& sections);
+
+  // Find a relaxed input section to an input section in OBJECT
+  // with index SHNDX.  Return NULL if none is found.
+  const Output_relaxed_input_section*
+  find_relaxed_input_section(const Relobj* object, unsigned int shndx) const;
+  
+  // Whether section offsets need adjustment due to relaxation.
+  bool
+  section_offsets_need_adjustment() const
+  { return this->section_offsets_need_adjustment_; }
+
+  // Set section_offsets_need_adjustment to be true.
+  void
+  set_section_offsets_need_adjustment()
+  { this->section_offsets_need_adjustment_ = true; }
+
+  // Adjust section offsets of input sections in this.  This is
+  // requires if relaxation caused some input sections to change sizes.
+  void
+  adjust_section_offsets();
+
+  // Whether this is a NOLOAD section.
+  bool
+  is_noload() const
+  { return this->is_noload_; }
+
+  // Set NOLOAD flag.
+  void
+  set_is_noload()
+  { this->is_noload_ = true; }
 
   // Print merge statistics to stderr.
   void
@@ -3167,19 +3186,20 @@ class Output_section : public Output_data
 			Merge_section_properties::equal_to>
     Merge_section_by_properties_map;
 
-  // Map that link Input_section_specifier to Output_section_data.
-  typedef Unordered_map<Input_section_specifier, Output_section_data*,
-			Input_section_specifier::hash,
-			Input_section_specifier::equal_to>
+  // Map that link Const_section_id to Output_section_data.
+  typedef Unordered_map<Const_section_id, Output_section_data*,
+			Const_section_id_hash>
     Output_section_data_by_input_section_map;
 
+  // Map that link Const_section_id to Output_relaxed_input_section.
+  typedef Unordered_map<Const_section_id, Output_relaxed_input_section*,
+			Const_section_id_hash>
+    Output_relaxed_input_section_by_input_section_map;
+
   // Map used during relaxation of existing sections.  This map
-  // an input section specifier to an input section list index.
-  // We assume that Input_section_list is a vector.
-  typedef Unordered_map<Input_section_specifier, size_t,
-			Input_section_specifier::hash,
-			Input_section_specifier::equal_to>
-    Relaxation_map;
+  // a section id an input section list index.  We assume that
+  // Input_section_list is a vector.
+  typedef Unordered_map<Section_id, size_t, Section_id_hash> Relaxation_map;
 
   // Add a new output section by Input_section.
   void
@@ -3208,11 +3228,6 @@ class Output_section : public Output_data
   Output_section_data*
   find_merge_section(const Relobj* object, unsigned int shndx) const;
 
-  // Find a relaxed input section to an input section in OBJECT
-  // with index SHNDX.  Return NULL if none is found.
-  const Output_section_data*
-  find_relaxed_input_section(const Relobj* object, unsigned int shndx) const;
-  
   // Build a relaxation map.
   void
   build_relaxation_map(
@@ -3323,10 +3338,27 @@ class Output_section : public Output_data
   bool is_relro_ : 1;
   // True if this section holds relro local data.
   bool is_relro_local_ : 1;
+  // True if this must be the last relro section.
+  bool is_last_relro_ : 1;
+  // True if this must be the first section after the relro sections.
+  bool is_first_non_relro_ : 1;
   // True if this is a small section.
   bool is_small_section_ : 1;
   // True if this is a large section.
   bool is_large_section_ : 1;
+  // True if this is the .interp section going into the PT_INTERP
+  // segment.
+  bool is_interp_ : 1;
+  // True if this is section is read by the dynamic linker.
+  bool is_dynamic_linker_section_ : 1;
+  // Whether code-fills are generated at write.
+  bool generate_code_fills_at_write_ : 1;
+  // Whether the entry size field should be zero.
+  bool is_entsize_zero_ : 1;
+  // Whether section offsets need adjustment due to relaxation.
+  bool section_offsets_need_adjustment_ : 1;
+  // Whether this is a NOLOAD section.
+  bool is_noload_ : 1;
   // For SHT_TLS sections, the offset of this section relative to the base
   // of the TLS segment.
   uint64_t tls_offset_;
@@ -3337,13 +3369,12 @@ class Output_section : public Output_data
   // Map from merge section properties to merge_sections;
   Merge_section_by_properties_map merge_section_by_properties_map_;
   // Map from input sections to relaxed input sections.  This is mutable
-  // beacause it is udpated lazily.  We may need to update it in a
+  // because it is updated lazily.  We may need to update it in a
   // const qualified method.
-  mutable Output_section_data_by_input_section_map relaxed_input_section_map_;
+  mutable Output_relaxed_input_section_by_input_section_map
+    relaxed_input_section_map_;
   // Whether relaxed_input_section_map_ is valid.
   mutable bool is_relaxed_input_section_map_valid_;
-  // Whether code-fills are generated at write.
-  bool generate_code_fills_at_write_;
 };
 
 // An output segment.  PT_LOAD segments are built from collections of
@@ -3412,17 +3443,20 @@ class Output_segment
   uint64_t
   maximum_alignment();
 
-  // Add an Output_section to this segment.
+  // Add the Output_section OS to this segment.  SEG_FLAGS is the
+  // segment flags to use.  DO_SORT is true if we should sort the
+  // placement of the input section for more efficient generated code.
   void
-  add_output_section(Output_section* os, elfcpp::Elf_Word seg_flags);
+  add_output_section(Output_section* os, elfcpp::Elf_Word seg_flags,
+		     bool do_sort);
 
   // Remove an Output_section from this segment.  It is an error if it
   // is not present.
   void
   remove_output_section(Output_section* os);
 
-  // Add an Output_data (which is not an Output_section) to the start
-  // of this segment.
+  // Add an Output_data (which need not be an Output_section) to the
+  // start of this segment.
   void
   add_initial_output_data(Output_data*);
 
@@ -3454,6 +3488,17 @@ class Output_segment
     this->are_addresses_set_ = true;
   }
 
+  // Update the flags for the flags of an output section added to this
+  // segment.
+  void
+  update_flags_for_output_section(elfcpp::Elf_Xword flags)
+  {
+    // The ELF ABI specifies that a PT_TLS segment should always have
+    // PF_R as the flags.
+    if (this->type() != elfcpp::PT_TLS)
+      this->flags_ |= flags;
+  }
+
   // Set the segment flags.  This is only used if we have a PHDRS
   // clause which explicitly specifies the flags.
   void
@@ -3468,19 +3513,23 @@ class Output_segment
   // address of the immediately following segment.  Update *POFF and
   // *PSHNDX.  This should only be called for a PT_LOAD segment.
   uint64_t
-  set_section_addresses(const Layout*, bool reset, uint64_t addr, off_t* poff,
+  set_section_addresses(const Layout*, bool reset, uint64_t addr,
+			unsigned int increase_relro, off_t* poff,
 			unsigned int* pshndx);
 
   // Set the minimum alignment of this segment.  This may be adjusted
   // upward based on the section alignments.
   void
   set_minimum_p_align(uint64_t align)
-  { this->min_p_align_ = align; }
+  {
+    if (align > this->min_p_align_)
+      this->min_p_align_ = align;
+  }
 
   // Set the offset of this segment based on the section.  This should
   // only be called for a non-PT_LOAD segment.
   void
-  set_offset();
+  set_offset(unsigned int increase);
 
   // Set the TLS offsets of the sections contained in the PT_TLS segment.
   void
@@ -3526,7 +3575,7 @@ class Output_segment
   uint64_t
   set_section_list_addresses(const Layout*, bool reset, Output_data_list*,
                              uint64_t addr, off_t* poff, unsigned int* pshndx,
-                             bool* in_tls, bool* in_relro);
+                             bool* in_tls);
 
   // Return the number of Output_sections in an Output_data_list.
   unsigned int

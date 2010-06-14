@@ -302,23 +302,39 @@ Symbol_table::resolve(Sized_symbol<size>* to,
                                          sym.get_st_type());
 
   bool adjust_common_sizes;
-  if (Symbol_table::should_override(to, frombits, object,
+  typename Sized_symbol<size>::Size_type tosize = to->symsize();
+  if (Symbol_table::should_override(to, frombits, OBJECT, object,
 				    &adjust_common_sizes))
     {
-      typename Sized_symbol<size>::Size_type tosize = to->symsize();
-
       this->override(to, sym, st_shndx, is_ordinary, object, version);
-
       if (adjust_common_sizes && tosize > to->symsize())
         to->set_symsize(tosize);
     }
   else
     {
-      if (adjust_common_sizes && sym.get_st_size() > to->symsize())
+      if (adjust_common_sizes && sym.get_st_size() > tosize)
         to->set_symsize(sym.get_st_size());
       // The ELF ABI says that even for a reference to a symbol we
       // merge the visibility.
       to->override_visibility(sym.get_st_visibility());
+    }
+
+  if (adjust_common_sizes && parameters->options().warn_common())
+    {
+      if (tosize > sym.get_st_size())
+	Symbol_table::report_resolve_problem(false,
+					     _("common of '%s' overriding "
+					       "smaller common"),
+					     to, OBJECT, object);
+      else if (tosize < sym.get_st_size())
+	Symbol_table::report_resolve_problem(false,
+					     _("common of '%s' overidden by "
+					       "larger common"),
+					     to, OBJECT, object);
+      else
+	Symbol_table::report_resolve_problem(false,
+					     _("multiple common of '%s'"),
+					     to, OBJECT, object);
     }
 
   // A new weak undefined reference, merging with an old weak
@@ -361,7 +377,8 @@ Symbol_table::resolve(Sized_symbol<size>* to,
 
 bool
 Symbol_table::should_override(const Symbol* to, unsigned int frombits,
-                              Object* object, bool* adjust_common_sizes)
+                              Defined defined, Object* object,
+			      bool* adjust_common_sizes)
 {
   *adjust_common_sizes = false;
 
@@ -419,17 +436,12 @@ Symbol_table::should_override(const Symbol* to, unsigned int frombits,
       // --just-symbols, then don't warn.  This is for compatibility
       // with the GNU linker.  FIXME: This is a hack.
       if ((to->source() == Symbol::FROM_OBJECT && to->object()->just_symbols())
-          || object->just_symbols())
+          || (object != NULL && object->just_symbols()))
         return false;
 
-      // FIXME: Do a better job of reporting locations.
-      gold_error(_("%s: multiple definition of %s"),
-		 object != NULL ? object->name().c_str() : _("command line"),
-		 to->demangled_name().c_str());
-      gold_error(_("%s: previous definition here"),
-		 (to->source() == Symbol::FROM_OBJECT
-		  ? to->object()->name().c_str()
-		  : _("command line")));
+      Symbol_table::report_resolve_problem(true,
+					   _("multiple definition of '%s'"),
+					   to, defined, object);
       return false;
 
     case WEAK_DEF * 16 + DEF:
@@ -464,8 +476,12 @@ Symbol_table::should_override(const Symbol* to, unsigned int frombits,
     case DYN_COMMON * 16 + DEF:
     case DYN_WEAK_COMMON * 16 + DEF:
       // We've seen a common symbol and now we see a definition.  The
-      // definition overrides.  FIXME: We should optionally issue, version a
-      // warning.
+      // definition overrides.
+      if (parameters->options().warn_common())
+	Symbol_table::report_resolve_problem(false,
+					     _("definition of '%s' overriding "
+					       "common"),
+					     to, defined, object);
       return true;
 
     case DEF * 16 + WEAK_DEF:
@@ -495,7 +511,12 @@ Symbol_table::should_override(const Symbol* to, unsigned int frombits,
     case DYN_COMMON * 16 + WEAK_DEF:
     case DYN_WEAK_COMMON * 16 + WEAK_DEF:
       // A weak definition does override a definition in a dynamic
-      // object.  FIXME: We should optionally issue a warning.
+      // object.
+      if (parameters->options().warn_common())
+	Symbol_table::report_resolve_problem(false,
+					     _("definition of '%s' overriding "
+					       "dynamic common definition"),
+					     to, defined, object);
       return true;
 
     case DEF * 16 + DYN_DEF:
@@ -611,6 +632,11 @@ Symbol_table::should_override(const Symbol* to, unsigned int frombits,
 
     case DEF * 16 + COMMON:
       // A common symbol does not override a definition.
+      if (parameters->options().warn_common())
+	Symbol_table::report_resolve_problem(false,
+					     _("common '%s' overridden by "
+					       "previous definition"),
+					     to, defined, object);
       return false;
 
     case WEAK_DEF * 16 + COMMON:
@@ -716,16 +742,73 @@ Symbol_table::should_override(const Symbol* to, unsigned int frombits,
     }
 }
 
+// Issue an error or warning due to symbol resolution.  IS_ERROR
+// indicates an error rather than a warning.  MSG is the error
+// message; it is expected to have a %s for the symbol name.  TO is
+// the existing symbol.  DEFINED/OBJECT is where the new symbol was
+// found.
+
+// FIXME: We should have better location information here.  When the
+// symbol is defined, we should be able to pull the location from the
+// debug info if there is any.
+
+void
+Symbol_table::report_resolve_problem(bool is_error, const char* msg,
+				     const Symbol* to, Defined defined,
+				     Object* object)
+{
+  std::string demangled(to->demangled_name());
+  size_t len = strlen(msg) + demangled.length() + 10;
+  char* buf = new char[len];
+  snprintf(buf, len, msg, demangled.c_str());
+
+  const char* objname;
+  switch (defined)
+    {
+    case OBJECT:
+      objname = object->name().c_str();
+      break;
+    case COPY:
+      objname = _("COPY reloc");
+      break;
+    case DEFSYM:
+    case UNDEFINED:
+      objname = _("command line");
+      break;
+    case SCRIPT:
+      objname = _("linker script");
+      break;
+    case PREDEFINED:
+      objname = _("linker defined");
+      break;
+    default:
+      gold_unreachable();
+    }
+
+  if (is_error)
+    gold_error("%s: %s", objname, buf);
+  else
+    gold_warning("%s: %s", objname, buf);
+
+  delete[] buf;
+
+  if (to->source() == Symbol::FROM_OBJECT)
+    objname = to->object()->name().c_str();
+  else
+    objname = _("command line");
+  gold_info("%s: %s: previous definition here", program_name, objname);
+}
+
 // A special case of should_override which is only called for a strong
 // defined symbol from a regular object file.  This is used when
 // defining special symbols.
 
 bool
-Symbol_table::should_override_with_special(const Symbol* to)
+Symbol_table::should_override_with_special(const Symbol* to, Defined defined)
 {
   bool adjust_common_sizes;
   unsigned int frombits = global_flag | regular_flag | def_flag;
-  bool ret = Symbol_table::should_override(to, frombits, NULL,
+  bool ret = Symbol_table::should_override(to, frombits, defined, NULL,
 					   &adjust_common_sizes);
   gold_assert(!adjust_common_sizes);
   return ret;
@@ -774,9 +857,8 @@ Symbol::override_base_with_special(const Symbol* from)
 
   // We shouldn't see these flags.  If we do, we need to handle them
   // somehow.
-  gold_assert(!from->is_target_special_ || this->is_target_special_);
   gold_assert(!from->is_forwarder_);
-  gold_assert(!from->has_plt_offset_);
+  gold_assert(!from->has_plt_offset());
   gold_assert(!from->has_warning_);
   gold_assert(!from->is_copied_from_dynobj_);
   gold_assert(!from->is_forced_local_);
@@ -829,7 +911,10 @@ Symbol_table::override_with_special(Sized_symbol<size>* tosym,
 // script to restrict this to only the ones needed for implemented
 // targets.
 
-#ifdef HAVE_TARGET_32_LITTLE
+// We have to instantiate both big and little endian versions because
+// these are used by other templates that depends on size only.
+
+#if defined(HAVE_TARGET_32_LITTLE) || defined(HAVE_TARGET_32_BIG)
 template
 void
 Symbol_table::resolve<32, false>(
@@ -840,9 +925,7 @@ Symbol_table::resolve<32, false>(
     unsigned int orig_st_shndx,
     Object* object,
     const char* version);
-#endif
 
-#ifdef HAVE_TARGET_32_BIG
 template
 void
 Symbol_table::resolve<32, true>(
@@ -855,7 +938,7 @@ Symbol_table::resolve<32, true>(
     const char* version);
 #endif
 
-#ifdef HAVE_TARGET_64_LITTLE
+#if defined(HAVE_TARGET_64_LITTLE) || defined(HAVE_TARGET_64_BIG)
 template
 void
 Symbol_table::resolve<64, false>(
@@ -866,9 +949,7 @@ Symbol_table::resolve<64, false>(
     unsigned int orig_st_shndx,
     Object* object,
     const char* version);
-#endif
 
-#ifdef HAVE_TARGET_64_BIG
 template
 void
 Symbol_table::resolve<64, true>(

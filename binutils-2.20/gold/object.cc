@@ -1138,6 +1138,12 @@ Sized_relobj<size, big_endian>::do_layout(Symbol_table* symtab,
 		omit[i] = true;
 	    }
 
+	  // Skip attributes section.
+	  if (parameters->target().is_attributes_section(name))
+	    {
+	      omit[i] = true;
+	    }
+
           bool discard = omit[i];
           if (!discard)
             {
@@ -1173,6 +1179,14 @@ Sized_relobj<size, big_endian>::do_layout(Symbol_table* symtab,
               || shdr.get_sh_type() == elfcpp::SHT_FINI_ARRAY)
             {
               symtab->gc()->worklist().push(Section_id(this, i)); 
+            }
+          // If the section name XXX can be represented as a C identifier
+          // it cannot be discarded if there are references to
+          // __start_XXX and __stop_XXX symbols.  These need to be
+          // specially handled.
+          if (is_cident(name))
+            {
+              symtab->gc()->add_cident_section(name, Section_id(this, i));
             }
         }
 
@@ -1677,7 +1691,15 @@ Sized_relobj<size, big_endian>::do_finalize_local_symbols(unsigned int index,
               os = folded_obj->output_section(folded.second);
               gold_assert(os != NULL);
               secoffset = folded_obj->get_output_section_offset(folded.second);
-              gold_assert(secoffset != invalid_address);
+
+	      // This could be a relaxed input section.
+              if (secoffset == invalid_address)
+		{
+		  const Output_relaxed_input_section* relaxed_section =
+		    os->find_relaxed_input_section(folded_obj, folded.second);
+		  gold_assert(relaxed_section != NULL);
+		  secoffset = relaxed_section->address() - os->address();
+		}
             }
 
 	  if (os == NULL)
@@ -1711,12 +1733,18 @@ Sized_relobj<size, big_endian>::do_finalize_local_symbols(unsigned int index,
 		}
 	      else if (!os->find_starting_output_address(this, shndx, &start))
 		{
-		  // This is a section symbol, but apparently not one
-		  // in a merged section.  Just use the start of the
-		  // output section.  This happens with relocatable
-		  // links when the input object has section symbols
-		  // for arbitrary non-merge sections.
-		  lv.set_output_value(os->address());
+		  // This is a section symbol, but apparently not one in a
+		  // merged section.  First check to see if this is a relaxed
+		  // input section.  If so, use its address.  Otherwise just
+		  // use the start of the output section.  This happens with
+		  // relocatable links when the input object has section
+		  // symbols for arbitrary non-merge sections.
+		  const Output_section_data* posd =
+		    os->find_relaxed_input_section(this, shndx);
+		  if (posd != NULL)
+		    lv.set_output_value(posd->address());
+		  else
+		    lv.set_output_value(os->address());
 		}
 	      else
 		{

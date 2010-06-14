@@ -39,6 +39,7 @@ noinst_LIBRARIES = libgold.a
 
 CCFILES = \
 	archive.cc \
+	attributes.cc \
 	binary.cc \
 	common.cc \
 	compressed_output.cc \
@@ -58,6 +59,7 @@ CCFILES = \
 	gold-threads.cc \
 	icf.cc \
 	incremental.cc \
+	int_encoding.cc \
 	layout.cc \
 	mapfile.cc \
 	merge.cc \
@@ -81,7 +83,9 @@ CCFILES = \
 	workqueue-threads.cc
 
 HFILES = \
+	arm-reloc-property.h \
 	archive.h \
+	attributes.h \
 	binary.h \
 	common.h \
 	compressed_output.h \
@@ -100,6 +104,7 @@ HFILES = \
 	gold.h \
 	gold-threads.h \
 	icf.h \
+	int_encoding.h \
 	layout.h \
 	mapfile.h \
 	merge.h \
@@ -128,16 +133,18 @@ HFILES = \
 YFILES = \
 	yyscript.y
 
+DEFFILES = arm-reloc.def
+
 EXTRA_DIST = yyscript.c yyscript.h
 
 TARGETSOURCES = \
-	i386.cc x86_64.cc sparc.cc powerpc.cc arm.cc
+	i386.cc x86_64.cc sparc.cc powerpc.cc arm.cc arm-reloc-property.cc
 
 ALL_TARGETOBJS = \
 	i386.$(OBJEXT) x86_64.$(OBJEXT) sparc.$(OBJEXT) powerpc.$(OBJEXT) \
-	arm.$(OBJEXT)
+	arm.$(OBJEXT) arm-reloc-property.$(OBJEXT)
 
-libgold_a_SOURCES = $(CCFILES) $(HFILES) $(YFILES)
+libgold_a_SOURCES = $(CCFILES) $(HFILES) $(YFILES) $(DEFFILES)
 libgold_a_LIBADD = $(LIBOBJS)
 
 sources_var = main.cc

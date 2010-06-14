@@ -33,7 +33,7 @@ SECTIONS
   .dynamic : { *(.dynamic) } :data :dynamic
   .data : { *(.data) } :data
   . += 0x100000;
-  . = ALIGN(0x100);
+  . = ALIGN(0x100000);
   .bss : { *(.bss) } :bss
 }
 
