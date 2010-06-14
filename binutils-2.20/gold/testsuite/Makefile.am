@@ -128,6 +128,16 @@ gc_tls_test:gc_tls_test.o gcctestdir/ld
 gc_tls_test.stdout: gc_tls_test
 	$(TEST_NM) -C gc_tls_test > gc_tls_test.stdout
 
+check_SCRIPTS += gc_orphan_section_test.sh
+check_DATA += gc_orphan_section_test.stdout
+MOSTLYCLEANFILES += gc_orphan_section_test
+gc_orphan_section_test.o: gc_orphan_section_test.cc
+	$(CXXCOMPILE) -O0 -c -g -o $@ $<
+gc_orphan_section_test:gc_orphan_section_test.o gcctestdir/ld
+	$(CXXLINK) -Bgcctestdir/ -Wl,--gc-sections gc_orphan_section_test.o
+gc_orphan_section_test.stdout: gc_orphan_section_test
+	$(TEST_NM) gc_orphan_section_test > gc_orphan_section_test.stdout
+
 check_SCRIPTS += icf_test.sh
 check_DATA += icf_test.stdout
 MOSTLYCLEANFILES += icf_test
@@ -1009,6 +1019,32 @@ script_test_5: script_test_5.o gcctestdir/ld $(srcdir)/script_test_5.t
 script_test_5.stdout: script_test_5
 	$(TEST_READELF) -SW script_test_5 > script_test_5.stdout
 
+check_SCRIPTS += script_test_6.sh
+check_DATA += script_test_6.stdout
+MOSTLYCLEANFILES += script_test_6
+script_test_6: basic_test.o gcctestdir/ld $(srcdir)/script_test_6.t
+	$(CXXLINK) -Bgcctestdir/ basic_test.o -T $(srcdir)/script_test_6.t \
+	-Wl,-Ttext=0x10001000 -Wl,-Tdata=0x10200000 -Wl,-Tbss=0x10400000
+script_test_6.stdout: script_test_6
+	$(TEST_READELF) -SlW script_test_6 > script_test_6.stdout
+
+check_SCRIPTS += script_test_7.sh
+check_DATA += script_test_7.stdout
+MOSTLYCLEANFILES += script_test_7
+script_test_7: basic_test.o gcctestdir/ld $(srcdir)/script_test_7.t
+	$(CXXLINK) -Bgcctestdir/ basic_test.o -T $(srcdir)/script_test_7.t
+script_test_7.stdout: script_test_7
+	$(TEST_READELF) -SlW script_test_7 > script_test_7.stdout
+
+check_SCRIPTS += script_test_8.sh
+check_DATA += script_test_8.stdout
+MOSTLYCLEANFILES += script_test_8
+script_test_8: basic_test.o gcctestdir/ld $(srcdir)/script_test_7.t
+	$(CXXLINK) -Bgcctestdir/ basic_test.o -T $(srcdir)/script_test_7.t \
+	-Wl,-Ttext=0x20001000 -Wl,-Tdata=0x20200000 -Wl,-Tbss=0x20400000
+script_test_8.stdout: script_test_8
+	$(TEST_READELF) -SlW script_test_8 > script_test_8.stdout
+
 # Test --dynamic-list, --dynamic-list-data, --dynamic-list-cpp-new,
 # and --dynamic-list-cpp-typeinfo
 
@@ -1301,3 +1337,22 @@ MOSTLYCLEANFILES += split_x86_64_1 split_x86_64_2 split_x86_64_3 \
 	split_x86_64_4 split_x86_64_r
 
 endif DEFAULT_TARGET_X86_64
+
+if DEFAULT_TARGET_ARM
+
+check_SCRIPTS += arm_abs_global.sh
+check_DATA += arm_abs_global.stdout
+arm_abs_lib.o: arm_abs_lib.s
+	$(TEST_AS) -march=armv7-a -o $@ $<
+libarm_abs.so: arm_abs_lib.o
+	../ld-new -shared -o $@ arm_abs_lib.o
+arm_abs_global.o: arm_abs_global.s
+	$(TEST_AS) -march=armv7-a -o $@ $<
+arm_abs_global: arm_abs_global.o libarm_abs.so
+	../ld-new -o $@ arm_abs_global.o -L. -larm_abs
+arm_abs_global.stdout: arm_abs_global
+	$(TEST_READELF) -r $< > $@
+
+MOSTLYCLEANFILES += arm_abs_global
+
+endif DEFAULT_TARGET_ARM

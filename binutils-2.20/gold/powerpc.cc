@@ -65,8 +65,7 @@ class Target_powerpc : public Sized_target<size, big_endian>
   // Process the relocations to determine unreferenced sections for 
   // garbage collection.
   void
-  gc_process_relocs(const General_options& options,
-	            Symbol_table* symtab,
+  gc_process_relocs(Symbol_table* symtab,
 	            Layout* layout,
 	            Sized_relobj<size, big_endian>* object,
 	            unsigned int data_shndx,
@@ -80,8 +79,7 @@ class Target_powerpc : public Sized_target<size, big_endian>
 
   // Scan the relocations to look for symbol adjustments.
   void
-  scan_relocs(const General_options& options,
-	      Symbol_table* symtab,
+  scan_relocs(Symbol_table* symtab,
 	      Layout* layout,
 	      Sized_relobj<size, big_endian>* object,
 	      unsigned int data_shndx,
@@ -94,7 +92,7 @@ class Target_powerpc : public Sized_target<size, big_endian>
 	      const unsigned char* plocal_symbols);
   // Finalize the sections.
   void
-  do_finalize_sections(Layout*);
+  do_finalize_sections(Layout*, const Input_objects*, Symbol_table*);
 
   // Return the value to use for a dynamic which requires special
   // treatment.
@@ -116,8 +114,7 @@ class Target_powerpc : public Sized_target<size, big_endian>
 
   // Scan the relocs during a relocatable link.
   void
-  scan_relocatable_relocs(const General_options& options,
-			  Symbol_table* symtab,
+  scan_relocatable_relocs(Symbol_table* symtab,
 			  Layout* layout,
 			  Sized_relobj<size, big_endian>* object,
 			  unsigned int data_shndx,
@@ -171,8 +168,7 @@ class Target_powerpc : public Sized_target<size, big_endian>
     { }
 
     inline void
-    local(const General_options& options, Symbol_table* symtab,
-	  Layout* layout, Target_powerpc* target,
+    local(Symbol_table* symtab, Layout* layout, Target_powerpc* target,
 	  Sized_relobj<size, big_endian>* object,
 	  unsigned int data_shndx,
 	  Output_section* output_section,
@@ -180,8 +176,7 @@ class Target_powerpc : public Sized_target<size, big_endian>
 	  const elfcpp::Sym<size, big_endian>& lsym);
 
     inline void
-    global(const General_options& options, Symbol_table* symtab,
-	   Layout* layout, Target_powerpc* target,
+    global(Symbol_table* symtab, Layout* layout, Target_powerpc* target,
 	   Sized_relobj<size, big_endian>* object,
 	   unsigned int data_shndx,
 	   Output_section* output_section,
@@ -347,7 +342,9 @@ Target::Target_info Target_powerpc<32, true>::powerpc_info =
   elfcpp::SHN_UNDEF,	// small_common_shndx
   elfcpp::SHN_UNDEF,	// large_common_shndx
   0,			// small_common_section_flags
-  0			// large_common_section_flags
+  0,			// large_common_section_flags
+  NULL,			// attributes_section
+  NULL			// attributes_vendor
 };
 
 template<>
@@ -368,7 +365,9 @@ Target::Target_info Target_powerpc<32, false>::powerpc_info =
   elfcpp::SHN_UNDEF,	// small_common_shndx
   elfcpp::SHN_UNDEF,	// large_common_shndx
   0,			// small_common_section_flags
-  0			// large_common_section_flags
+  0,			// large_common_section_flags
+  NULL,			// attributes_section
+  NULL			// attributes_vendor
 };
 
 template<>
@@ -389,7 +388,9 @@ Target::Target_info Target_powerpc<64, true>::powerpc_info =
   elfcpp::SHN_UNDEF,	// small_common_shndx
   elfcpp::SHN_UNDEF,	// large_common_shndx
   0,			// small_common_section_flags
-  0			// large_common_section_flags
+  0,			// large_common_section_flags
+  NULL,			// attributes_section
+  NULL			// attributes_vendor
 };
 
 template<>
@@ -410,7 +411,9 @@ Target::Target_info Target_powerpc<64, false>::powerpc_info =
   elfcpp::SHN_UNDEF,	// small_common_shndx
   elfcpp::SHN_UNDEF,	// large_common_shndx
   0,			// small_common_section_flags
-  0			// large_common_section_flags
+  0,			// large_common_section_flags
+  NULL,			// attributes_section
+  NULL			// attributes_vendor
 };
 
 template<int size, bool big_endian>
@@ -713,7 +716,7 @@ Target_powerpc<size, big_endian>::got_section(Symbol_table* symtab,
 
       layout->add_output_section_data(".got", elfcpp::SHT_PROGBITS,
 				      elfcpp::SHF_ALLOC | elfcpp::SHF_WRITE,
-				      this->got_);
+				      this->got_, false, false, false, false);
 
       // Create the GOT2 or TOC in the .got section.
       if (size == 32)
@@ -722,7 +725,8 @@ Target_powerpc<size, big_endian>::got_section(Symbol_table* symtab,
 	  layout->add_output_section_data(".got2", elfcpp::SHT_PROGBITS,
 					  elfcpp::SHF_ALLOC
 					  | elfcpp::SHF_WRITE,
-					  this->got2_);
+					  this->got2_, false, false, false,
+					  false);
 	}
       else
 	{
@@ -730,11 +734,13 @@ Target_powerpc<size, big_endian>::got_section(Symbol_table* symtab,
 	  layout->add_output_section_data(".toc", elfcpp::SHT_PROGBITS,
 					  elfcpp::SHF_ALLOC
 					  | elfcpp::SHF_WRITE,
-					  this->toc_);
+					  this->toc_, false, false, false,
+					  false);
 	}
 
       // Define _GLOBAL_OFFSET_TABLE_ at the start of the .got section.
       symtab->define_in_output_data("_GLOBAL_OFFSET_TABLE_", NULL,
+				    Symbol_table::PREDEFINED,
 				    this->got_,
 				    0, 0, elfcpp::STT_OBJECT,
 				    elfcpp::STB_LOCAL,
@@ -756,7 +762,8 @@ Target_powerpc<size, big_endian>::rela_dyn_section(Layout* layout)
       gold_assert(layout != NULL);
       this->rela_dyn_ = new Reloc_section(parameters->options().combreloc());
       layout->add_output_section_data(".rela.dyn", elfcpp::SHT_RELA,
-				      elfcpp::SHF_ALLOC, this->rela_dyn_);
+				      elfcpp::SHF_ALLOC, this->rela_dyn_, true,
+				      false, false, false);
     }
   return this->rela_dyn_;
 }
@@ -816,7 +823,8 @@ Output_data_plt_powerpc<size, big_endian>::Output_data_plt_powerpc(Layout* layou
 {
   this->rel_ = new Reloc_section(false);
   layout->add_output_section_data(".rela.plt", elfcpp::SHT_RELA,
-				  elfcpp::SHF_ALLOC, this->rel_);
+				  elfcpp::SHF_ALLOC, this->rel_, true, false,
+				  false, false);
 }
 
 template<int size, bool big_endian>
@@ -945,10 +953,11 @@ Target_powerpc<size, big_endian>::make_plt_entry(Symbol_table* symtab,
 				      (elfcpp::SHF_ALLOC
 				       | elfcpp::SHF_EXECINSTR
 				       | elfcpp::SHF_WRITE),
-				      this->plt_);
+				      this->plt_, false, false, false, false);
 
       // Define _PROCEDURE_LINKAGE_TABLE_ at the start of the .plt section.
       symtab->define_in_output_data("_PROCEDURE_LINKAGE_TABLE_", NULL,
+				    Symbol_table::PREDEFINED,
 				    this->plt_,
 				    0, 0, elfcpp::STT_OBJECT,
 				    elfcpp::STB_LOCAL,
@@ -1113,7 +1122,6 @@ Target_powerpc<size, big_endian>::Scan::check_non_pic(Relobj* object,
 template<int size, bool big_endian>
 inline void
 Target_powerpc<size, big_endian>::Scan::local(
-			const General_options&,
 			Symbol_table* symtab,
 			Layout* layout,
 			Target_powerpc<size, big_endian>* target,
@@ -1248,7 +1256,6 @@ Target_powerpc<size, big_endian>::Scan::unsupported_reloc_global(
 template<int size, bool big_endian>
 inline void
 Target_powerpc<size, big_endian>::Scan::global(
-				const General_options&,
 				Symbol_table* symtab,
 				Layout* layout,
 				Target_powerpc<size, big_endian>* target,
@@ -1444,7 +1451,6 @@ Target_powerpc<size, big_endian>::Scan::global(
 template<int size, bool big_endian>
 void
 Target_powerpc<size, big_endian>::gc_process_relocs(
-			const General_options& options,
 			Symbol_table* symtab,
 			Layout* layout,
 			Sized_relobj<size, big_endian>* object,
@@ -1461,7 +1467,6 @@ Target_powerpc<size, big_endian>::gc_process_relocs(
   typedef typename Target_powerpc<size, big_endian>::Scan Scan;
 
   gold::gc_process_relocs<size, big_endian, Powerpc, elfcpp::SHT_RELA, Scan>(
-    options,
     symtab,
     layout,
     this,
@@ -1480,7 +1485,6 @@ Target_powerpc<size, big_endian>::gc_process_relocs(
 template<int size, bool big_endian>
 void
 Target_powerpc<size, big_endian>::scan_relocs(
-			const General_options& options,
 			Symbol_table* symtab,
 			Layout* layout,
 			Sized_relobj<size, big_endian>* object,
@@ -1512,8 +1516,10 @@ Target_powerpc<size, big_endian>::scan_relocs(
     Output_section* os = layout->add_output_section_data(".sdata", 0,
 							 elfcpp::SHF_ALLOC
 							 | elfcpp::SHF_WRITE,
-							 sdata);
+							 sdata, false,
+							 false, false, false);
     symtab->define_in_output_data("_SDA_BASE_", NULL,
+				  Symbol_table::PREDEFINED,
 				  os,
 				  32768, 0,
 				  elfcpp::STT_OBJECT,
@@ -1523,7 +1529,6 @@ Target_powerpc<size, big_endian>::scan_relocs(
   }
 
   gold::scan_relocs<size, big_endian, Powerpc, elfcpp::SHT_RELA, Scan>(
-    options,
     symtab,
     layout,
     this,
@@ -1541,7 +1546,10 @@ Target_powerpc<size, big_endian>::scan_relocs(
 
 template<int size, bool big_endian>
 void
-Target_powerpc<size, big_endian>::do_finalize_sections(Layout* layout)
+Target_powerpc<size, big_endian>::do_finalize_sections(
+    Layout* layout,
+    const Input_objects*,
+    Symbol_table*)
 {
   // Fill in some more dynamic tags.
   Output_data_dynamic* const odyn = layout->dynamic_data();
@@ -1897,7 +1905,6 @@ Target_powerpc<size, big_endian>::Relocatable_size_for_reloc::get_size_for_reloc
 template<int size, bool big_endian>
 void
 Target_powerpc<size, big_endian>::scan_relocatable_relocs(
-			const General_options& options,
 			Symbol_table* symtab,
 			Layout* layout,
 			Sized_relobj<size, big_endian>* object,
@@ -1918,7 +1925,6 @@ Target_powerpc<size, big_endian>::scan_relocatable_relocs(
 
   gold::scan_relocatable_relocs<size, big_endian, elfcpp::SHT_RELA,
       Scan_relocatable_relocs>(
-    options,
     symtab,
     layout,
     object,

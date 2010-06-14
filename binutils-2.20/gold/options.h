@@ -39,6 +39,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <list>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -308,7 +309,10 @@ struct Struct_special : public Struct_var
     void                                                                 \
     parse_to_value(const char*, const char*,                             \
                    Command_line*, General_options* options)              \
-    { options->set_##varname__(false); }                                 \
+    {                                                                    \
+      options->set_##varname__(false);                                   \
+      options->set_user_set_##varname__();                               \
+    }                                                                    \
                                                                          \
     options::One_option option;                                          \
   };                                                                     \
@@ -588,6 +592,10 @@ class General_options
               N_("Only set DT_NEEDED for dynamic libs if used"),
               N_("Always DT_NEEDED for dynamic libs"));
 
+  DEFINE_enum(assert, options::ONE_DASH, '\0', NULL,
+	      N_("Ignored"), N_("[ignored]"),
+	      {"definitions", "nodefinitions", "nosymbolic", "pure-text"});
+
   // This should really be an "enum", but it's too easy for folks to
   // forget to update the list as they add new targets.  So we just
   // accept any string.  We'll fail later (when the string is parsed),
@@ -690,8 +698,27 @@ class General_options
   DEFINE_string(fini, options::ONE_DASH, '\0', "_fini",
                 N_("Call SYMBOL at unload-time"), N_("SYMBOL"));
 
+  DEFINE_bool(fix_cortex_a8, options::TWO_DASHES, '\0', false,
+	      N_("(ARM only) Fix binaries for Cortex-A8 erratum."),
+	      N_("(ARM only) Do not fix binaries for Cortex-A8 erratum."));
+
+  DEFINE_special(fix_v4bx, options::TWO_DASHES, '\0',
+                 N_("(ARM only) Rewrite BX rn as MOV pc, rn for ARMv4"),
+                 NULL);
+
+  DEFINE_special(fix_v4bx_interworking, options::TWO_DASHES, '\0',
+                 N_("(ARM only) Rewrite BX rn branch to ARMv4 interworking "
+                    "veneer"),
+                 NULL);
+
+  DEFINE_bool(g, options::EXACTLY_ONE_DASH, '\0', false,
+	      N_("Ignored"), NULL);
+
   DEFINE_string(soname, options::ONE_DASH, 'h', NULL,
                 N_("Set shared library name"), N_("FILENAME"));
+
+  DEFINE_bool(i, options::EXACTLY_ONE_DASH, '\0', false,
+	      N_("Ignored"), NULL);
 
   DEFINE_double(hash_bucket_empty_fraction, options::TWO_DASHES, '\0', 0.0,
 		N_("Min fraction of empty buckets in dynamic hash"),
@@ -728,6 +755,10 @@ class General_options
 
   DEFINE_dirlist(library_path, options::TWO_DASHES, 'L',
                  N_("Add directory to search path"), N_("DIR"));
+
+  DEFINE_bool(nostdlib, options::ONE_DASH, '\0', false,
+              N_(" Only search directories specified on the command line."),
+              NULL);
 
   DEFINE_string(m, options::EXACTLY_ONE_DASH, 'm', "",
                 N_("Ignored for compatibility"), N_("EMULATION"));
@@ -811,6 +842,13 @@ class General_options
                  N_("Add DIR to link time shared library search path"),
                  N_("DIR"));
 
+  DEFINE_special(section_start, options::TWO_DASHES, '\0',
+		 N_("Set address of section"), N_("SECTION=ADDRESS"));
+
+  DEFINE_optional_string(sort_common, options::TWO_DASHES, '\0', NULL,
+			 N_("Sort common symbols by alignment"),
+			 N_("[={ascending,descending}]"));
+
   DEFINE_bool(strip_all, options::TWO_DASHES, 's', false,
               N_("Strip all symbols"), NULL);
   DEFINE_bool(strip_debug, options::TWO_DASHES, 'S', false,
@@ -833,7 +871,7 @@ class General_options
               N_("Use less memory and more disk I/O "
                  "(included only for compatibility with GNU ld)"), NULL);
 
-  DEFINE_bool(shared, options::ONE_DASH, '\0', false,
+  DEFINE_bool(shared, options::ONE_DASH, 'G', false,
               N_("Generate shared library"), NULL);
 
   DEFINE_bool(Bshareable, options::ONE_DASH, '\0', false,
@@ -911,6 +949,10 @@ class General_options
 
   DEFINE_special(version_script, options::TWO_DASHES, '\0',
                  N_("Read version script"), N_("FILE"));
+
+  DEFINE_bool(warn_common, options::TWO_DASHES, '\0', false,
+	      N_("Warn about duplicate common symbols"),
+	      N_("Do not warn about duplicate common symbols (default)"));
 
   DEFINE_bool(warn_search_mismatch, options::TWO_DASHES, '\0', true,
 	      N_("Warn when skipping an incompatible library"),
@@ -1115,6 +1157,26 @@ class General_options
   bool
   check_excluded_libs (const std::string &s) const;
 
+  // If an explicit start address was given for section SECNAME with
+  // the --section-start option, return true and set *PADDR to the
+  // address.  Otherwise return false.
+  bool
+  section_start(const char* secname, uint64_t* paddr) const;
+
+  enum Fix_v4bx
+  {
+    // Leave original instruction.
+    FIX_V4BX_NONE,
+    // Replace instruction.
+    FIX_V4BX_REPLACE,
+    // Generate an interworking veneer.
+    FIX_V4BX_INTERWORKING
+  };
+
+  Fix_v4bx
+  fix_v4bx() const
+  { return (this->fix_v4bx_); }
+
  private:
   // Don't copy this structure.
   General_options(const General_options&);
@@ -1202,6 +1264,10 @@ class General_options
   Unordered_set<std::string> excluded_libs_;
   // List of symbol-names to keep, via -retain-symbol-info.
   Unordered_set<std::string> symbols_to_retain_;
+  // Map from section name to address from --section-start.
+  std::map<std::string, uint64_t> section_starts_;
+  // Whether to process armv4 bx instruction relocation.
+  Fix_v4bx fix_v4bx_;
 };
 
 // The position-dependent options.  We use this to store the state of

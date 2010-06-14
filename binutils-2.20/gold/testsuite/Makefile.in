@@ -55,8 +55,10 @@ check_PROGRAMS = object_unittest$(EXEEXT) binary_unittest$(EXEEXT) \
 
 # Test --dynamic-list, --dynamic-list-data, --dynamic-list-cpp-new,
 # and --dynamic-list-cpp-typeinfo
-@GCC_TRUE@@NATIVE_LINKER_TRUE@am__append_1 = gc_comdat_test.sh \
-@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_tls_test.sh icf_test.sh \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@am__append_1 = incremental_test.sh \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_comdat_test.sh gc_tls_test.sh \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_orphan_section_test.sh \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_test.sh \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_keep_unique_test.sh \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_safe_test.sh \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	two_file_shared.sh weak_plt.sh \
@@ -67,7 +69,10 @@ check_PROGRAMS = object_unittest$(EXEEXT) binary_unittest$(EXEEXT) \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	ver_matching_test.sh \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_3.sh \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_4.sh \
-@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_5.sh dynamic_list.sh
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_5.sh \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_6.sh \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_7.sh \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_8.sh dynamic_list.sh
 
 # Create the data files that debug_msg.sh analyzes.
 
@@ -75,8 +80,10 @@ check_PROGRAMS = object_unittest$(EXEEXT) binary_unittest$(EXEEXT) \
 
 # We also want to make sure we do something reasonable when there's no
 # debug info available.  For the best test, we use .so's.
-@GCC_TRUE@@NATIVE_LINKER_TRUE@am__append_2 = gc_comdat_test.stdout \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@am__append_2 = incremental_test.stdout \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_comdat_test.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_tls_test.stdout \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_orphan_section_test.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_test.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_keep_unique_test.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_safe_test.stdout \
@@ -92,9 +99,13 @@ check_PROGRAMS = object_unittest$(EXEEXT) binary_unittest$(EXEEXT) \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_3.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_4.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_5.stdout \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_6.stdout \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_7.stdout \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_8.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	dynamic_list.stdout
-@GCC_TRUE@@NATIVE_LINKER_TRUE@am__append_3 = gc_comdat_test \
-@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_tls_test icf_test \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@am__append_3 = incremental_test \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_comdat_test gc_tls_test \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	gc_orphan_section_test icf_test \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_keep_unique_test \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	icf_safe_test \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	two_file_shared.dbg \
@@ -242,9 +253,10 @@ check_PROGRAMS = object_unittest$(EXEEXT) binary_unittest$(EXEEXT) \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	ver_matching_test.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_3.stdout \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_4 script_test_5 \
-@GCC_TRUE@@NATIVE_LINKER_TRUE@	dynamic_list dynamic_list.stdout \
-@GCC_TRUE@@NATIVE_LINKER_TRUE@	libthin1.a libthin3.a \
-@GCC_TRUE@@NATIVE_LINKER_TRUE@	libthinall.a \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_6 script_test_7 \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	script_test_8 dynamic_list \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	dynamic_list.stdout libthin1.a \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	libthin3.a libthinall.a \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	alt/thin_archive_test_2.o \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	alt/thin_archive_test_4.o \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	alt/libthin2.a alt/libthin4.a
@@ -406,6 +418,9 @@ check_PROGRAMS = object_unittest$(EXEEXT) binary_unittest$(EXEEXT) \
 @DEFAULT_TARGET_X86_64_TRUE@am__append_37 = split_x86_64_1 split_x86_64_2 split_x86_64_3 \
 @DEFAULT_TARGET_X86_64_TRUE@	split_x86_64_4 split_x86_64_r
 
+@DEFAULT_TARGET_ARM_TRUE@am__append_38 = arm_abs_global.sh
+@DEFAULT_TARGET_ARM_TRUE@am__append_39 = arm_abs_global.stdout
+@DEFAULT_TARGET_ARM_TRUE@am__append_40 = arm_abs_global
 subdir = testsuite
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -1451,15 +1466,16 @@ TEST_AS = $(top_builddir)/../gas/as-new
 # the right choice for files 'make' builds that people rebuild.
 MOSTLYCLEANFILES = *.so *.syms *.stdout $(am__append_3) \
 	$(am__append_8) $(am__append_17) $(am__append_25) \
-	$(am__append_29) $(am__append_34) $(am__append_37)
+	$(am__append_29) $(am__append_34) $(am__append_37) \
+	$(am__append_40)
 
 # We will add to these later, for each individual test.  Note
 # that we add each test under check_SCRIPTS or check_PROGRAMS;
 # the TESTS variable is automatically populated from these.
 check_SCRIPTS = $(am__append_1) $(am__append_23) $(am__append_27) \
-	$(am__append_32) $(am__append_35)
+	$(am__append_32) $(am__append_35) $(am__append_38)
 check_DATA = $(am__append_2) $(am__append_24) $(am__append_28) \
-	$(am__append_33) $(am__append_36)
+	$(am__append_33) $(am__append_36) $(am__append_39)
 BUILT_SOURCES = $(am__append_16)
 TESTS = $(check_SCRIPTS) $(check_PROGRAMS)
 
@@ -2621,6 +2637,14 @@ uninstall-am:
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXCOMPILE) -O0 -g -c -o $@ $<
 @GCC_TRUE@@NATIVE_LINKER_TRUE@flagstest_ndebug.o: constructor_test.cc
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXCOMPILE) -O0 -c -o $@ $<
+@GCC_TRUE@@NATIVE_LINKER_TRUE@incremental_test_1.o: incremental_test_1.c
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(COMPILE) -O0 -c -ffunction-sections -g -o $@ $<
+@GCC_TRUE@@NATIVE_LINKER_TRUE@incremental_test_2.o: incremental_test_2.c
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(COMPILE) -O0 -c -ffunction-sections -g -o $@ $<
+@GCC_TRUE@@NATIVE_LINKER_TRUE@incremental_test: incremental_test_1.o incremental_test_2.o gcctestdir/ld
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(LINK) -Bgcctestdir/ -Wl,-incremental incremental_test_1.o incremental_test_2.o -Wl,-debug 2> incremental_test.cmdline
+@GCC_TRUE@@NATIVE_LINKER_TRUE@incremental_test.stdout: incremental_test ../incremental-dump
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	../incremental-dump incremental_test > $@
 @GCC_TRUE@@NATIVE_LINKER_TRUE@gc_comdat_test_1.o: gc_comdat_test_1.cc 
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXCOMPILE) -O0 -c -ffunction-sections -g -o $@ $<
 @GCC_TRUE@@NATIVE_LINKER_TRUE@gc_comdat_test_2.o: gc_comdat_test_2.cc 
@@ -2635,6 +2659,12 @@ uninstall-am:
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXLINK) -Bgcctestdir/ -Wl,--gc-sections gc_tls_test.o
 @GCC_TRUE@@NATIVE_LINKER_TRUE@gc_tls_test.stdout: gc_tls_test
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(TEST_NM) -C gc_tls_test > gc_tls_test.stdout
+@GCC_TRUE@@NATIVE_LINKER_TRUE@gc_orphan_section_test.o: gc_orphan_section_test.cc
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXCOMPILE) -O0 -c -g -o $@ $<
+@GCC_TRUE@@NATIVE_LINKER_TRUE@gc_orphan_section_test:gc_orphan_section_test.o gcctestdir/ld
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXLINK) -Bgcctestdir/ -Wl,--gc-sections gc_orphan_section_test.o
+@GCC_TRUE@@NATIVE_LINKER_TRUE@gc_orphan_section_test.stdout: gc_orphan_section_test
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(TEST_NM) gc_orphan_section_test > gc_orphan_section_test.stdout
 @GCC_TRUE@@NATIVE_LINKER_TRUE@icf_test.o: icf_test.cc 
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXCOMPILE) -O0 -c -ffunction-sections -g -o $@ $<
 @GCC_TRUE@@NATIVE_LINKER_TRUE@icf_test: icf_test.o gcctestdir/ld
@@ -2972,6 +3002,20 @@ uninstall-am:
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXLINK) -Bgcctestdir/ script_test_5.o -T $(srcdir)/script_test_5.t
 @GCC_TRUE@@NATIVE_LINKER_TRUE@script_test_5.stdout: script_test_5
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(TEST_READELF) -SW script_test_5 > script_test_5.stdout
+@GCC_TRUE@@NATIVE_LINKER_TRUE@script_test_6: basic_test.o gcctestdir/ld $(srcdir)/script_test_6.t
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXLINK) -Bgcctestdir/ basic_test.o -T $(srcdir)/script_test_6.t \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	-Wl,-Ttext=0x10001000 -Wl,-Tdata=0x10200000 -Wl,-Tbss=0x10400000
+@GCC_TRUE@@NATIVE_LINKER_TRUE@script_test_6.stdout: script_test_6
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(TEST_READELF) -SlW script_test_6 > script_test_6.stdout
+@GCC_TRUE@@NATIVE_LINKER_TRUE@script_test_7: basic_test.o gcctestdir/ld $(srcdir)/script_test_7.t
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXLINK) -Bgcctestdir/ basic_test.o -T $(srcdir)/script_test_7.t
+@GCC_TRUE@@NATIVE_LINKER_TRUE@script_test_7.stdout: script_test_7
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(TEST_READELF) -SlW script_test_7 > script_test_7.stdout
+@GCC_TRUE@@NATIVE_LINKER_TRUE@script_test_8: basic_test.o gcctestdir/ld $(srcdir)/script_test_7.t
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXLINK) -Bgcctestdir/ basic_test.o -T $(srcdir)/script_test_7.t \
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	-Wl,-Ttext=0x20001000 -Wl,-Tdata=0x20200000 -Wl,-Tbss=0x20400000
+@GCC_TRUE@@NATIVE_LINKER_TRUE@script_test_8.stdout: script_test_8
+@GCC_TRUE@@NATIVE_LINKER_TRUE@	$(TEST_READELF) -SlW script_test_8 > script_test_8.stdout
 @GCC_TRUE@@NATIVE_LINKER_TRUE@dynamic_list: basic_test.o gcctestdir/ld $(srcdir)/dynamic_list.t
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	$(CXXLINK) -Bgcctestdir/ basic_test.o \
 @GCC_TRUE@@NATIVE_LINKER_TRUE@	  -Wl,--dynamic-list $(srcdir)/dynamic_list.t \
@@ -3135,6 +3179,16 @@ uninstall-am:
 @DEFAULT_TARGET_X86_64_TRUE@	$(TEST_OBJDUMP) -d $< > $@
 @DEFAULT_TARGET_X86_64_TRUE@split_x86_64_r.stdout: split_x86_64_1.o split_x86_64_n.o ../ld-new
 @DEFAULT_TARGET_X86_64_TRUE@	../ld-new -r split_x86_64_1.o split_x86_64_n.o -o split_x86_64_r > $@ 2>&1 || exit 0
+@DEFAULT_TARGET_ARM_TRUE@arm_abs_lib.o: arm_abs_lib.s
+@DEFAULT_TARGET_ARM_TRUE@	$(TEST_AS) -march=armv7-a -o $@ $<
+@DEFAULT_TARGET_ARM_TRUE@libarm_abs.so: arm_abs_lib.o
+@DEFAULT_TARGET_ARM_TRUE@	../ld-new -shared -o $@ arm_abs_lib.o
+@DEFAULT_TARGET_ARM_TRUE@arm_abs_global.o: arm_abs_global.s
+@DEFAULT_TARGET_ARM_TRUE@	$(TEST_AS) -march=armv7-a -o $@ $<
+@DEFAULT_TARGET_ARM_TRUE@arm_abs_global: arm_abs_global.o libarm_abs.so
+@DEFAULT_TARGET_ARM_TRUE@	../ld-new -o $@ arm_abs_global.o -L. -larm_abs
+@DEFAULT_TARGET_ARM_TRUE@arm_abs_global.stdout: arm_abs_global
+@DEFAULT_TARGET_ARM_TRUE@	$(TEST_READELF) -r $< > $@
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

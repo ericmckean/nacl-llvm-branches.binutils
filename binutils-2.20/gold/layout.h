@@ -360,11 +360,23 @@ class Layout
   layout_gnu_stack(bool seen_gnu_stack, uint64_t gnu_stack_flags);
 
   // Add an Output_section_data to the layout.  This is used for
-  // special sections like the GOT section.
+  // special sections like the GOT section.  IS_DYNAMIC_LINKER_SECTION
+  // is true for sections which are used by the dynamic linker, such
+  // as dynamic reloc sections.  IS_RELRO is true for relro sections.
+  // IS_LAST_RELRO is true for the last relro section.
+  // IS_FIRST_NON_RELRO is true for the first section after the relro
+  // sections.
   Output_section*
   add_output_section_data(const char* name, elfcpp::Elf_Word type,
 			  elfcpp::Elf_Xword flags,
-			  Output_section_data*);
+			  Output_section_data*, bool is_dynamic_linker_section,
+			  bool is_relro, bool is_last_relro,
+			  bool is_first_non_relro);
+
+  // Increase the size of the relro segment by this much.
+  void
+  increase_relro(unsigned int s)
+  { this->increase_relro_ += s; }
 
   // Create dynamic sections if necessary.
   void
@@ -574,7 +586,8 @@ class Layout
 
   // Make a section for a linker script to hold data.
   Output_section*
-  make_output_section_for_script(const char* name);
+  make_output_section_for_script(const char* name,
+				 Script_sections::Section_type section_type);
 
   // Make a segment.  This is used by the linker script code.
   Output_segment*
@@ -745,18 +758,25 @@ class Layout
   // Return the output section for NAME, TYPE and FLAGS.
   Output_section*
   get_output_section(const char* name, Stringpool::Key name_key,
-		     elfcpp::Elf_Word type, elfcpp::Elf_Xword flags);
+		     elfcpp::Elf_Word type, elfcpp::Elf_Xword flags,
+		     bool is_interp, bool is_dynamic_linker_section,
+		     bool is_relro, bool is_last_relro,
+		     bool is_first_non_relro);
 
   // Choose the output section for NAME in RELOBJ.
   Output_section*
   choose_output_section(const Relobj* relobj, const char* name,
 			elfcpp::Elf_Word type, elfcpp::Elf_Xword flags,
-			bool is_input_section);
+			bool is_input_section, bool is_interp,
+			bool is_dynamic_linker_section, bool is_relro,
+			bool is_last_relro, bool is_first_non_relro);
 
   // Create a new Output_section.
   Output_section*
   make_output_section(const char* name, elfcpp::Elf_Word type,
-		      elfcpp::Elf_Xword flags);
+		      elfcpp::Elf_Xword flags, bool is_interp,
+		      bool is_dynamic_linker_section, bool is_relro,
+		      bool is_last_relro, bool is_first_non_relro);
 
   // Attach a section to a segment.
   void
@@ -932,6 +952,9 @@ class Layout
   Output_segment* tls_segment_;
   // A pointer to the PT_GNU_RELRO segment if there is one.
   Output_segment* relro_segment_;
+  // A backend may increase the size of the PT_GNU_RELRO segment if
+  // there is one.  This is the amount to increase it by.
+  unsigned int increase_relro_;
   // The SHT_SYMTAB output section.
   Output_section* symtab_section_;
   // The SHT_SYMTAB_SHNDX for the regular symbol table if there is one.
