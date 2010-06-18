@@ -30,12 +30,19 @@ directory's path doesn't fit in @var{len} characters, the result is
 #include <stdlib.h>
 #endif
 
-extern char *getwd ();
-extern int errno;
-
 #ifndef MAXPATHLEN
 #define MAXPATHLEN 1024
 #endif
+
+#ifdef PNACL_TOOLCHAIN_SANDBOX
+char *
+getcwd (char *buf, size_t len __attribute__ ((__unused__)))
+{
+  return buf;
+}
+#else
+extern char *getwd ();
+extern int errno;
 
 char *
 getcwd (char *buf, size_t len)
@@ -58,5 +65,7 @@ getcwd (char *buf, size_t len)
     }
     strcpy (buf, ourbuf);
   }
+
   return buf;
 }
+#endif

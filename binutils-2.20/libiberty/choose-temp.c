@@ -64,8 +64,9 @@ choose_temp_base (void)
   temp_filename = XNEWVEC (char, len + TEMP_FILE_LEN + 1);
   strcpy (temp_filename, base);
   strcpy (temp_filename + len, TEMP_FILE);
-
-  if (mktemp (temp_filename) == 0)
+/* @LOCALMOD-BEGIN */
+  if (mkstemp (temp_filename) == 0)
+/* @LOCALMOD-END */
     abort ();
   return temp_filename;
 }
