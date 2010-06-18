@@ -629,6 +629,7 @@ bfd_openw (const char *filename, const char *target)
   return nbfd;
 }
 
+#ifndef PNACL_TOOLCHAIN_SANDBOX
 static inline void
 _maybe_make_executable (bfd * abfd)
 {
@@ -654,6 +655,7 @@ _maybe_make_executable (bfd * abfd)
 	}
     }
 }
+#endif
 
 /*
 
@@ -718,8 +720,10 @@ bfd_close (bfd *abfd)
   else
     ret = abfd->iovec->bclose (abfd);
 
+#ifndef PNACL_TOOLCHAIN_SANDBOX
   if (ret)
     _maybe_make_executable (abfd);
+#endif
 
   _bfd_delete_bfd (abfd);
 
@@ -755,8 +759,10 @@ bfd_close_all_done (bfd *abfd)
 
   ret = bfd_cache_close (abfd);
 
+#ifndef PNACL_TOOLCHAIN_SANDBOX
   if (ret)
     _maybe_make_executable (abfd);
+#endif
 
   _bfd_delete_bfd (abfd);
 
