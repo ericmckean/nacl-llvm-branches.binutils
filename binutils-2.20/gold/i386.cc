@@ -1562,6 +1562,12 @@ Target_i386::do_finalize_sections(
     const Input_objects*,
     Symbol_table*)
 {
+  if (parameters->options().native_client())
+    {
+      const int EF_NACL_ALIGN_32 = 0x200000;
+      this->set_processor_specific_flags(EF_NACL_ALIGN_32);
+    }
+
   // Fill in some more dynamic tags.
   Output_data_dynamic* const odyn = layout->dynamic_data();
   if (odyn != NULL)

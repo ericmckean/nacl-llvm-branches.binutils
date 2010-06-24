@@ -902,6 +902,10 @@ class General_options
   DEFINE_set(keep_unique, options::TWO_DASHES, '\0',
 	     N_("Do not fold this symbol during ICF"), N_("SYMBOL"));
 
+  DEFINE_bool(native_client, options::TWO_DASHES, '\0', false,
+              N_("Produce a native client app"),
+              N_("Don't produce a native client app (default)"));
+
   DEFINE_bool(gc_sections, options::TWO_DASHES, '\0', false,
               N_("Remove unused sections"),
               N_("Don't remove unused sections (default)"));
