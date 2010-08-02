@@ -629,7 +629,7 @@ bfd_openw (const char *filename, const char *target)
   return nbfd;
 }
 
-#ifndef PNACL_TOOLCHAIN_SANDBOX
+#if !defined(__native_client__)
 static inline void
 _maybe_make_executable (bfd * abfd)
 {
@@ -720,7 +720,7 @@ bfd_close (bfd *abfd)
   else
     ret = abfd->iovec->bclose (abfd);
 
-#ifndef PNACL_TOOLCHAIN_SANDBOX
+#if !defined(__native_client__)
   if (ret)
     _maybe_make_executable (abfd);
 #endif
@@ -759,7 +759,7 @@ bfd_close_all_done (bfd *abfd)
 
   ret = bfd_cache_close (abfd);
 
-#ifndef PNACL_TOOLCHAIN_SANDBOX
+#if !defined(__native_client__)
   if (ret)
     _maybe_make_executable (abfd);
 #endif

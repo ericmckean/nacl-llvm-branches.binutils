@@ -509,7 +509,7 @@ pex_unix_wait (struct pex_obj *obj, pid_t pid, int *status,
 {
   /* If we are cleaning up when the caller didn't retrieve process
      status for some reason, encourage the process to go away.  */
-#ifndef PNACL_TOOLCHAIN_SANDBOX
+#if !defined(__native_client__)
   if (done)
     kill (pid, SIGTERM);
 #endif

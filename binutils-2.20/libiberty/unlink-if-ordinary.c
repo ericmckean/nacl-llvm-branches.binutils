@@ -59,7 +59,7 @@ was made to unlink the file because it is special.
 #endif
 #endif
 
-#ifdef PNACL_TOOLCHAIN_SANDBOX
+#if defined(__native_client__)
 int
 unlink_if_ordinary (const char *name __attribute__ ((__unused__)))
 {
