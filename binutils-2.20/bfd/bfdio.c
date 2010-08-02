@@ -71,7 +71,7 @@ real_fseek (FILE *file, file_ptr offset, int whence)
 static FILE *
 close_on_exec (FILE *file)
 {
-#ifndef PNACL_TOOLCHAIN_SANDBOX
+#if !defined(__native_client__)
 #if defined (HAVE_FILENO) && defined (F_GETFD)
   if (file)
     {

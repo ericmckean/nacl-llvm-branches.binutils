@@ -34,7 +34,7 @@ directory's path doesn't fit in @var{len} characters, the result is
 #define MAXPATHLEN 1024
 #endif
 
-#ifdef PNACL_TOOLCHAIN_SANDBOX
+#if defined(__native_client__)
 char *
 getcwd (char *buf, size_t len __attribute__ ((__unused__)))
 {
