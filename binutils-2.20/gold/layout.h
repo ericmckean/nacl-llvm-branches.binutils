@@ -51,12 +51,17 @@ class Output_segment_headers;
 class Output_file_header;
 class Output_segment;
 class Output_data;
+class Output_data_reloc_generic;
 class Output_data_dynamic;
 class Output_symtab_xindex;
 class Output_reduced_debug_abbrev_section;
 class Output_reduced_debug_info_section;
 class Eh_frame;
 class Target;
+
+// Return TRUE if SECNAME is the name of a compressed debug section.
+extern bool
+is_compressed_debug_section(const char* secname);
 
 // This task function handles mapping the input sections to output
 // sections and laying them out in memory.
@@ -307,6 +312,12 @@ class Layout
 	 const char* name, const elfcpp::Shdr<size, big_endian>& shdr,
 	 unsigned int reloc_shndx, unsigned int reloc_type, off_t* offset);
 
+  unsigned int
+  find_section_order_index(const std::string&);
+
+  void
+  read_layout_from_file();
+
   // Layout an input reloc section when doing a relocatable link.  The
   // section is RELOC_SHNDX in OBJECT, with data in SHDR.
   // DATA_SECTION is the reloc section to which it refers.  RR is the
@@ -362,11 +373,21 @@ class Layout
   // Add an Output_section_data to the layout.  This is used for
   // special sections like the GOT section.  IS_DYNAMIC_LINKER_SECTION
   // is true for sections which are used by the dynamic linker, such
-  // as dynamic reloc sections.
+  // as dynamic reloc sections.  IS_RELRO is true for relro sections.
+  // IS_LAST_RELRO is true for the last relro section.
+  // IS_FIRST_NON_RELRO is true for the first section after the relro
+  // sections.
   Output_section*
   add_output_section_data(const char* name, elfcpp::Elf_Word type,
 			  elfcpp::Elf_Xword flags,
-			  Output_section_data*, bool is_dynamic_linker_section);
+			  Output_section_data*, bool is_dynamic_linker_section,
+			  bool is_relro, bool is_last_relro,
+			  bool is_first_non_relro);
+
+  // Increase the size of the relro segment by this much.
+  void
+  increase_relro(unsigned int s)
+  { this->increase_relro_ += s; }
 
   // Create dynamic sections if necessary.
   void
@@ -423,12 +444,18 @@ class Layout
   is_linkonce(const char* name)
   { return strncmp(name, ".gnu.linkonce", sizeof(".gnu.linkonce") - 1) == 0; }
 
+  // Whether we have added an input section.
+  bool
+  have_added_input_section() const
+  { return this->have_added_input_section_; }
+
   // Return true if a section is a debugging section.
   static inline bool
   is_debug_info_section(const char* name)
   {
     // Debugging sections can only be recognized by name.
     return (strncmp(name, ".debug", sizeof(".debug") - 1) == 0
+            || strncmp(name, ".zdebug", sizeof(".zdebug") - 1) == 0
             || strncmp(name, ".gnu.linkonce.wi.",
                        sizeof(".gnu.linkonce.wi.") - 1) == 0
             || strncmp(name, ".line", sizeof(".line") - 1) == 0
@@ -541,6 +568,14 @@ class Layout
   incremental_inputs()
   { return this->incremental_inputs_; }
 
+  // For the target-specific code to add dynamic tags which are common
+  // to most targets.
+  void
+  add_target_dynamic_tags(bool use_rel, const Output_data* plt_got,
+			  const Output_data* plt_rel,
+			  const Output_data_reloc_generic* dyn_rel,
+			  bool add_debug, bool dynrel_includes_plt);
+
   // Compute and write out the build ID if needed.
   void
   write_build_id(Output_file*) const;
@@ -576,7 +611,8 @@ class Layout
 
   // Make a section for a linker script to hold data.
   Output_section*
-  make_output_section_for_script(const char* name);
+  make_output_section_for_script(const char* name,
+				 Script_sections::Section_type section_type);
 
   // Make a segment.  This is used by the linker script code.
   Output_segment*
@@ -708,6 +744,10 @@ class Layout
   void
   finish_dynamic_section(const Input_objects*, const Symbol_table*);
 
+  // Set the size of the _DYNAMIC symbol.
+  void
+  set_dynamic_symbol_size(const Symbol_table*);
+
   // Create the .interp section and PT_INTERP segment.
   void
   create_interp(const Target* target);
@@ -748,20 +788,24 @@ class Layout
   Output_section*
   get_output_section(const char* name, Stringpool::Key name_key,
 		     elfcpp::Elf_Word type, elfcpp::Elf_Xword flags,
-		     bool is_interp, bool is_dynamic_linker_section);
+		     bool is_interp, bool is_dynamic_linker_section,
+		     bool is_relro, bool is_last_relro,
+		     bool is_first_non_relro);
 
   // Choose the output section for NAME in RELOBJ.
   Output_section*
   choose_output_section(const Relobj* relobj, const char* name,
 			elfcpp::Elf_Word type, elfcpp::Elf_Xword flags,
 			bool is_input_section, bool is_interp,
-			bool is_dynamic_linker_section);
+			bool is_dynamic_linker_section, bool is_relro,
+			bool is_last_relro, bool is_first_non_relro);
 
   // Create a new Output_section.
   Output_section*
   make_output_section(const char* name, elfcpp::Elf_Word type,
 		      elfcpp::Elf_Xword flags, bool is_interp,
-		      bool is_dynamic_linker_section);
+		      bool is_dynamic_linker_section, bool is_relro,
+		      bool is_last_relro, bool is_first_non_relro);
 
   // Attach a section to a segment.
   void
@@ -937,6 +981,9 @@ class Layout
   Output_segment* tls_segment_;
   // A pointer to the PT_GNU_RELRO segment if there is one.
   Output_segment* relro_segment_;
+  // A backend may increase the size of the PT_GNU_RELRO segment if
+  // there is one.  This is the amount to increase it by.
+  unsigned int increase_relro_;
   // The SHT_SYMTAB output section.
   Output_section* symtab_section_;
   // The SHT_SYMTAB_SHNDX for the regular symbol table if there is one.
@@ -947,6 +994,8 @@ class Layout
   Output_symtab_xindex* dynsym_xindex_;
   // The SHT_DYNAMIC output section if there is one.
   Output_section* dynamic_section_;
+  // The _DYNAMIC symbol if there is one.
+  Symbol* dynamic_symbol_;
   // The dynamic data which goes into dynamic_section_.
   Output_data_dynamic* dynamic_data_;
   // The exception frame output section if there is one.
@@ -967,6 +1016,8 @@ class Layout
   Group_signatures group_signatures_;
   // The size of the output file.
   off_t output_file_size_;
+  // Whether we have added an input section to an output section.
+  bool have_added_input_section_;
   // Whether we have attached the sections to the segments.
   bool sections_are_attached_;
   // Whether we have seen an object file marked to require an
@@ -997,6 +1048,10 @@ class Layout
   Segment_states* segment_states_;
   // A relaxation debug checker.  We only create one when in debugging mode.
   Relaxation_debug_check* relaxation_debug_check_;
+  // Hash a pattern to its position in the section ordering file.
+  Unordered_map<std::string, unsigned int> input_section_position_;
+  // Vector of glob only patterns in the section_ordering file.
+  std::vector<std::string> input_section_glob_;
 };
 
 // This task handles writing out data in output sections which is not

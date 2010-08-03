@@ -38,8 +38,11 @@ if { ![istarget cris-*-*] && ![istarget crisv32-*-*]
 # The MN10300 port supports link time relaxation which in turn allows
 # for link time resolution of the differneces of two symbols which are
 # undefined at assembly time.  Hence this test will not pass for the
-# MN10300.
-if { ![istarget hppa*-*-*] && ![istarget mn10300-*-*] && ![istarget am3*-*-*] } then {
+# MN10300.  The same thing is true for the RX port as well.
+if { ![istarget hppa*-*-*]
+     && ![istarget rx-*-*]
+     && ![istarget mn10300-*-*]
+     && ![istarget am3*-*-*] } then {
     gas_test_error "diff1.s" "" "difference of two undefined symbols"
 }
 
@@ -108,13 +111,13 @@ case $target_triplet in {
 	# This is usually revealed by the error message:
 	#  symbol `sym' required but not present
 	setup_xfail "*arm*-*-*aout*" "*arm*-*-*coff" \
-	    "*arm*-*-pe" "m68hc*-*-*" "maxq-*-*" \
-	    "vax*-*-*" "z8k-*-*"
+	    "*arm*-*-pe" "m68hc*-*-*" \
+	    "rx-*-*" "vax*-*-*" "z8k-*-*"
 	run_dump_test redef2
 	setup_xfail "*-*-aix*" "*-*-coff" "*-*-cygwin" "*-*-mingw*" "*-*-pe*" \
 	    "bfin-*-*" "hppa*-*-hpux*" \
-	    "m68hc*-*-*" "maxq-*-*" "or32-*-*" \
-	    "vax*-*-*" "z8k-*-*"
+	    "m68hc*-*-*" "or32-*-*" \
+	    "rx-*-*" "vax*-*-*" "z8k-*-*"
 	run_dump_test redef3
 	gas_test_error "redef4.s" "" ".set for symbol already used as label"
 	gas_test_error "redef5.s" "" ".set for symbol already defined through .comm"
@@ -163,7 +166,7 @@ proc general_info_section {} {
     gas_start "comment.s" "-agn"
     while 1 {
 	expect {
-	    -re "^ \[^\n\]*\t: \-agn\[^\n\]*\n"                { set x1 1 }
+	    -re "^ \[^\n\]*\t: .*\-agn\[^\n\]*\n"                { set x1 1 }
 	    -re "^ \[^\n\]*\t: \[^\n\]*comment\.s\[^\n\]*\n"   { set x2 1 }
 	    -re "^ \[^\n\]*\t: a\.out\[^\n\]*\n"               { set x3 1 }
 	    -re "\[^\n\]*\n"     { }
@@ -284,7 +287,7 @@ proc test_cond {} {
 	send_log "$comp_output\n"
 	fail $testname
     } else {
-	if { [regexp_diff dump.out $srcdir/$subdir/cond.l] } {
+	if { [regexp_diff dump.out $srcdir/$subdir/cond.l ""] } {
 	    fail $testname
 	} else {
 	    pass $testname
@@ -300,6 +303,7 @@ case $target_triplet in {
     { hppa*-*-* } { }
     { *c4x*-*-* } { }
     { *c54x*-*-* } { }
+    { rx-*-* } { }
     default {
         test_cond
 	remote_download host "$srcdir/$subdir/incbin.dat"
@@ -323,6 +327,11 @@ run_dump_test sleb128
 # MeP put bytes into packets.
 if { ![istarget "tic4x*-*-*"] && ![istarget "tic54x*-*-*"] && ![istarget "hppa*-*-hpux*"] && ![istarget "mep*-*-*"] } {
     run_dump_test relax
+}
+
+# powerpc allows a string argument to .byte
+if { ![istarget "powerpc*-*-*"] && ![istarget "rs6000*-*-*"] } {
+    run_dump_test byte
 }
 
 # .quad is 16 bytes on i960.

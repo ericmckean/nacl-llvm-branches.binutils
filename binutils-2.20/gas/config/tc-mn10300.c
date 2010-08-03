@@ -1,6 +1,6 @@
 /* tc-mn10300.c -- Assembler code for the Matsushita 10300
    Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-   2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+   2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -1772,8 +1772,6 @@ keep_going:
 	 that they do indeed not match.  */
       if (opcode->no_match_operands)
 	{
-	  int i;
-
 	  /* Look at each operand to see if it's marked.  */
 	  for (i = 0; i < MN10300_MAX_OPERANDS; i++)
 	    {
@@ -2056,6 +2054,7 @@ keep_going:
       for (i = 0; i < fc; i++)
 	{
 	  const struct mn10300_operand *operand;
+	  int reloc_size;
 
 	  operand = &mn10300_operands[fixups[i].opindex];
 	  if (fixups[i].reloc != BFD_RELOC_UNUSED
@@ -2065,9 +2064,7 @@ keep_going:
 	      && fixups[i].reloc != BFD_RELOC_MN10300_GOT32)
 	    {
 	      reloc_howto_type *reloc_howto;
-	      int size;
 	      int offset;
-	      fixS *fixP;
 
 	      reloc_howto = bfd_reloc_type_lookup (stdoutput,
 						   fixups[i].reloc);
@@ -2075,20 +2072,20 @@ keep_going:
 	      if (!reloc_howto)
 		abort ();
 
-	      size = bfd_get_reloc_size (reloc_howto);
+	      reloc_size = bfd_get_reloc_size (reloc_howto);
 
-	      if (size < 1 || size > 4)
+	      if (reloc_size < 1 || reloc_size > 4)
 		abort ();
 
 	      offset = 4 - size;
-	      fixP = fix_new_exp (frag_now, f - frag_now->fr_literal + offset,
-				  size, &fixups[i].exp,
-				  reloc_howto->pc_relative,
-				  fixups[i].reloc);
+	      fix_new_exp (frag_now, f - frag_now->fr_literal + offset,
+			   reloc_size, &fixups[i].exp,
+			   reloc_howto->pc_relative,
+			   fixups[i].reloc);
 	    }
 	  else
 	    {
-	      int reloc, pcrel, reloc_size, offset;
+	      int reloc, pcrel, offset;
 	      fixS *fixP;
 
 	      reloc = BFD_RELOC_NONE;

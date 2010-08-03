@@ -583,7 +583,7 @@ proc copy_executable { prog flags test1 test2 } {
 	setup_xfail "arm*-*-pe"
 	setup_xfail "thumb*-*-coff"
 	setup_xfail "thumb*-*-pe"
-	setup_xfail "x86_64-*-mingw*"
+	setup_xfail "*-*-mingw*"
 	setup_xfail "*-*-cygwin*"
     
 	fail $test1
@@ -834,7 +834,9 @@ if [is_elf_format] {
     objcopy_test_readelf "ELF group" group-2.s
     objcopy_test_readelf "ELF group" group-3.s
     objcopy_test_readelf "ELF group" group-4.s
+    run_dump_test "group-5"
     run_dump_test "copy-1"
+    run_dump_test "note-1"
 }
 
 run_dump_test "copy-2"
@@ -875,5 +877,11 @@ if [is_elf_format] {
     run_dump_test "localize-hidden-1"
     run_dump_test "testranges"
     run_dump_test "testranges-ia64"
+
+    run_dump_test "add-section"
+    run_dump_test "add-empty-section"
+
+    run_dump_test "exclude-1a"
+    run_dump_test "exclude-1b"
 }
 run_dump_test "localize-hidden-2"
