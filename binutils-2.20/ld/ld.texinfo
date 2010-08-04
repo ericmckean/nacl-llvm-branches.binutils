@@ -54,7 +54,7 @@ This file documents the @sc{gnu} linker LD
 @end ifset
 version @value{VERSION}.
 
-Copyright @copyright{} 1991, 92, 93, 94, 95, 96, 97, 98, 99, 2000,
+Copyright @copyright{} 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
@@ -92,8 +92,9 @@ section entitled ``GNU Free Documentation License''.
 
 @vskip 0pt plus 1filll
 @c man begin COPYRIGHT
-Copyright @copyright{} 1991, 92, 93, 94, 95, 96, 97, 98, 99, 2000, 2001,
-2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+Copyright @copyright{} 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
+1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009 Free
+Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3
@@ -364,6 +365,17 @@ argument must be one of the strings @samp{archive}, @samp{shared}, or
 @samp{-Bstatic}, and the other two keywords are functionally equivalent
 to @samp{-Bdynamic}.  This option may be used any number of times.
 
+@kindex --audit @var{AUDITLIB}
+@item --audit @var{AUDITLIB}
+Adds @var{AUDITLIB} to the @code{DT_AUDIT} entry of the dynamic section.
+@var{AUDITLIB} is not checked for existence, nor will it use the DT_SONAME
+specified in the library.  If specified multiple times @code{DT_AUDIT}
+will contain a colon separated list of audit interfaces to use. If the linker
+finds an object with an audit entry while searching for shared libraries,
+it will add a corresponding @code{DT_DEPAUDIT} entry in the output file.  
+This option is only meaningful on ELF platforms supporting the rtld-audit
+interface.  
+
 @ifset I960
 @cindex architectures
 @kindex -A @var{arch}
@@ -450,6 +462,17 @@ compatibility with other linkers.  They assign space to common symbols
 even if a relocatable output file is specified (with @samp{-r}).  The
 script command @code{FORCE_COMMON_ALLOCATION} has the same effect.
 @xref{Miscellaneous Commands}.
+
+@kindex --depaudit @var{AUDITLIB}
+@kindex -P @var{AUDITLIB}
+@item --depaudit @var{AUDITLIB}
+@itemx -P @var{AUDITLIB}
+Adds @var{AUDITLIB} to the @code{DT_DEPAUDIT} entry of the dynamic section.
+@var{AUDITLIB} is not checked for existence, nor will it use the DT_SONAME
+specified in the library.  If specified multiple times @code{DT_DEPAUDIT}
+will contain a colon separated list of audit interfaces to use.  This
+option is only meaningful on ELF platforms supporting the rtld-audit interface.
+The -P option is provided for Solaris compatibility.  
 
 @cindex entry point, from command line
 @kindex -e @var{entry}
@@ -758,8 +781,9 @@ scripts.
 @kindex --nmagic
 @item -n
 @itemx --nmagic
-Turn off page alignment of sections, and mark the output as
-@code{NMAGIC} if possible.
+Turn off page alignment of sections, and disable linking against shared
+libraries.  If the output format supports Unix style magic numbers,
+mark the output as @code{NMAGIC}.
 
 @kindex -N
 @kindex --omagic
@@ -1110,27 +1134,24 @@ restore the old behaviour.
 @item --as-needed
 @itemx --no-as-needed
 This option affects ELF DT_NEEDED tags for dynamic libraries mentioned
-on the command line after the @option{--as-needed} option.  Normally,
+on the command line after the @option{--as-needed} option.  Normally
 the linker will add a DT_NEEDED tag for each dynamic library mentioned
 on the command line, regardless of whether the library is actually
-needed.  @option{--as-needed} causes a DT_NEEDED tag to only be emitted
-for a library that satisfies a symbol reference from regular objects
-which is undefined at the point that the library was linked, or, if
-the library is not found in the DT_NEEDED lists of other libraries
-linked up to that point, a reference from another dynamic library.
+needed or not.  @option{--as-needed} causes a DT_NEEDED tag to only be
+emitted for a library that satisfies an undefined symbol reference
+from a regular object file or, if the library is not found in the
+DT_NEEDED lists of other libraries linked up to that point, an
+undefined symbol reference from another dynamic library.
 @option{--no-as-needed} restores the default behaviour.
 
 @kindex --add-needed
 @kindex --no-add-needed
 @item --add-needed
 @itemx --no-add-needed
-This option affects the treatment of dynamic libraries from ELF
-DT_NEEDED tags in dynamic libraries mentioned on the command line after
-the @option{--no-add-needed} option.  Normally, the linker will add
-a DT_NEEDED tag for each dynamic library from DT_NEEDED tags.
-@option{--no-add-needed} causes DT_NEEDED tags will never be emitted
-for those libraries from DT_NEEDED tags. @option{--add-needed} restores
-the default behaviour.
+These two options have been deprecated because of the similarity of
+their names to the @option{--as-needed} and @option{--no-as-needed}
+options.  They have been replaced by @option{--copy-dt-needed-entries}
+and @option{--no-copy-dt-needed-entries}.
 
 @kindex -assert @var{keyword}
 @item -assert @var{keyword}
@@ -1230,6 +1251,29 @@ restored by using the command line switch @option{--check-sections}.
 Section overlap is not usually checked for relocatable links.  You can
 force checking in that case by using the @option{--check-sections}
 option.
+
+@kindex --copy-dt-needed-entries
+@kindex --no-copy-dt-needed-entries
+@item --copy-dt-needed-entries
+@itemx --no-copy-dt-needed-entries
+This option affects the treatment of dynamic libraries referred to 
+by DT_NEEDED tags @emph{inside} ELF dynamic libraries mentioned on the
+command line.  Normally the linker will add a DT_NEEDED tag to the
+output binary for each library mentioned in a DT_NEEDED tag in an
+input dynamic library.  With @option{--no-copy-dt-needed-entries}
+specified on the command line however any dynamic libraries that
+follow it will have their DT_NEEDED entries ignored.  The default
+behaviour can be restored with @option{--copy-dt-needed-entries}.
+
+This option also has an effect on the resolution of symbols in dynamic
+libraries.  With the default setting dynamic libraries mentioned on
+the command line will be recursively searched, following their
+DT_NEEDED tags to other libraries, in order to resolve symbols
+required by the output binary.  With
+@option{--no-copy-dt-needed-entries} specified however the searching
+of dynamic libraries that follow it will stop with the dynamic
+library itself.  No DT_NEEDED links will be traversed to resolve
+symbols.
 
 @cindex cross reference table
 @kindex --cref
@@ -1341,7 +1385,7 @@ the linker recursively marks as used any section referenced by their
 relocations.  See @samp{--entry} and @samp{--undefined}.
 
 This option can be set when doing a partial link (enabled with option
-@samp{-r}).  In this case the root of symbols kept must be explicitely 
+@samp{-r}).  In this case the root of symbols kept must be explicitly 
 specified either by an @samp{--entry} or @samp{--undefined} option or by
 a @code{ENTRY} command in the linker script.
 
@@ -1521,7 +1565,9 @@ This option is ignored for SVR4 compatibility.
 @kindex --relax
 @cindex synthesizing linker
 @cindex relaxing addressing modes
+@cindex --no-relax
 @item --relax
+@itemx --no-relax
 An option with machine dependent effects.
 @ifset GENERIC
 This option is only supported on a few targets.
@@ -1542,22 +1588,26 @@ This option is only supported on a few targets.
 @xref{PowerPC ELF32,,@command{ld} and PowerPC 32-bit ELF Support}.
 @end ifset
 
-On some platforms, the @samp{--relax} option performs global
-optimizations that become possible when the linker resolves addressing
-in the program, such as relaxing address modes and synthesizing new
-instructions in the output object file.
+On some platforms the @samp{--relax} option performs target specific,
+global optimizations that become possible when the linker resolves
+addressing in the program, such as relaxing address modes,
+synthesizing new instructions, selecting shorter version of current
+instructions, and combinig constant values.
 
 On some platforms these link time global optimizations may make symbolic
 debugging of the resulting executable impossible.
 @ifset GENERIC
-This is known to be
-the case for the Matsushita MN10200 and MN10300 family of processors.
+This is known to be the case for the Matsushita MN10200 and MN10300
+family of processors.
 @end ifset
 
 @ifset GENERIC
 On platforms where this is not supported, @samp{--relax} is accepted,
 but ignored.
 @end ifset
+
+On platforms where @samp{--relax} is accepted the option
+@samp{--no-relax} can be used to disable the feature.
 
 @cindex retaining specified symbols
 @cindex stripping all but some symbols
@@ -2169,6 +2219,14 @@ feature is fully enabled and warnings are not printed.  If you specify
 mismatches are considered to be errors.
 [This option is specific to the i386 PE targeted port of the linker]
 
+@kindex --leading-underscore
+@kindex --no-leading-underscore
+@item --leading-underscore
+@itemx --no-leading-underscore
+For most targets default symbol-prefix is an underscore and is defined
+in target's description. By this option it is possible to
+disable/enable the default underscore symbol-prefix.
+
 @cindex DLLs, creating
 @kindex --export-all-symbols
 @item --export-all-symbols
@@ -2200,6 +2258,11 @@ These cygwin-excludes are: @code{_cygwin_dll_entry@@12},
 @item --exclude-symbols @var{symbol},@var{symbol},...
 Specifies a list of symbols which should not be automatically
 exported.  The symbol names may be delimited by commas or colons.
+[This option is specific to the i386 PE targeted port of the linker]
+
+@kindex --exclude-all-symbols
+@item --exclude-all-symbols
+Specifies no symbols should be automatically exported.
 [This option is specific to the i386 PE targeted port of the linker]
 
 @kindex --file-alignment
@@ -2874,7 +2937,9 @@ the @samp{-e} @var{entry} command-line option;
 @item
 the @code{ENTRY(@var{symbol})} command in a linker script;
 @item
-the value of the symbol @code{start}, if defined;
+the value of a target specific symbol, if it is defined;  For many
+targets this is @code{start}, but PE and BeOS based systems for example
+check a list of possible entry symbols, matching the first one found.
 @item
 the address of the first byte of the @samp{.text} section, if present;
 @item
@@ -4688,7 +4753,8 @@ The @var{name} is used only for reference in the @code{SECTIONS} command
 of the linker script.  It is not put into the output file.  Program
 header names are stored in a separate name space, and will not conflict
 with symbol names, file names, or section names.  Each program header
-must have a distinct name.
+must have a distinct name.  The headers are processed in order and it
+is usual for them to map to sections in ascending load address order.
 
 Certain program header types describe segments of memory which the
 system loader will load from the file.  In the linker script, you
@@ -4712,11 +4778,13 @@ segment at all.
 
 @kindex FILEHDR
 @kindex PHDRS
-You may use the @code{FILEHDR} and @code{PHDRS} keywords appear after
+You may use the @code{FILEHDR} and @code{PHDRS} keywords after
 the program header type to further describe the contents of the segment.
 The @code{FILEHDR} keyword means that the segment should include the ELF
 file header.  The @code{PHDRS} keyword means that the segment should
-include the ELF program headers themselves.
+include the ELF program headers themselves.  If applied to a loadable
+segment (@code{PT_LOAD}), all prior loadable segments must have one of
+these keywords.
 
 The @var{type} may be one of the following.  The numbers indicate the
 value of the keyword.
@@ -4842,8 +4910,8 @@ VERS_2.0 @{
 		 bar1; bar2;
 	 extern "C++" @{
 		 ns::*;
-		 "int f(int, double)";
-         @}
+		 "f(int, double)";
+	 @};
 @} VERS_1.2;
 @end smallexample
 
@@ -4968,7 +5036,8 @@ VERSION extern "lang" @{ version-script-commands @}
 The supported @samp{lang}s are @samp{C}, @samp{C++}, and @samp{Java}.
 The linker will iterate over the list of symbols at the link time and
 demangle them according to @samp{lang} before matching them to the
-patterns specified in @samp{version-script-commands}.
+patterns specified in @samp{version-script-commands}.  The default
+@samp{lang} is @samp{C}.
 
 Demangled names may contains spaces and other special characters.  As
 described above, you can use a glob pattern to match demangled names,
@@ -5872,6 +5941,10 @@ The @samp{--fix-cortex-a8} switch enables a link-time workaround for an erratum 
 
 The erratum only affects Thumb-2 code.  Please contact ARM for further details.
 
+@kindex --merge-exidx-entries
+@kindex --no-merge-exidx-entries
+The @samp{--no-merge-exidx-entries} switch disables the merging of adjacent exidx entries in debuginfo.
+
 @ifclear GENERIC
 @lowersections
 @end ifclear
@@ -6642,14 +6715,19 @@ bar
 _bar = bar
 another_foo = abc.dll.afoo
 var1 DATA
+doo = foo == foo2
+eoo DATA == var1
 @end example
 
-This example defines a DLL with a non-default base address and five
+This example defines a DLL with a non-default base address and seven
 symbols in the export table. The third exported symbol @code{_bar} is an
 alias for the second. The fourth symbol, @code{another_foo} is resolved
 by "forwarding" to another module and treating it as an alias for
 @code{afoo} exported from the DLL @samp{abc.dll}. The final symbol
-@code{var1} is declared to be a data object.
+@code{var1} is declared to be a data object. The @samp{doo} symbol in
+export library is an alias of @samp{foo}, which gets the string name
+in export table @samp{foo2}. The @samp{eoo} symbol is an data export
+symbol, which gets in export table the name @samp{var1}.
 
 The optional @code{LIBRARY <name>} command indicates the @emph{internal}
 name of the output DLL. If @samp{<name>} does not include a suffix,
@@ -6674,7 +6752,7 @@ The complete specification of an export symbol is:
 EXPORTS
   ( (  ( <name1> [ = <name2> ] )
      | ( <name1> = <module-name> . <external-name>))
-  [ @@ <integer> ] [NONAME] [DATA] [CONSTANT] [PRIVATE] ) *
+  [ @@ <integer> ] [NONAME] [DATA] [CONSTANT] [PRIVATE] [== <name3>] ) *
 @end example
 
 Declares @samp{<name1>} as an exported symbol from the DLL, or declares
@@ -6682,7 +6760,8 @@ Declares @samp{<name1>} as an exported symbol from the DLL, or declares
 @samp{<name1>} as a "forward" alias for the symbol
 @samp{<external-name>} in the DLL @samp{<module-name>}.
 Optionally, the symbol may be exported by the specified ordinal
-@samp{<integer>} alias.
+@samp{<integer>} alias. The optional @samp{<name3>} is the to be used
+string in import/export table for the symbol.
 
 The optional keywords that follow the declaration indicate:
 
@@ -7088,12 +7167,6 @@ control the linker:
 
 @cindex Xtensa options
 @table @option
-@kindex --no-relax
-@item --no-relax
-Since the Xtensa version of @code{ld} enables the @option{--relax} option
-by default, the @option{--no-relax} option is provided to disable
-relaxation.
-
 @item --size-opt
 When optimizing indirect calls to direct calls, optimize for code size
 more than performance.  With this option, the linker will not insert

@@ -61,6 +61,18 @@ typedef Expression* Expression_ptr;
 typedef void* Expression_ptr;
 #endif
 
+/* Script_section type.  */
+enum Script_section_type
+{
+  /* No section type.  */
+  SCRIPT_SECTION_TYPE_NONE,
+  SCRIPT_SECTION_TYPE_NOLOAD,
+  SCRIPT_SECTION_TYPE_DSECT,
+  SCRIPT_SECTION_TYPE_COPY,
+  SCRIPT_SECTION_TYPE_INFO,
+  SCRIPT_SECTION_TYPE_OVERLAY
+};
+
 /* A constraint for whether to use a particular output section
    definition.  */
 
@@ -83,6 +95,8 @@ struct Parser_output_section_header
 {
   /* The address.  This may be NULL.  */
   Expression_ptr address;
+  /* Section type.  May be NULL string.  */ 
+  enum Script_section_type section_type;
   /* The load address, from the AT specifier.  This may be NULL.  */
   Expression_ptr load_address;
   /* The alignment, from the ALIGN specifier.  This may be NULL.  */
@@ -222,6 +236,11 @@ script_add_extern(void* closure, const char*, size_t);
 extern void
 script_add_file(void* closure, const char*, size_t);
 
+/* Called by the bison parser to add a library to the link.  */
+
+extern void
+script_add_library(void* closure, const char*, size_t);
+
 /* Called by the bison parser to start and stop a group.  */
 
 extern void
@@ -283,6 +302,14 @@ script_push_lex_into_version_mode(void* closure);
 
 extern void
 script_pop_lex_mode(void* closure);
+
+/* Called by the bison parser to get the value of a symbol.  This is
+   called for a reference to a symbol, but is not called for something
+   like "sym += 10".  Uses of the special symbol "." can just call
+   script_exp_string.  */
+
+extern Expression_ptr
+script_symbol(void* closure, const char*, size_t);
 
 /* Called by the bison parser to set a symbol to a value.  PROVIDE is
    non-zero if the symbol should be provided--only defined if there is
@@ -388,6 +415,11 @@ script_data_segment_align(void* closure);
 
 extern void
 script_data_segment_relro_end(void* closure);
+
+/* Record the fact that a SEGMENT_START expression is seen.  */
+
+extern void
+script_saw_segment_start_expression(void* closure);
 
 /* Called by the bison parser for expressions.  */
 

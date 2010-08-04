@@ -315,6 +315,11 @@ fold_binary (etree_type *tree)
       for (seg = segments; seg; seg = seg->next) 
 	if (strcmp (seg->name, segment_name) == 0)
 	  {
+	    if (!seg->used
+		&& config.magic_demand_paged
+		&& (seg->value % config.maxpagesize) != 0)
+	      einfo (_("%P: warning: address of `%s' isn't multiple of maximum page size\n"),
+		     segment_name);
 	    seg->used = TRUE;
 	    expld.result.value = seg->value;
 	    expld.result.str = NULL;
@@ -831,6 +836,28 @@ exp_fold_tree_1 (etree_type *tree)
 	      h->u.def.section = expld.result.section;
 	      if (tree->type.node_class == etree_provide)
 		tree->type.node_class = etree_provided;
+
+	      /* Copy the symbol type if this is a simple assignment of
+	         one symbol to annother.  */
+	      if (tree->assign.src->type.node_class == etree_name)
+		{
+		  struct bfd_link_hash_entry *hsrc;
+
+		  hsrc = bfd_link_hash_lookup (link_info.hash,
+					       tree->assign.src->name.name,
+					       FALSE, FALSE, TRUE);
+		  if (hsrc)
+		    bfd_copy_link_hash_symbol_type (link_info.output_bfd, h,
+						    hsrc);
+		}
+	    }
+	  else if (expld.phase == lang_final_phase_enum)
+	    {
+	      h = bfd_link_hash_lookup (link_info.hash, tree->assign.dst,
+					FALSE, FALSE, TRUE);
+	      if (h != NULL
+		  && h->type == bfd_link_hash_new)
+		h->type = bfd_link_hash_undefined;
 	    }
 	}
       break;
@@ -991,6 +1018,8 @@ exp_assert (etree_type *exp, const char *message)
 void
 exp_print_tree (etree_type *tree)
 {
+  bfd_boolean function_like;
+
   if (config.map_file == NULL)
     config.map_file = stderr;
 
@@ -1011,7 +1040,7 @@ exp_print_tree (etree_type *tree)
       minfo ("%s+0x%v", tree->rel.section->name, tree->rel.value);
       return;
     case etree_assign:
-      fprintf (config.map_file, "%s", tree->assign.dst);
+      fputs (tree->assign.dst, config.map_file);
       exp_print_token (tree->type.node_code, TRUE);
       exp_print_tree (tree->assign.src);
       break;
@@ -1019,20 +1048,38 @@ exp_print_tree (etree_type *tree)
     case etree_provided:
       fprintf (config.map_file, "PROVIDE (%s, ", tree->assign.dst);
       exp_print_tree (tree->assign.src);
-      fprintf (config.map_file, ")");
+      fputc (')', config.map_file);
       break;
     case etree_binary:
-      fprintf (config.map_file, "(");
+      function_like = FALSE;
+      switch (tree->type.node_code)
+	{
+	case MAX_K:
+	case MIN_K:
+	case ALIGN_K:
+	case DATA_SEGMENT_ALIGN:
+	case DATA_SEGMENT_RELRO_END:
+	  function_like = TRUE;
+	}
+      if (function_like)
+	{
+	  exp_print_token (tree->type.node_code, FALSE);
+	  fputc (' ', config.map_file);
+	}
+      fputc ('(', config.map_file);
       exp_print_tree (tree->binary.lhs);
-      exp_print_token (tree->type.node_code, TRUE);
+      if (function_like)
+	fprintf (config.map_file, ", ");
+      else
+	exp_print_token (tree->type.node_code, TRUE);
       exp_print_tree (tree->binary.rhs);
-      fprintf (config.map_file, ")");
+      fputc (')', config.map_file);
       break;
     case etree_trinary:
       exp_print_tree (tree->trinary.cond);
-      fprintf (config.map_file, "?");
+      fputc ('?', config.map_file);
       exp_print_tree (tree->trinary.lhs);
-      fprintf (config.map_file, ":");
+      fputc (':', config.map_file);
       exp_print_tree (tree->trinary.rhs);
       break;
     case etree_unary:
@@ -1041,7 +1088,7 @@ exp_print_tree (etree_type *tree)
 	{
 	  fprintf (config.map_file, " (");
 	  exp_print_tree (tree->unary.child);
-	  fprintf (config.map_file, ")");
+	  fputc (')', config.map_file);
 	}
       break;
 
@@ -1053,9 +1100,7 @@ exp_print_tree (etree_type *tree)
 
     case etree_name:
       if (tree->type.node_code == NAME)
-	{
-	  fprintf (config.map_file, "%s", tree->name.name);
-	}
+	fputs (tree->name.name, config.map_file);
       else
 	{
 	  exp_print_token (tree->type.node_code, FALSE);

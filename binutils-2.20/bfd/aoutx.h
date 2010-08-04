@@ -1,6 +1,6 @@
 /* BFD semi-generic back-end for a.out binaries.
    Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Written by Cygnus Support.
 
@@ -629,7 +629,9 @@ NAME (aout, some_aout_object_p) (bfd *abfd,
   if (execp->a_entry != 0
       || (execp->a_entry >= obj_textsec (abfd)->vma
 	  && execp->a_entry < (obj_textsec (abfd)->vma
-			       + obj_textsec (abfd)->size)))
+			       + obj_textsec (abfd)->size)
+	  && execp->a_trsize == 0
+	  && execp->a_drsize == 0))
     abfd->flags |= EXEC_P;
 #ifdef STAT_FOR_EXEC
   else
@@ -1808,7 +1810,7 @@ add_to_stringtab (bfd *abfd,
 		  bfd_boolean copy)
 {
   bfd_boolean hash;
-  bfd_size_type index;
+  bfd_size_type str_index;
 
   /* An index of 0 always means the empty string.  */
   if (str == 0 || *str == '\0')
@@ -1820,14 +1822,14 @@ add_to_stringtab (bfd *abfd,
   if ((abfd->flags & BFD_TRADITIONAL_FORMAT) != 0)
     hash = FALSE;
 
-  index = _bfd_stringtab_add (tab, str, hash, copy);
+  str_index = _bfd_stringtab_add (tab, str, hash, copy);
 
-  if (index != (bfd_size_type) -1)
+  if (str_index != (bfd_size_type) -1)
     /* Add BYTES_IN_WORD to the return value to account for the
        space taken up by the string table size.  */
-    index += BYTES_IN_WORD;
+    str_index += BYTES_IN_WORD;
 
-  return index;
+  return str_index;
 }
 
 /* Write out a strtab.  ABFD is already at the right location in the
@@ -3284,7 +3286,7 @@ aout_link_check_ar_symbols (bfd *abfd,
 	    {
 	      int skip = 0;
 
-	      switch (info->common_skip_ar_aymbols)
+	      switch (info->common_skip_ar_symbols)
 		{
 		case bfd_link_common_skip_text:
 		  skip = (type == (N_TEXT | N_EXT));
@@ -5233,8 +5235,6 @@ aout_link_write_symbols (struct aout_final_link_info *finfo, bfd *input_bfd)
 static bfd_boolean
 aout_link_input_bfd (struct aout_final_link_info *finfo, bfd *input_bfd)
 {
-  bfd_size_type sym_count;
-
   BFD_ASSERT (bfd_get_format (input_bfd) == bfd_object);
 
   /* If this is a dynamic object, it may need special handling.  */
@@ -5247,8 +5247,6 @@ aout_link_input_bfd (struct aout_final_link_info *finfo, bfd *input_bfd)
      finfo->info->keep_memory is FALSE.  */
   if (! aout_get_external_symbols (input_bfd))
     return FALSE;
-
-  sym_count = obj_aout_external_sym_count (input_bfd);
 
   /* Write out the symbols and get a map of the new indices.  The map
      is placed into finfo->symbol_map.  */
