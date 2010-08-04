@@ -2657,6 +2657,7 @@ get_osabi_name (unsigned int osabi)
 	    switch (osabi)
 	      {
 	      case ELFOSABI_ARM:	return "ARM";
+    case ELFOSABI_NACL:		return "NativeClient";
 	      default:
 		break;
 	      }

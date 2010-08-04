@@ -78,6 +78,7 @@
 #define ELFOSABI_C6000_ELFABI 64 /* Bare-metal TMS320C6000 */
 #define ELFOSABI_C6000_LINUX 65 /* Linux TMS320C6000 */
 #define ELFOSABI_ARM	     97	/* ARM */
+#define ELFOSABI_NACL	    123	/* x86 NativeClient */
 #define ELFOSABI_STANDALONE 255	/* Standalone (embedded) application */
 
 #define EI_ABIVERSION	8	/* ABI version */

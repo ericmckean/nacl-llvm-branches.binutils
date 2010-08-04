@@ -306,6 +306,7 @@ IT_SRCS = itbl-parse.c itbl-lex.c $(srcdir)/itbl-ops.c
 IT_DEPS = $(srcdir)/itbl-parse.y $(srcdir)/itbl-lex.l $(srcdir)/config/itbl-@target_cpu_type@.h
 IT_OBJS = itbl-parse.@OBJEXT@ itbl-lex.@OBJEXT@ itbl-ops.@OBJEXT@
 
+	nacl \
 # Regular source files.
 GAS_CFILES = \
 	app.c \
@@ -411,6 +412,7 @@ TARGET_CPU_CFILES = \
 	config/tc-moxie.c \
 	config/tc-msp430.c \
 	config/tc-mt.c \
+	config/tc-nacl.c \
 	config/tc-ns32k.c \
 	config/tc-openrisc.c \
 	config/tc-or32.c \
@@ -474,6 +476,7 @@ TARGET_CPU_HFILES = \
 	config/tc-mn10300.h \
 	config/tc-msp430.h \
 	config/tc-mt.h \
+	config/tc-nacl.h \
 	config/tc-ns32k.h \
 	config/tc-openrisc.h \
 	config/tc-or32.h \
@@ -818,6 +821,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-moxie.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-msp430.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-mt.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-nacl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-ns32k.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-openrisc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-or32.Po@am__quote@
@@ -1384,6 +1388,20 @@ tc-mt.obj: config/tc-mt.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-mt.c' object='tc-mt.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-mt.obj `if test -f 'config/tc-mt.c'; then $(CYGPATH_W) 'config/tc-mt.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-mt.c'; fi`
+
+tc-nacl.o: config/tc-nacl.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-nacl.o -MD -MP -MF $(DEPDIR)/tc-nacl.Tpo -c -o tc-nacl.o `test -f 'config/tc-nacl.c' || echo '$(srcdir)/'`config/tc-nacl.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/tc-nacl.Tpo $(DEPDIR)/tc-nacl.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-nacl.c' object='tc-nacl.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-nacl.o `test -f 'config/tc-nacl.c' || echo '$(srcdir)/'`config/tc-nacl.c
+
+tc-nacl.obj: config/tc-nacl.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-nacl.obj -MD -MP -MF $(DEPDIR)/tc-nacl.Tpo -c -o tc-nacl.obj `if test -f 'config/tc-nacl.c'; then $(CYGPATH_W) 'config/tc-nacl.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-nacl.c'; fi`
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/tc-nacl.Tpo $(DEPDIR)/tc-nacl.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-nacl.c' object='tc-nacl.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-nacl.obj `if test -f 'config/tc-nacl.c'; then $(CYGPATH_W) 'config/tc-nacl.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-nacl.c'; fi`
 
 tc-ns32k.o: config/tc-ns32k.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-ns32k.o -MD -MP -MF $(DEPDIR)/tc-ns32k.Tpo -c -o tc-ns32k.o `test -f 'config/tc-ns32k.c' || echo '$(srcdir)/'`config/tc-ns32k.c
