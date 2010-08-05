@@ -306,7 +306,6 @@ IT_SRCS = itbl-parse.c itbl-lex.c $(srcdir)/itbl-ops.c
 IT_DEPS = $(srcdir)/itbl-parse.y $(srcdir)/itbl-lex.l $(srcdir)/config/itbl-@target_cpu_type@.h
 IT_OBJS = itbl-parse.@OBJEXT@ itbl-lex.@OBJEXT@ itbl-ops.@OBJEXT@
 
-	nacl \
 # Regular source files.
 GAS_CFILES = \
 	app.c \
