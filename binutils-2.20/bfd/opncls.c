@@ -622,6 +622,7 @@ bfd_openw (const char *filename, const char *target)
   return nbfd;
 }
 
+#if !defined(__native_client__)
 static inline void
 _maybe_make_executable (bfd * abfd)
 {
@@ -647,6 +648,7 @@ _maybe_make_executable (bfd * abfd)
 	}
     }
 }
+#endif
 
 /*
 
@@ -698,8 +700,10 @@ bfd_close (bfd *abfd)
 
   ret = abfd->iovec->bclose (abfd);
 
+#if !defined(__native_client__)
   if (ret)
     _maybe_make_executable (abfd);
+#endif
 
   _bfd_delete_bfd (abfd);
 
@@ -735,8 +739,10 @@ bfd_close_all_done (bfd *abfd)
 
   ret = bfd_cache_close (abfd);
 
+#if !defined(__native_client__)
   if (ret)
     _maybe_make_executable (abfd);
+#endif
 
   _bfd_delete_bfd (abfd);
 

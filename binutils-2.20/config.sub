@@ -239,6 +239,10 @@ case $os in
 		basic_machine=m68k-atari
 		os=-mint
 		;;
+	-nacl*)
+        	basic_machine=i686-pc
+	        os=-nacl
+        	;;
 esac
 
 # Decode aliases for certain CPU-COMPANY combinations.
@@ -329,6 +333,14 @@ case $basic_machine in
 	# (2) the word "unknown" tends to confuse beginning users.
 	i*86 | x86_64)
 	  basic_machine=$basic_machine-pc
+	  ;;
+	nacl64*)
+	  basic_machine=x86_64-pc
+	  os=-nacl
+	  ;;
+	nacl*)
+	  basic_machine=i686-pc
+	  os=-nacl
 	  ;;
 	nacl64*)
 	  basic_machine=x86_64-pc
@@ -1336,6 +1348,9 @@ case $os in
 			os=-nto$os
 			;;
 		esac
+		;;
+	-nacl*)
+		os=-nacl
 		;;
 	-nacl*)
 		os=-nacl

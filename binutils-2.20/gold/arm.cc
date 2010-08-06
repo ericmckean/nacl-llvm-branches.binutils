@@ -9608,6 +9608,13 @@ Target_arm<big_endian>::merge_processor_specific_flags(
     const std::string& name,
     elfcpp::Elf_Word flags)
 {
+  if (parameters->options().native_client())
+    {
+      const int EF_NACL_ALIGN_16 = 0x100000;
+      this->set_processor_specific_flags(EF_NACL_ALIGN_16);
+      return;
+    }
+
   if (this->are_processor_specific_flags_set())
     {
       elfcpp::Elf_Word out_flags = this->processor_specific_flags();
@@ -9657,12 +9664,20 @@ Target_arm<big_endian>::do_adjust_elf_header(
   unsigned char e_ident[elfcpp::EI_NIDENT];
   memcpy(e_ident, ehdr.get_e_ident(), elfcpp::EI_NIDENT);
 
-  if (elfcpp::arm_eabi_version(this->processor_specific_flags())
-      == elfcpp::EF_ARM_EABI_UNKNOWN)
-    e_ident[elfcpp::EI_OSABI] = elfcpp::ELFOSABI_ARM;
+  if (parameters->options().native_client())
+    {
+      e_ident[elfcpp::EI_OSABI] = 123;
+      e_ident[elfcpp::EI_ABIVERSION] = 7;
+    }
   else
-    e_ident[elfcpp::EI_OSABI] = 0;
-  e_ident[elfcpp::EI_ABIVERSION] = 0;
+    {
+      if (elfcpp::arm_eabi_version(this->processor_specific_flags())
+          == elfcpp::EF_ARM_EABI_UNKNOWN)
+        e_ident[elfcpp::EI_OSABI] = elfcpp::ELFOSABI_ARM;
+      else
+        e_ident[elfcpp::EI_OSABI] = 0;
+      e_ident[elfcpp::EI_ABIVERSION] = 0;
+    }
 
   // FIXME: Do EF_ARM_BE8 adjustment.
 

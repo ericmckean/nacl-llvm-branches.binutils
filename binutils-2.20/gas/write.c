@@ -160,7 +160,9 @@ fix_new_internal (fragS *frag,		/* Which frag?  */
 
   fixP = (fixS *) obstack_alloc (&notes, sizeof (fixS));
 
+#ifdef NACL_TOOLCHAIN_PATCH
   frag->nacl_fixup = fixP;
+#endif
 
   fixP->fx_frag = frag;
   fixP->fx_where = where;
@@ -433,6 +435,7 @@ chain_frchains_together (bfd *abfd ATTRIBUTE_UNUSED,
   frags_chained = 1;
 }
 
+#ifdef NACL_TOOLCHAIN_PATCH
 static void
 move_call_insn_to_end(fragS *fragP, fragS *next ATTRIBUTE_UNUSED)
 {
@@ -464,6 +467,7 @@ move_call_insn_to_end(fragS *fragP, fragS *next ATTRIBUTE_UNUSED)
     }
   }
 }
+#endif
 
 static void
 cvt_frag_to_fill (segT sec ATTRIBUTE_UNUSED, fragS *fragP)
@@ -489,10 +493,11 @@ cvt_frag_to_fill (segT sec ATTRIBUTE_UNUSED, fragS *fragP)
 			(long) fragP->fr_offset);
 	  fragP->fr_offset = 0;
 	}
-
+#ifdef NACL_TOOLCHAIN_PATCH
       if (fragP->is_call && (nacl_alignment > 0)) {
         move_call_insn_to_end (fragP, NULL);
       }
+#endif
       fragP->fr_type = rs_fill;
       break;
 
@@ -1237,9 +1242,13 @@ write_relocs (bfd *abfd, asection *sec, void *xxx ATTRIBUTE_UNUSED)
       if (slack > 0)
 	fx_size = fx_size > slack ? fx_size - slack : 0;
       loc = fixp->fx_where + fx_size;
+#ifdef NACL_TOOLCHAIN_PATCH
       limitsize = (fixp->fx_frag->is_call ?
                    (fixp->fx_frag->fr_fix + fixp->fx_frag->fr_var) :
                    fixp->fx_frag->fr_fix);
+#else
+      limitsize = fixp->fx_frag->fr_fix;
+#endif
       if (slack >= 0 && loc > limitsize)
 	as_bad_where (fixp->fx_file, fixp->fx_line,
 		      _("internal error: fixup not contained within frag"));
