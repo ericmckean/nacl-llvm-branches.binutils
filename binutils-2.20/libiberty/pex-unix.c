@@ -531,9 +531,10 @@ pex_unix_wait (struct pex_obj *obj, pid_t pid, int *status,
 {
   /* If we are cleaning up when the caller didn't retrieve process
      status for some reason, encourage the process to go away.  */
+#if !defined(__native_client__)
   if (done)
     kill (pid, SIGTERM);
-
+#endif
   if (pex_wait (obj, pid, status, time) < 0)
     {
       *err = errno;
@@ -577,12 +578,12 @@ pex_unix_cleanup (struct pex_obj *obj ATTRIBUTE_UNUSED)
 #if !defined (HAVE_WAIT4) && !defined (HAVE_WAITPID)
   while (obj->sysdep != NULL)
     {
-      struct status_list *this;
+      struct status_list *_this;
       struct status_list *next;
 
-      this = (struct status_list *) obj->sysdep;
-      next = this->next;
-      free (this);
+      _this = (struct status_list *) obj->sysdep;
+      next = _this->next;
+      free (_this);
       obj->sysdep = (void *) next;
     }
 #endif

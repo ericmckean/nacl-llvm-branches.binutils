@@ -69,6 +69,8 @@ relative prefix can be found, return @code{NULL}.
 #define X_OK 1
 #endif
 
+#if !defined(__native_client__)
+
 #ifndef DIR_SEPARATOR
 #  define DIR_SEPARATOR '/'
 #endif
@@ -383,7 +385,16 @@ make_relative_prefix_1 (const char *progname, const char *bin_prefix,
 
   return ret;
 }
-
+#else /*__native_client__*/
+static char *
+make_relative_prefix_1 (const char *progname ATTRIBUTE_UNUSED, 
+                        const char *bin_prefix ATTRIBUTE_UNUSED,
+			const char *prefix ATTRIBUTE_UNUSED, 
+                        const int resolve_links ATTRIBUTE_UNUSED)
+{
+  return NULL;
+}
+#endif /*__native_client__*/
 
 /* Do the full job, including symlink resolution.
    This path will find files installed in the same place as the
