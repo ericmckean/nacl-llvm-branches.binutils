@@ -320,6 +320,8 @@ input_list:
 input_list_element:
 	  string
 	    { script_add_file(closure, $1.value, $1.length); }
+	| '-' STRING
+	    { script_add_library(closure, $2.value, $2.length); }
 	| AS_NEEDED
 	    { script_start_as_needed(closure); }
 	  '(' input_list ')'
@@ -865,7 +867,7 @@ exp:
 	| INTEGER
 	    { $$ = script_exp_integer($1); }
 	| string
-	    { $$ = script_exp_string($1.value, $1.length); }
+	    { $$ = script_symbol(closure, $1.value, $1.length); }
 	| MAX_K '(' exp ',' exp ')'
 	    { $$ = script_exp_function_max($3, $5); }
 	| MIN_K '(' exp ',' exp ')'

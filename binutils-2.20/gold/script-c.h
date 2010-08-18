@@ -236,6 +236,11 @@ script_add_extern(void* closure, const char*, size_t);
 extern void
 script_add_file(void* closure, const char*, size_t);
 
+/* Called by the bison parser to add a library to the link.  */
+
+extern void
+script_add_library(void* closure, const char*, size_t);
+
 /* Called by the bison parser to start and stop a group.  */
 
 extern void
@@ -297,6 +302,14 @@ script_push_lex_into_version_mode(void* closure);
 
 extern void
 script_pop_lex_mode(void* closure);
+
+/* Called by the bison parser to get the value of a symbol.  This is
+   called for a reference to a symbol, but is not called for something
+   like "sym += 10".  Uses of the special symbol "." can just call
+   script_exp_string.  */
+
+extern Expression_ptr
+script_symbol(void* closure, const char*, size_t);
 
 /* Called by the bison parser to set a symbol to a value.  PROVIDE is
    non-zero if the symbol should be provided--only defined if there is

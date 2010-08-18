@@ -1,6 +1,6 @@
 // options.h -- handle command line options for gold  -*- C++ -*-
 
-// Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -53,6 +53,7 @@ class Command_line;
 class General_options;
 class Search_directory;
 class Input_file_group;
+class Input_file_lib;
 class Position_dependent_options;
 class Target;
 class Plugin_manager;
@@ -244,12 +245,18 @@ struct Struct_special : public Struct_var
 // var() and set_var() as General_options methods.  Arguments as are
 // for the constructor for One_option.  param_type__ is the same as
 // type__ for built-in types, and "const type__ &" otherwise.
+//
+// When we define the linker command option "assert", the macro argument
+// varname__ of DEFINE_var below will be replaced by "assert".  On Mac OSX
+// assert.h is included implicitly by one of the library headers we use.  To
+// avoid unintended macro substitution of "assert()", we need to enclose
+// varname__ with parenthese.
 #define DEFINE_var(varname__, dashes__, shortname__, default_value__,        \
                    default_value_as_string__, helpstring__, helparg__,       \
                    optional_arg__, type__, param_type__, parse_fn__)	     \
  public:                                                                     \
   param_type__                                                               \
-  varname__() const                                                          \
+  (varname__)() const                                                        \
   { return this->varname__##_.value; }                                       \
                                                                              \
   bool                                                                       \
@@ -584,13 +591,21 @@ class General_options
   // alphabetical order).  For both, lowercase sorts before uppercase.
   // The -z options come last.
 
+  DEFINE_bool(add_needed, options::TWO_DASHES, '\0', false,
+	      N_("Not supported"),
+	      N_("Do not copy DT_NEEDED tags from shared libraries"));
+
+  DEFINE_bool_alias(allow_multiple_definition, muldefs, options::TWO_DASHES,
+		    '\0', N_("Allow multiple definitions of symbols"),
+		    N_("Do not allow multiple definitions"), false);
+
   DEFINE_bool(allow_shlib_undefined, options::TWO_DASHES, '\0', false,
               N_("Allow unresolved references in shared libraries"),
               N_("Do not allow unresolved references in shared libraries"));
 
   DEFINE_bool(as_needed, options::TWO_DASHES, '\0', false,
-              N_("Only set DT_NEEDED for dynamic libs if used"),
-              N_("Always DT_NEEDED for dynamic libs"));
+              N_("Only set DT_NEEDED for shared libraries if used"),
+              N_("Always DT_NEEDED for shared libraries"));
 
   DEFINE_enum(assert, options::ONE_DASH, '\0', NULL,
 	      N_("Ignored"), N_("[ignored]"),
@@ -635,6 +650,14 @@ class General_options
               {"none"});
 #endif
 
+  DEFINE_bool(copy_dt_needed_entries, options::TWO_DASHES, '\0', false,
+	      N_("Not supported"),
+	      N_("Do not copy DT_NEEDED tags from shared libraries"));
+
+  DEFINE_bool(cref, options::TWO_DASHES, '\0', false,
+	      N_("Output cross reference table"),
+	      N_("Do not output cross reference table"));
+
   DEFINE_bool(define_common, options::TWO_DASHES, 'd', false,
               N_("Define common symbols"),
               N_("Do not define common symbols"));
@@ -662,6 +685,8 @@ class General_options
               N_("Try to detect violations of the One Definition Rule"),
               NULL);
 
+  DEFINE_bool(discard_all, options::TWO_DASHES, 'x', false,
+	      N_("Delete all local symbols"), NULL);
   DEFINE_bool(discard_locals, options::TWO_DASHES, 'X', false,
               N_("Delete all temporary local symbols"), NULL);
 
@@ -688,8 +713,14 @@ class General_options
               N_("Export all dynamic symbols"),
 	      N_("Do not export all dynamic symbols (default)"));
 
+  DEFINE_special(EB, options::ONE_DASH, '\0',
+		 N_("Link big-endian objects."), NULL);
+
   DEFINE_bool(eh_frame_hdr, options::TWO_DASHES, '\0', false,
               N_("Create exception frame header"), NULL);
+
+  DEFINE_special(EL, options::ONE_DASH, '\0',
+		 N_("Link little-endian objects."), NULL);
 
   DEFINE_bool(fatal_warnings, options::TWO_DASHES, '\0', false,
 	      N_("Treat warnings as errors"),
@@ -701,6 +732,10 @@ class General_options
   DEFINE_bool(fix_cortex_a8, options::TWO_DASHES, '\0', false,
 	      N_("(ARM only) Fix binaries for Cortex-A8 erratum."),
 	      N_("(ARM only) Do not fix binaries for Cortex-A8 erratum."));
+
+  DEFINE_bool(merge_exidx_entries, options::TWO_DASHES, '\0', true,
+	      N_("(ARM only) Merge exidx entries in debuginfo."),
+	      N_("(ARM only) Do not merge exidx entries in debuginfo."));
 
   DEFINE_special(fix_v4bx, options::TWO_DASHES, '\0',
                  N_("(ARM only) Rewrite BX rn as MOV pc, rn for ARMv4"),
@@ -750,6 +785,15 @@ class General_options
   DEFINE_special(just_symbols, options::TWO_DASHES, '\0',
                  N_("Read only symbol values from FILE"), N_("FILE"));
 
+  DEFINE_bool(map_whole_files, options::TWO_DASHES, '\0',
+	      sizeof(void*) >= 8,
+              N_("Map whole files to memory (default on 64-bit hosts)"),
+              N_("Map relevant file parts to memory (default on 32-bit "
+                 "hosts)"));
+  DEFINE_bool(keep_files_mapped, options::TWO_DASHES, '\0', true,
+              N_("Keep files mapped across passes (default)"),
+              N_("Release mapped files after each pass"));
+
   DEFINE_special(library, options::TWO_DASHES, 'l',
                  N_("Search for library LIBNAME"), N_("LIBNAME"));
 
@@ -794,11 +838,17 @@ class General_options
   DEFINE_string(oformat, options::EXACTLY_TWO_DASHES, '\0', "elf",
 		N_("Set output format"), N_("[binary]"));
 
+  DEFINE_bool(p, options::ONE_DASH, '\0', false,
+	      N_("(ARM only) Ignore for backward compatibility"), NULL);
+
   DEFINE_bool(pie, options::ONE_DASH, '\0', false,
 	      N_("Create a position independent executable"), NULL);
   DEFINE_bool_alias(pic_executable, pie, options::TWO_DASHES, '\0',
 		    N_("Create a position independent executable"), NULL,
 		    false);
+
+  DEFINE_bool(pipeline_knowledge, options::ONE_DASH, '\0', false,
+	      NULL, N_("(ARM only) Ignore for backward compatibility"));
 
 #ifdef ENABLE_PLUGINS
   DEFINE_special(plugin, options::TWO_DASHES, '\0',
@@ -826,8 +876,8 @@ class General_options
   DEFINE_bool(relax, options::TWO_DASHES, '\0', false,
 	      N_("Relax branches on certain targets"), NULL);
 
-  DEFINE_string(retain_symbols_file, options::EXACTLY_ONE_DASH, '\0', NULL,
-                N_("keep only symbols listed in this file"), N_("[file]"));
+  DEFINE_string(retain_symbols_file, options::TWO_DASHES, '\0', NULL,
+                N_("keep only symbols listed in this file"), N_("FILE"));
 
   // -R really means -rpath, but can mean --just-symbols for
   // compatibility with GNU ld.  -rpath is always -rpath, so we list
@@ -842,12 +892,20 @@ class General_options
                  N_("Add DIR to link time shared library search path"),
                  N_("DIR"));
 
+  DEFINE_string(section_ordering_file, options::TWO_DASHES, '\0', NULL,
+		N_("Layout sections in the order specified."),
+		N_("FILENAME"));
+
   DEFINE_special(section_start, options::TWO_DASHES, '\0',
 		 N_("Set address of section"), N_("SECTION=ADDRESS"));
 
   DEFINE_optional_string(sort_common, options::TWO_DASHES, '\0', NULL,
 			 N_("Sort common symbols by alignment"),
 			 N_("[={ascending,descending}]"));
+
+  DEFINE_uint(spare_dynamic_tags, options::TWO_DASHES, '\0', 5,
+	      N_("Dynamic tag slots to reserve (default 5)"),
+	      N_("COUNT"));
 
   DEFINE_bool(strip_all, options::TWO_DASHES, 's', false,
               N_("Strip all symbols"), NULL);
@@ -888,7 +946,8 @@ class General_options
 
   DEFINE_enum(icf, options::TWO_DASHES, '\0', "none",
               N_("Identical Code Folding. "
-                 "\'--icf=safe\' folds only ctors and dtors."),
+                 "\'--icf=safe\' Folds ctors, dtors and functions whose"
+                 " pointers are definitely not taken."),
 	      ("[none,all,safe]"),	
               {"none", "all", "safe"});
 
@@ -958,9 +1017,30 @@ class General_options
 	      N_("Warn about duplicate common symbols"),
 	      N_("Do not warn about duplicate common symbols (default)"));
 
+  DEFINE_bool(warn_constructors, options::TWO_DASHES, '\0', false,
+	      N_("Ignored"), N_("Ignored"));
+
+  DEFINE_bool(warn_mismatch, options::TWO_DASHES, '\0', true,
+	      NULL, N_("Don't warn about mismatched input files"));
+
+  DEFINE_bool(warn_multiple_gp, options::TWO_DASHES, '\0', false,
+	      N_("Ignored"), NULL);
+
   DEFINE_bool(warn_search_mismatch, options::TWO_DASHES, '\0', true,
 	      N_("Warn when skipping an incompatible library"),
 	      N_("Don't warn when skipping an incompatible library"));
+
+  DEFINE_bool(warn_shared_textrel, options::TWO_DASHES, '\0', false,
+	      N_("Warn if text segment is not shareable"),
+	      N_("Do not warn if text segment is not shareable (default)"));
+
+  DEFINE_bool(warn_unresolved_symbols, options::TWO_DASHES, '\0', false,
+	      N_("Report unresolved symbols as warnings"),
+	      NULL);
+  DEFINE_bool_alias(error_unresolved_symbols, warn_unresolved_symbols,
+		    options::TWO_DASHES, '\0',
+		    N_("Report unresolved symbols as errors"),
+		    NULL, true);
 
   DEFINE_bool(whole_archive, options::TWO_DASHES, '\0', false,
               N_("Include all archive contents"),
@@ -972,6 +1052,10 @@ class General_options
   DEFINE_set(trace_symbol, options::TWO_DASHES, 'y',
              N_("Trace references to symbol"), N_("SYMBOL"));
 
+  DEFINE_bool(undefined_version, options::TWO_DASHES, '\0', true,
+	      N_("Allow unused version in script (default)"),
+	      N_("Do not allow unused version in script"));
+
   DEFINE_string(Y, options::EXACTLY_ONE_DASH, 'Y', "",
 		N_("Default search path for Solaris compatibility"),
 		N_("PATH"));
@@ -980,6 +1064,12 @@ class General_options
                  N_("Start a library search group"), NULL);
   DEFINE_special(end_group, options::TWO_DASHES, ')',
                  N_("End a library search group"), NULL);
+
+
+  DEFINE_special(start_lib, options::TWO_DASHES, '\0',
+                 N_("Start a library"), NULL);
+  DEFINE_special(end_lib, options::TWO_DASHES, '\0',
+                 N_("End a library "), NULL);
 
   // The -z options.
 
@@ -1007,6 +1097,11 @@ class General_options
 	      NULL);
   DEFINE_uint64(max_page_size, options::DASH_Z, '\0', 0,
                 N_("Set maximum page size to SIZE"), N_("SIZE"));
+  DEFINE_bool(muldefs, options::DASH_Z, '\0', false,
+	      N_("Allow multiple definitions of symbols"),
+	      NULL);
+  // copyreloc is here in the list because there is only -z
+  // nocopyreloc, not -z copyreloc.
   DEFINE_bool(copyreloc, options::DASH_Z, '\0', true,
 	      NULL,
 	      N_("Do not create copy relocs"));
@@ -1033,6 +1128,12 @@ class General_options
   DEFINE_bool(relro, options::DASH_Z, '\0', false,
 	      N_("Where possible mark variables read-only after relocation"),
 	      N_("Don't mark variables read-only after relocation"));
+  DEFINE_bool(text, options::DASH_Z, '\0', false,
+	      N_("Do not permit relocations in read-only segments"),
+	      NULL);
+  DEFINE_bool_alias(textoff, text, options::DASH_Z, '\0',
+		    N_("Permit relocations in read-only segments (default)"),
+		    NULL, true);
 
  public:
   typedef options::Dir_list Dir_list;
@@ -1149,6 +1250,11 @@ class General_options
   in_dynamic_list(const char* symbol) const
   { return this->dynamic_list_.version_script_info()->symbol_is_local(symbol); }
 
+  // Finalize the dynamic list.
+  void
+  finalize_dynamic_list()
+  { this->dynamic_list_.version_script_info()->finalize(); }
+
   // The disposition given by the --incremental-changed,
   // --incremental-unchanged or --incremental-unknown option.  The
   // value may change as we proceed parsing the command line flags.
@@ -1180,6 +1286,17 @@ class General_options
   Fix_v4bx
   fix_v4bx() const
   { return (this->fix_v4bx_); }
+
+  enum Endianness
+  {
+    ENDIANNESS_NOT_SET,
+    ENDIANNESS_BIG,
+    ENDIANNESS_LITTLE
+  };
+
+  Endianness
+  endianness() const
+  { return this->endianness_; }
 
  private:
   // Don't copy this structure.
@@ -1272,6 +1389,8 @@ class General_options
   std::map<std::string, uint64_t> section_starts_;
   // Whether to process armv4 bx instruction relocation.
   Fix_v4bx fix_v4bx_;
+  // Endianness.
+  Endianness endianness_;
 };
 
 // The position-dependent options.  We use this to store the state of
@@ -1432,12 +1551,17 @@ class Input_argument
  public:
   // Create a file or library argument.
   explicit Input_argument(Input_file_argument file)
-    : is_file_(true), file_(file), group_(NULL)
+    : is_file_(true), file_(file), group_(NULL), lib_(NULL)
   { }
 
   // Create a group argument.
   explicit Input_argument(Input_file_group* group)
-    : is_file_(false), group_(group)
+    : is_file_(false), group_(group), lib_(NULL)
+  { }
+
+  // Create a lib argument.
+  explicit Input_argument(Input_file_lib* lib)
+    : is_file_(false), group_(NULL), lib_(lib)
   { }
 
   // Return whether this is a file.
@@ -1448,7 +1572,12 @@ class Input_argument
   // Return whether this is a group.
   bool
   is_group() const
-  { return !this->is_file_; }
+  { return !this->is_file_ && this->lib_ == NULL; }
+
+  // Return whether this is a lib.
+  bool
+  is_lib() const
+  { return this->lib_ != NULL; }
 
   // Return the information about the file.
   const Input_file_argument&
@@ -1473,10 +1602,28 @@ class Input_argument
     return this->group_;
   }
 
+  // Return the information about the lib.
+  const Input_file_lib*
+  lib() const
+  {
+    gold_assert(!this->is_file_);
+    gold_assert(this->lib_);
+    return this->lib_;
+  }
+
+  Input_file_lib*
+  lib()
+  {
+    gold_assert(!this->is_file_);
+    gold_assert(this->lib_);
+    return this->lib_;
+  }
+
  private:
   bool is_file_;
   Input_file_argument file_;
   Input_file_group* group_;
+  Input_file_lib* lib_;
 };
 
 typedef std::vector<Input_argument> Input_argument_list;
@@ -1512,6 +1659,46 @@ class Input_file_group
   Input_argument_list files_;
 };
 
+// A lib from the command line.  This is a set of arguments within
+// --start-lib ... --end-lib.
+
+class Input_file_lib
+{
+ public:
+  typedef Input_argument_list::const_iterator const_iterator;
+
+  Input_file_lib(const Position_dependent_options& options)
+    : files_(), options_(options)
+  { }
+
+  // Add a file to the end of the lib.
+  void
+  add_file(const Input_file_argument& arg)
+  { this->files_.push_back(Input_argument(arg)); }
+
+  const Position_dependent_options&
+  options() const
+  { return this->options_; }
+
+  // Iterators to iterate over the lib contents.
+
+  const_iterator
+  begin() const
+  { return this->files_.begin(); }
+
+  const_iterator
+  end() const
+  { return this->files_.end(); }
+
+  size_t
+  size() const
+  { return this->files_.size(); }
+
+ private:
+  Input_argument_list files_;
+  Position_dependent_options options_;
+};
+
 // A list of files from the command line or a script.
 
 class Input_arguments
@@ -1520,7 +1707,7 @@ class Input_arguments
   typedef Input_argument_list::const_iterator const_iterator;
 
   Input_arguments()
-    : input_argument_list_(), in_group_(false)
+    : input_argument_list_(), in_group_(false), in_lib_(false)
   { }
 
   // Add a file.
@@ -1535,10 +1722,23 @@ class Input_arguments
   void
   end_group();
 
+  // Start a lib (the --start-lib option).
+  void
+  start_lib(const Position_dependent_options&);
+
+  // End a lib (the --end-lib option).
+  void
+  end_lib();
+
   // Return whether we are currently in a group.
   bool
   in_group() const
   { return this->in_group_; }
+
+  // Return whether we are currently in a lib.
+  bool
+  in_lib() const
+  { return this->in_lib_; }
 
   // The number of entries in the list.
   int
@@ -1563,6 +1763,7 @@ class Input_arguments
  private:
   Input_argument_list input_argument_list_;
   bool in_group_;
+  bool in_lib_;
 };
 
 
@@ -1607,10 +1808,9 @@ class Command_line
   script_options()
   { return this->script_options_; }
 
-  // Get the version-script options: a convenience routine.
+  // Finalize the version-script options and return them.
   const Version_script_info&
-  version_script() const
-  { return *this->script_options_.version_script_info(); }
+  version_script();
 
   // Get the input files.
   Input_arguments&

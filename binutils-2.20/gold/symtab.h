@@ -205,6 +205,14 @@ class Symbol
   type() const
   { return this->type_; }
 
+  // Return true for function symbol.
+  bool
+  is_func() const
+  {
+    return (this->type_ == elfcpp::STT_FUNC
+	    || this->type_ == elfcpp::STT_GNU_IFUNC);
+  }
+
   // Return the symbol visibility.
   elfcpp::STV
   visibility() const
@@ -218,6 +226,23 @@ class Symbol
   // Override symbol visibility.
   void
   override_visibility(elfcpp::STV);
+
+  // Set whether the symbol was originally a weak undef or a regular undef
+  // when resolved by a dynamic def.
+  inline void
+  set_undef_binding(elfcpp::STB bind)
+  {
+    if (!this->undef_binding_set_ || this->undef_binding_weak_)
+      {
+        this->undef_binding_weak_ = bind == elfcpp::STB_WEAK;
+        this->undef_binding_set_ = true;
+      }
+  }
+
+  // Return TRUE if a weak undef was resolved by a dynamic def.
+  inline bool
+  is_undef_binding_weak() const
+  { return this->undef_binding_weak_; }
 
   // Return the non-visibility part of the st_other field.
   unsigned char
@@ -253,7 +278,9 @@ class Symbol
   needs_dynsym_entry() const
   {
     return (this->needs_dynsym_entry_
-            || (this->in_reg() && this->in_dyn()));
+            || (this->in_reg()
+		&& this->in_dyn()
+		&& this->is_externally_visible()));
   }
 
   // Mark this symbol as needing an entry in the dynamic symbol table.
@@ -264,7 +291,7 @@ class Symbol
   // Return whether this symbol should be added to the dynamic symbol
   // table.
   bool
-  should_add_dynsym_entry() const;
+  should_add_dynsym_entry(Symbol_table*) const;
 
   // Return whether this symbol has been seen in a regular object.
   bool
@@ -449,6 +476,13 @@ class Symbol
     return this->source_ == FROM_OBJECT && this->object()->is_dynamic();
   }
 
+  // Return whether this is a placeholder symbol from a plugin object.
+  bool
+  is_placeholder() const
+  {
+    return this->source_ == FROM_OBJECT && this->object()->pluginobj() != NULL;
+  }
+
   // Return whether this is an undefined symbol.
   bool
   is_undefined() const
@@ -480,10 +514,10 @@ class Symbol
   bool
   is_common() const
   {
-    if (this->type_ == elfcpp::STT_COMMON)
-      return true;
     if (this->source_ != FROM_OBJECT)
       return false;
+    if (this->type_ == elfcpp::STT_COMMON)
+      return true;
     bool is_ordinary;
     unsigned int shndx = this->shndx(&is_ordinary);
     return !is_ordinary && Symbol::is_common_shndx(shndx);
@@ -555,7 +589,7 @@ class Symbol
 
     return (!parameters->doing_static_link()
 	    && !parameters->options().pie()
-            && this->type() == elfcpp::STT_FUNC
+            && this->is_func()
             && (this->is_from_dynobj()
                 || this->is_undefined()
                 || this->is_preemptible()));
@@ -746,7 +780,7 @@ class Symbol
     return (!parameters->options().shared()
 	    && parameters->options().copyreloc()
 	    && this->is_from_dynobj()
-	    && this->type() != elfcpp::STT_FUNC);
+	    && !this->is_func());
   }
 
  protected:
@@ -932,6 +966,11 @@ class Symbol
   // True if this symbol is defined in a section which was discarded
   // (bit 31).
   bool is_defined_in_discarded_section_ : 1;
+  // True if UNDEF_BINDING_WEAK_ has been set (bit 32).
+  bool undef_binding_set_ : 1;
+  // True if this symbol was a weak undef resolved by a dynamic def
+  // (bit 33).
+  bool undef_binding_weak_ : 1;
 };
 
 // The parts of a symbol which are size specific.  Using a template
@@ -1230,7 +1269,7 @@ class Symbol_table
 
   // During garbage collection, this keeps undefined symbols.
   void
-  gc_mark_undef_symbols(); 
+  gc_mark_undef_symbols(Layout*);
 
   // During garbage collection, this ensures externally visible symbols
   // are not treated as garbage while building shared objects.
@@ -1344,7 +1383,7 @@ class Symbol_table
   get_sized_symbol(const Symbol*) const;
 
   // Return the count of undefined symbols seen.
-  int
+  size_t
   saw_undefined() const
   { return this->saw_undefined_; }
 
@@ -1380,7 +1419,7 @@ class Symbol_table
   // Add any undefined symbols named on the command line to the symbol
   // table.
   void
-  add_undefined_symbols_from_command_line();
+  add_undefined_symbols_from_command_line(Layout*);
 
   // SYM is defined using a COPY reloc.  Return the dynamic object
   // where the original definition was found.
@@ -1519,7 +1558,7 @@ class Symbol_table
   // Whether we should override a symbol, based on flags in
   // resolve.cc.
   static bool
-  should_override(const Symbol*, unsigned int, Defined, Object*, bool*);
+  should_override(const Symbol*, unsigned int, Defined, Object*, bool*, bool*);
 
   // Report a problem in symbol resolution.
   static void
@@ -1594,7 +1633,12 @@ class Symbol_table
   // table, sized version.
   template<int size>
   void
-  do_add_undefined_symbols_from_command_line();
+  do_add_undefined_symbols_from_command_line(Layout*);
+
+  // Add one undefined symbol.
+  template<int size>
+  void
+  add_undefined_symbol_from_command_line(const char* name);
 
   // Types of common symbols.
 
@@ -1650,7 +1694,7 @@ class Symbol_table
   void
   sized_write_symbol(Sized_symbol<size>*,
 		     typename elfcpp::Elf_types<size>::Elf_Addr value,
-		     unsigned int shndx,
+		     unsigned int shndx, elfcpp::STB,
 		     const Stringpool*, unsigned char* p) const;
 
   // Possibly warn about an undefined symbol from a dynamic object.
@@ -1699,7 +1743,7 @@ class Symbol_table
 
   // We increment this every time we see a new undefined symbol, for
   // use in archive groups.
-  int saw_undefined_;
+  size_t saw_undefined_;
   // The index of the first global symbol in the output file.
   unsigned int first_global_index_;
   // The file offset within the output symtab section where we should

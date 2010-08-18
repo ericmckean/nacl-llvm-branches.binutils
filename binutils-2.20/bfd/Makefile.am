@@ -4,7 +4,7 @@ AUTOMAKE_OPTIONS = 1.11 no-dist foreign
 ACLOCAL_AMFLAGS = -I . -I .. -I ../config
 
 # Uncomment the following line when doing a release.
-RELEASE=y
+# RELEASE=y
 
 INCDIR = $(srcdir)/../include
 CSEARCH = -I. -I$(srcdir) -I$(INCDIR)
@@ -103,7 +103,6 @@ ALL_MACHINES = \
 	cpu-m68hc12.lo \
 	cpu-m68k.lo \
 	cpu-m88k.lo \
-	cpu-maxq.lo \
 	cpu-mcore.lo \
 	cpu-mep.lo \
 	cpu-microblaze.lo \
@@ -120,6 +119,7 @@ ALL_MACHINES = \
 	cpu-plugin.lo \
 	cpu-powerpc.lo \
 	cpu-rs6000.lo \
+	cpu-rx.lo \
 	cpu-s390.lo \
 	cpu-score.lo \
 	cpu-sh.lo \
@@ -128,6 +128,7 @@ ALL_MACHINES = \
 	cpu-tic30.lo \
 	cpu-tic4x.lo \
 	cpu-tic54x.lo \
+	cpu-tic6x.lo \
 	cpu-tic80.lo \
 	cpu-v850.lo \
 	cpu-vax.lo \
@@ -174,7 +175,6 @@ ALL_MACHINES_CFILES = \
 	cpu-m68hc12.c \
 	cpu-m68k.c \
 	cpu-m88k.c \
-	cpu-maxq.c \
 	cpu-mcore.c \
 	cpu-mep.c \
 	cpu-microblaze.c \
@@ -191,6 +191,7 @@ ALL_MACHINES_CFILES = \
 	cpu-plugin.c \
 	cpu-powerpc.c \
 	cpu-rs6000.c \
+	cpu-rx.c \
 	cpu-s390.c \
 	cpu-score.c \
 	cpu-sh.c \
@@ -199,6 +200,7 @@ ALL_MACHINES_CFILES = \
 	cpu-tic30.c \
 	cpu-tic4x.c \
 	cpu-tic54x.c \
+	cpu-tic6x.c \
 	cpu-tic80.c \
 	cpu-v850.c \
 	cpu-vax.c \
@@ -236,7 +238,6 @@ BFD32_BACKENDS = \
 	coff-i960.lo \
 	coff-m68k.lo \
 	coff-m88k.lo \
-	coff-maxq.lo \
 	coff-mips.lo \
 	coff-or32.lo \
 	coff-rs6000.lo \
@@ -308,6 +309,7 @@ BFD32_BACKENDS = \
 	elf32-or32.lo \
 	elf32-pj.lo \
 	elf32-ppc.lo \
+	elf32-rx.lo \
 	elf32-s390.lo \
 	elf32-sh-symbian.lo \
 	elf32-sh.lo \
@@ -315,6 +317,7 @@ BFD32_BACKENDS = \
 	elf32-sh64.lo \
 	elf32-sparc.lo \
 	elf32-spu.lo \
+	elf32-tic6x.lo \
 	elf32-v850.lo \
 	elf32-vax.lo \
 	elf32-xc16x.lo \
@@ -386,11 +389,8 @@ BFD32_BACKENDS = \
 	vaxbsd.lo \
 	vaxnetbsd.lo \
 	versados.lo \
-	vms-gsd.lo \
-	vms-hdr.lo \
+	vms-lib.lo \
 	vms-misc.lo \
-	vms-tir.lo \
-	vms.lo \
 	xcofflink.lo \
 	xsym.lo \
 	xtensa-isa.lo \
@@ -420,7 +420,6 @@ BFD32_BACKENDS_CFILES = \
 	coff-i960.c \
 	coff-m68k.c \
 	coff-m88k.c \
-	coff-maxq.c \
 	coff-mips.c \
 	coff-or32.c \
 	coff-rs6000.c \
@@ -492,6 +491,7 @@ BFD32_BACKENDS_CFILES = \
 	elf32-or32.c \
 	elf32-pj.c \
 	elf32-ppc.c \
+	elf32-rx.c \
 	elf32-s390.c \
 	elf32-sh-symbian.c \
 	elf32-sh.c \
@@ -499,6 +499,7 @@ BFD32_BACKENDS_CFILES = \
 	elf32-sh64.c \
 	elf32-sparc.c \
 	elf32-spu.c \
+	elf32-tic6x.c \
 	elf32-v850.c \
 	elf32-vax.c \
 	elf32-xc16x.c \
@@ -569,11 +570,8 @@ BFD32_BACKENDS_CFILES = \
 	vaxbsd.c \
 	vaxnetbsd.c \
 	versados.c \
-	vms-gsd.c \
-	vms-hdr.c \
+	vms-lib.c \
 	vms-misc.c \
-	vms-tir.c \
-	vms.c \
 	xcofflink.c \
 	xsym.c \
 	xtensa-isa.c \
@@ -608,6 +606,7 @@ BFD64_BACKENDS = \
 	elf64-x86-64.lo \
 	elf64.lo \
 	elfn32-mips.lo \
+	mach-o-x86-64.lo \
 	mmo.lo \
 	nlm32-alpha.lo \
 	nlm64.lo \
@@ -615,7 +614,8 @@ BFD64_BACKENDS = \
 	pei-ia64.lo \
 	pei-x86_64.lo \
 	pepigen.lo \
-	pex64igen.lo
+	pex64igen.lo \
+	vms-alpha.lo
 
 BFD64_BACKENDS_CFILES = \
 	aix5ppc-core.c \
@@ -639,12 +639,14 @@ BFD64_BACKENDS_CFILES = \
 	elf64-x86-64.c \
 	elf64.c \
 	elfn32-mips.c \
+	mach-o-x86-64.c \
 	mmo.c \
 	nlm32-alpha.c \
 	nlm64.c \
 	pe-x86_64.c \
 	pei-ia64.c \
-	pei-x86_64.c
+	pei-x86_64.c \
+	vms-alpha.c
 
 OPTIONAL_BACKENDS = \
 	aix386-core.lo \
@@ -680,8 +682,10 @@ ALL_BACKENDS = @all_backends@
 BFD_BACKENDS = @bfd_backends@
 BFD_MACHINES = @bfd_machines@
 TDEFAULTS = @tdefaults@
+HAVEVECS = @havevecs@
 
-INCLUDES = @HDEFINES@ @COREFLAG@ @TDEFINES@ $(CSEARCH) $(CSWITCHES) @INCINTL@
+INCLUDES = @HDEFINES@ @COREFLAG@ @TDEFINES@ $(CSEARCH) $(CSWITCHES) \
+	$(HAVEVECS) @INCINTL@
 
 # C source files that correspond to .o's.
 SOURCE_CFILES = \

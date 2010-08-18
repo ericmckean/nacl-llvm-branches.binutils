@@ -1,3 +1,5 @@
+%option nounput
+
 %{
 
 /* Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
@@ -22,7 +24,6 @@
    Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
    MA 02110-1301, USA.  */
 
-#include "sysdep.h"
 #include "bfd.h"
 #include "safe-ctype.h"
 #include "bfdlink.h"
@@ -254,6 +255,8 @@ V_IDENTIFIER [*?.$_a-zA-Z\[\]\-\!\^\\]([*?.$_a-zA-Z0-9\[\]\-\!\^\\]|::)*
 <EXPRESSION,BOTH,SCRIPT>"ALIGNOF"	{ RTOKEN(ALIGNOF); }
 <EXPRESSION,BOTH>"MAX"			{ RTOKEN(MAX_K); }
 <EXPRESSION,BOTH>"MIN"			{ RTOKEN(MIN_K); }
+<EXPRESSION,BOTH>"CEILP2"		{ RTOKEN(CEILP2); }
+<EXPRESSION,BOTH>"NACL_MASK"		{ RTOKEN(NACL_MASK);}
 <EXPRESSION,BOTH,SCRIPT>"ASSERT"	{ RTOKEN(ASSERT_K); }
 <BOTH,SCRIPT>"ENTRY"			{ RTOKEN(ENTRY);}
 <BOTH,SCRIPT,MRI>"EXTERN"		{ RTOKEN(EXTERN);}

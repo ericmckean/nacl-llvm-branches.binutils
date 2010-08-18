@@ -1,6 +1,6 @@
 // dynobj.h -- dynamic object support for gold   -*- C++ -*-
 
-// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -177,6 +177,10 @@ class Sized_dynobj : public Dynobj
   void
   do_add_symbols(Symbol_table*, Read_symbols_data*, Layout*);
 
+  Archive::Should_include
+  do_should_include_member(Symbol_table* symtab, Layout*, Read_symbols_data*,
+                           std::string* why);
+
   // Get the size of a section.
   uint64_t
   do_section_size(unsigned int shndx)
@@ -235,6 +239,11 @@ class Sized_dynobj : public Dynobj
   // Get symbol counts.
   void
   do_get_global_symbol_counts(const Symbol_table*, size_t*, size_t*) const;
+
+  // Get the global symbols.
+  const Symbols*
+  do_get_global_symbols() const
+  { return this->symbols_; }
 
  private:
   // For convenience.
@@ -355,9 +364,9 @@ class Verdef : public Version_base
 {
  public:
   Verdef(const char* name, const std::vector<std::string>& deps,
-         bool is_base, bool is_weak, bool is_symbol_created)
+         bool is_base, bool is_weak, bool is_info, bool is_symbol_created)
     : name_(name), deps_(deps), is_base_(is_base), is_weak_(is_weak),
-      is_symbol_created_(is_symbol_created)
+      is_info_(is_info), is_symbol_created_(is_symbol_created)
   { }
 
   // Return the version name.
@@ -385,6 +394,11 @@ class Verdef : public Version_base
   void
   clear_weak()
   { this->is_weak_ = false; }
+
+  // Return whether this definition is informational.
+  bool
+  is_info() const
+  { return this->is_info_; }
 
   // Return whether a version symbol has been created for this
   // definition.
@@ -414,6 +428,8 @@ class Verdef : public Version_base
   bool is_base_;
   // Whether this version is weak.
   bool is_weak_;
+  // Whether this version is informational.
+  bool is_info_;
   // Whether a version symbol has been created.
   bool is_symbol_created_;
 };
@@ -584,6 +600,10 @@ class Versions
   version_index(const Symbol_table*, const Stringpool*,
 		const Symbol* sym) const;
 
+  // Define the base version of a shared library.
+  void
+  define_base_version(Stringpool* dynpool);
+
   // We keep a hash table mapping canonicalized name/version pairs to
   // a version base.
   typedef std::pair<Stringpool::Key, Stringpool::Key> Key;
@@ -616,6 +636,9 @@ class Versions
   bool is_finalized_;
   // Contents of --version-script, if passed, or NULL.
   const Version_script_info& version_script_;
+  // Whether we need to insert a base version.  This is only used for
+  // shared libaries and is cleared when the base version is defined.
+  bool needs_base_version_;
 };
 
 } // End namespace gold.

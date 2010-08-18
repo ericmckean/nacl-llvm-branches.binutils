@@ -136,7 +136,7 @@ static int error_index;
 %token NOLOAD DSECT COPY INFO OVERLAY
 %token DEFINED TARGET_K SEARCH_DIR MAP ENTRY
 %token <integer> NEXT
-%token SIZEOF ALIGNOF ADDR LOADADDR MAX_K MIN_K
+%token SIZEOF ALIGNOF ADDR LOADADDR MAX_K MIN_K CEILP2 NACL_MASK
 %token STARTUP HLL SYSLIB FLOAT NOFLOAT NOCROSSREFS
 %token ORIGIN FILL
 %token LENGTH CREATE_OBJECT_SYMBOLS INPUT GROUP OUTPUT CONSTRUCTORS
@@ -378,17 +378,17 @@ input_list:
 		{ lang_add_input_file($2,lang_input_file_is_l_enum,
 				 (char *)NULL); }
 	|	AS_NEEDED '('
-		  { $<integer>$ = as_needed; as_needed = TRUE; }
+		  { $<integer>$ = add_DT_NEEDED_for_regular; add_DT_NEEDED_for_regular = TRUE; }
 		     input_list ')'
-		  { as_needed = $<integer>3; }
+		  { add_DT_NEEDED_for_regular = $<integer>3; }
 	|	input_list ',' AS_NEEDED '('
-		  { $<integer>$ = as_needed; as_needed = TRUE; }
+		  { $<integer>$ = add_DT_NEEDED_for_regular; add_DT_NEEDED_for_regular = TRUE; }
 		     input_list ')'
-		  { as_needed = $<integer>5; }
+		  { add_DT_NEEDED_for_regular = $<integer>5; }
 	|	input_list AS_NEEDED '('
-		  { $<integer>$ = as_needed; as_needed = TRUE; }
+		  { $<integer>$ = add_DT_NEEDED_for_regular; add_DT_NEEDED_for_regular = TRUE; }
 		     input_list ')'
-		  { as_needed = $<integer>4; }
+		  { add_DT_NEEDED_for_regular = $<integer>4; }
 	;
 
 sections:
@@ -893,6 +893,10 @@ exp	:
 			{ $$ = exp_binop (MAX_K, $3, $5 ); }
 	|	MIN_K '(' exp ',' exp ')'
 			{ $$ = exp_binop (MIN_K, $3, $5 ); }
+	|	CEILP2 '(' exp ')'
+			{ $$ = exp_unop (CEILP2, $3); }
+        |	NACL_MASK '(' exp ')'
+			{ $$ = exp_unop (NACL_MASK, $3); }
 	|	ASSERT_K '(' exp ',' NAME ')'
 			{ $$ = exp_assert ($3, $5); }
 	|	ORIGIN '(' NAME ')'

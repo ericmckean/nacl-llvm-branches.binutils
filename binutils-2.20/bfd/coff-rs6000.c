@@ -1,6 +1,7 @@
 /* BFD back-end for IBM RS/6000 "XCOFF" files.
    Copyright 1990-1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
-   2008, 2009  Free Software Foundation, Inc.
+   2008, 2009, 2010
+   Free Software Foundation, Inc.
    Written by Metin G. Ozisik, Mimi Phuong-Thao Vo, and John Gilmore.
    Archive support from Damon A. Permezel.
    Contributed by IBM Corporation and Cygnus Support.
@@ -896,11 +897,11 @@ reloc_howto_type xcoff_howto_table[] =
 
   EMPTY_HOWTO (0xe),
 
-  /* Non-relocating reference.  */
+  /* Non-relocating reference.  Bitsize is 1 so that r_rsize is 0.  */
   HOWTO (R_REF,			/* type */
 	 0,			/* rightshift */
-	 2,			/* size (0 = byte, 1 = short, 2 = long) */
-	 32,			/* bitsize */
+	 0,			/* size (0 = byte, 1 = short, 2 = long) */
+	 1,			/* bitsize */
 	 FALSE,			/* pc_relative */
 	 0,			/* bitpos */
 	 complain_overflow_dont, /* complain_on_overflow */
@@ -1162,6 +1163,8 @@ _bfd_xcoff_reloc_type_lookup (abfd, code)
     case BFD_RELOC_32:
     case BFD_RELOC_CTOR:
       return &xcoff_howto_table[0];
+    case BFD_RELOC_NONE:
+      return &xcoff_howto_table[0xf];
     default:
       return NULL;
     }
@@ -3068,7 +3071,7 @@ xcoff_complain_overflow_bitfield_func (input_bfd, val, relocation, howto)
      bfd_vma relocation;
      struct reloc_howto_struct *howto;
 {
-  bfd_vma addrmask, fieldmask, signmask, ss;
+  bfd_vma fieldmask, signmask, ss;
   bfd_vma a, b, sum;
 
   /* Get the values to be added together.  For signed and unsigned
@@ -3076,7 +3079,6 @@ xcoff_complain_overflow_bitfield_func (input_bfd, val, relocation, howto)
      the size of an address.  For bitfields, all the bits matter.
      See also bfd_check_overflow.  */
   fieldmask = N_ONES (howto->bitsize);
-  addrmask = N_ONES (bfd_arch_bits_per_address (input_bfd)) | fieldmask;
   a = relocation;
   b = val & howto->src_mask;
 
@@ -4171,13 +4173,13 @@ const bfd_target rs6000coff_vec =
 
     /* Copy */
     _bfd_xcoff_copy_private_bfd_data,
-    ((bfd_boolean (*) (bfd *, bfd *)) bfd_true),
+    _bfd_generic_bfd_merge_private_bfd_data,
     _bfd_generic_init_private_section_data,
-    ((bfd_boolean (*) (bfd *, asection *, bfd *, asection *)) bfd_true),
-    ((bfd_boolean (*) (bfd *, asymbol *, bfd *, asymbol *)) bfd_true),
-    ((bfd_boolean (*) (bfd *, bfd *)) bfd_true),
-    ((bfd_boolean (*) (bfd *, flagword)) bfd_true),
-    ((bfd_boolean (*) (bfd *, void * )) bfd_true),
+    _bfd_generic_bfd_copy_private_section_data,
+    _bfd_generic_bfd_copy_private_symbol_data,
+    _bfd_generic_bfd_copy_private_header_data,
+    _bfd_generic_bfd_set_private_flags,
+    _bfd_generic_bfd_print_private_bfd_data,
 
     /* Core */
     coff_core_file_failing_command,
@@ -4186,11 +4188,12 @@ const bfd_target rs6000coff_vec =
 
     /* Archive */
     _bfd_xcoff_slurp_armap,
-    bfd_false,
-    ((bfd_boolean (*) (bfd *, char **, bfd_size_type *, const char **)) bfd_false),
+    _bfd_noarchive_slurp_extended_name_table,
+    _bfd_noarchive_construct_extended_name_table,
     bfd_dont_truncate_arname,
     _bfd_xcoff_write_armap,
     _bfd_xcoff_read_ar_hdr,
+    _bfd_generic_write_ar_hdr,
     _bfd_xcoff_openr_next_archived_file,
     _bfd_generic_get_elt_at_index,
     _bfd_xcoff_stat_arch_elt,
@@ -4230,6 +4233,7 @@ const bfd_target rs6000coff_vec =
     _bfd_generic_link_hash_table_free,
     _bfd_xcoff_bfd_link_add_symbols,
     _bfd_generic_link_just_syms,
+    _bfd_generic_copy_link_hash_symbol_type,
     _bfd_xcoff_bfd_final_link,
     _bfd_generic_link_split_section,
     bfd_generic_gc_sections,
@@ -4424,13 +4428,13 @@ const bfd_target pmac_xcoff_vec =
 
     /* Copy */
     _bfd_xcoff_copy_private_bfd_data,
-    ((bfd_boolean (*) (bfd *, bfd *)) bfd_true),
+    _bfd_generic_bfd_merge_private_bfd_data,
     _bfd_generic_init_private_section_data,
-    ((bfd_boolean (*) (bfd *, asection *, bfd *, asection *)) bfd_true),
-    ((bfd_boolean (*) (bfd *, asymbol *, bfd *, asymbol *)) bfd_true),
-    ((bfd_boolean (*) (bfd *, bfd *)) bfd_true),
-    ((bfd_boolean (*) (bfd *, flagword)) bfd_true),
-    ((bfd_boolean (*) (bfd *, void * )) bfd_true),
+    _bfd_generic_bfd_copy_private_section_data,
+    _bfd_generic_bfd_copy_private_symbol_data,
+    _bfd_generic_bfd_copy_private_header_data,
+    _bfd_generic_bfd_set_private_flags,
+    _bfd_generic_bfd_print_private_bfd_data,
 
     /* Core */
     coff_core_file_failing_command,
@@ -4439,11 +4443,12 @@ const bfd_target pmac_xcoff_vec =
 
     /* Archive */
     _bfd_xcoff_slurp_armap,
-    bfd_false,
-    ((bfd_boolean (*) (bfd *, char **, bfd_size_type *, const char **)) bfd_false),
+    _bfd_noarchive_slurp_extended_name_table,
+    _bfd_noarchive_construct_extended_name_table,
     bfd_dont_truncate_arname,
     _bfd_xcoff_write_armap,
     _bfd_xcoff_read_ar_hdr,
+    _bfd_generic_write_ar_hdr,
     _bfd_xcoff_openr_next_archived_file,
     _bfd_generic_get_elt_at_index,
     _bfd_xcoff_stat_arch_elt,
@@ -4483,6 +4488,7 @@ const bfd_target pmac_xcoff_vec =
     _bfd_generic_link_hash_table_free,
     _bfd_xcoff_bfd_link_add_symbols,
     _bfd_generic_link_just_syms,
+    _bfd_generic_copy_link_hash_symbol_type,
     _bfd_xcoff_bfd_final_link,
     _bfd_generic_link_split_section,
     bfd_generic_gc_sections,

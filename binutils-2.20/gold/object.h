@@ -1,6 +1,6 @@
 // object.h -- support for an object file for linking in gold  -*- C++ -*-
 
-// Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -30,6 +30,7 @@
 #include "elfcpp_file.h"
 #include "fileread.h"
 #include "target.h"
+#include "archive.h"
 
 namespace gold
 {
@@ -37,7 +38,6 @@ namespace gold
 class General_options;
 class Task;
 class Cref;
-class Archive;
 class Layout;
 class Output_section;
 class Output_file;
@@ -55,6 +55,13 @@ class Stringpool_template;
 
 struct Read_symbols_data
 {
+  Read_symbols_data()
+    : section_headers(NULL), section_names(NULL), symbols(NULL),
+      symbol_names(NULL), versym(NULL), verdef(NULL), verneed(NULL)
+  { }
+
+  ~Read_symbols_data();
+
   // Section headers.
   File_view* section_headers;
   // Section names.
@@ -102,6 +109,13 @@ struct Symbol_location_info
 
 struct Section_relocs
 {
+  Section_relocs()
+    : contents(NULL)
+  { }
+
+  ~Section_relocs()
+  { delete this->contents; }
+
   // Index of reloc section.
   unsigned int reloc_shndx;
   // Index of section that relocs apply to.
@@ -125,6 +139,13 @@ struct Section_relocs
 
 struct Read_relocs_data
 {
+  Read_relocs_data()
+    : local_symbols(NULL)
+  { }
+
+  ~Read_relocs_data()
+  { delete this->local_symbols; }
+
   typedef std::vector<Section_relocs> Relocs_list;
   // The relocations.
   Relocs_list relocs;
@@ -188,6 +209,8 @@ class Xindex
 class Object
 {
  public:
+  typedef std::vector<Symbol*> Symbols;
+
   // NAME is the name of the object as we would report it to the user
   // (e.g., libfoo.a(bar.o) if this is in an archive.  INPUT_FILE is
   // used to read the file.  OFFSET is the offset within the input
@@ -195,8 +218,8 @@ class Object
   Object(const std::string& name, Input_file* input_file, bool is_dynamic,
 	 off_t offset = 0)
     : name_(name), input_file_(input_file), offset_(offset), shnum_(-1U),
-      is_dynamic_(is_dynamic), uses_split_stack_(false),
-      has_no_split_stack_(false), xindex_(NULL), no_export_(false)
+      is_dynamic_(is_dynamic), is_needed_(false), uses_split_stack_(false),
+      has_no_split_stack_(false), no_export_(false), xindex_(NULL)
   { input_file->file().add_object(); }
 
   virtual ~Object()
@@ -216,6 +239,19 @@ class Object
   bool
   is_dynamic() const
   { return this->is_dynamic_; }
+
+  // Return whether this object is needed--true if it is a dynamic
+  // object which defines some symbol referenced by a regular object.
+  // We keep the flag here rather than in Dynobj for convenience when
+  // setting it.
+  bool
+  is_needed() const
+  { return this->is_needed_; }
+
+  // Record that this object is needed.
+  void
+  set_is_needed()
+  { this->is_needed_ = true; }
 
   // Return whether this object was compiled with -fsplit-stack.
   bool
@@ -367,6 +403,12 @@ class Object
   add_symbols(Symbol_table* symtab, Read_symbols_data* sd, Layout *layout)
   { this->do_add_symbols(symtab, sd, layout); }
 
+  // Add symbol information to the global symbol table.
+  Archive::Should_include
+  should_include_member(Symbol_table* symtab, Layout* layout,
+			Read_symbols_data* sd, std::string* why)
+  { return this->do_should_include_member(symtab, layout, sd, why); }
+
   // Functions and types for the elfcpp::Elf_file interface.  This
   // permit us to use Object as the File template parameter for
   // elfcpp::Elf_file.
@@ -453,6 +495,11 @@ class Object
 			   size_t* used) const
   { this->do_get_global_symbol_counts(symtab, defined, used); }
 
+  // Get the symbols defined in this object.
+  const Symbols*
+  get_global_symbols() const
+  { return this->do_get_global_symbols(); }
+
   // Return whether this object was found in a system directory.
   bool
   is_in_system_directory() const
@@ -470,6 +517,13 @@ class Object
   void
   set_no_export(bool value)
   { this->no_export_ = value; }
+
+  // Return TRUE if the section is a compressed debug section, and set
+  // *UNCOMPRESSED_SIZE to the size of the uncompressed data.
+  bool
+  section_is_compressed(unsigned int shndx,
+			section_size_type* uncompressed_size) const
+  { return this->do_section_is_compressed(shndx, uncompressed_size); }
 
  protected:
   // Returns NULL for Objects that are not plugin objects.  This method
@@ -490,6 +544,10 @@ class Object
   // child class.
   virtual void
   do_add_symbols(Symbol_table*, Read_symbols_data*, Layout*) = 0;
+
+  virtual Archive::Should_include
+  do_should_include_member(Symbol_table* symtab, Layout*, Read_symbols_data*,
+                           std::string* why) = 0;
 
   // Return the location of the contents of a section.  Implemented by
   // child class.
@@ -540,6 +598,9 @@ class Object
   virtual void
   do_get_global_symbol_counts(const Symbol_table*, size_t*, size_t*) const = 0;
 
+  virtual const Symbols*
+  do_get_global_symbols() const = 0;
+
   // Set the number of sections.
   void
   set_shnum(int shnum)
@@ -574,6 +635,12 @@ class Object
   bool
   handle_split_stack_section(const char* name);
 
+  // Return TRUE if the section is a compressed debug section, and set
+  // *UNCOMPRESSED_SIZE to the size of the uncompressed data.
+  virtual bool
+  do_section_is_compressed(unsigned int, section_size_type*) const
+  { return false; }
+
  private:
   // This class may not be copied.
   Object(const Object&);
@@ -589,17 +656,21 @@ class Object
   // Number of input sections.
   unsigned int shnum_;
   // Whether this is a dynamic object.
-  bool is_dynamic_;
+  bool is_dynamic_ : 1;
+  // Whether this object is needed.  This is only set for dynamic
+  // objects, and means that the object defined a symbol which was
+  // used by a reference from a regular object.
+  bool is_needed_ : 1;
   // Whether this object was compiled with -fsplit-stack.
-  bool uses_split_stack_;
+  bool uses_split_stack_ : 1;
   // Whether this object contains any functions compiled with the
   // no_split_stack attribute.
-  bool has_no_split_stack_;
-  // Many sections for objects with more than SHN_LORESERVE sections.
-  Xindex* xindex_;
+  bool has_no_split_stack_ : 1;
   // True if exclude this object from automatic symbol export.
   // This is used only for archive objects.
-  bool no_export_;
+  bool no_export_ : 1;
+  // Many sections for objects with more than SHN_LORESERVE sections.
+  Xindex* xindex_;
 };
 
 // A regular object (ET_REL).  This is an abstract base class itself.
@@ -1060,17 +1131,39 @@ class Symbol_value
   input_value() const
   { return this->u_.value; }
 
-  // Return whether this symbol should go into the output symbol
+  // Return whether we have set the index in the output symbol table
+  // yet.
+  bool
+  is_output_symtab_index_set() const
+  {
+    return (this->output_symtab_index_ != 0
+	    && this->output_symtab_index_ != -2U);
+  }
+
+  // Return whether this symbol may be discarded from the normal
+  // symbol table.
+  bool
+  may_be_discarded_from_output_symtab() const
+  {
+    gold_assert(!this->is_output_symtab_index_set());
+    return this->output_symtab_index_ != -2U;
+  }
+
+  // Return whether this symbol has an entry in the output symbol
   // table.
   bool
-  needs_output_symtab_entry() const
-  { return this->output_symtab_index_ != -1U; }
+  has_output_symtab_entry() const
+  {
+    gold_assert(this->is_output_symtab_index_set());
+    return this->output_symtab_index_ != -1U;
+  }
 
   // Return the index in the output symbol table.
   unsigned int
   output_symtab_index() const
   {
-    gold_assert(this->output_symtab_index_ != 0);
+    gold_assert(this->is_output_symtab_index_set()
+		&& this->output_symtab_index_ != -1U);
     return this->output_symtab_index_;
   }
 
@@ -1078,7 +1171,8 @@ class Symbol_value
   void
   set_output_symtab_index(unsigned int i)
   {
-    gold_assert(this->output_symtab_index_ == 0);
+    gold_assert(!this->is_output_symtab_index_set());
+    gold_assert(i != 0 && i != -1U && i != -2U);
     this->output_symtab_index_ = i;
   }
 
@@ -1091,6 +1185,15 @@ class Symbol_value
     this->output_symtab_index_ = -1U;
   }
 
+  // Record that this symbol must go into the output symbol table,
+  // because it there is a relocation that uses it.
+  void
+  set_must_have_output_symtab_entry()
+  {
+    gold_assert(!this->is_output_symtab_index_set());
+    this->output_symtab_index_ = -2U;
+  }
+
   // Set the index in the output dynamic symbol table.
   void
   set_needs_output_dynsym_entry()
@@ -1099,11 +1202,20 @@ class Symbol_value
     this->output_dynsym_index_ = 0;
   }
 
-  // Return whether this symbol should go into the output symbol
+  // Return whether this symbol should go into the dynamic symbol
   // table.
   bool
   needs_output_dynsym_entry() const
   {
+    return this->output_dynsym_index_ != -1U;
+  }
+
+  // Return whether this symbol has an entry in the dynamic symbol
+  // table.
+  bool
+  has_output_dynsym_entry() const
+  {
+    gold_assert(this->output_dynsym_index_ != 0);
     return this->output_dynsym_index_ != -1U;
   }
 
@@ -1112,6 +1224,7 @@ class Symbol_value
   set_output_dynsym_index(unsigned int i)
   {
     gold_assert(this->output_dynsym_index_ == 0);
+    gold_assert(i != 0 && i != -1U);
     this->output_dynsym_index_ = i;
   }
 
@@ -1168,10 +1281,13 @@ class Symbol_value
 
  private:
   // The index of this local symbol in the output symbol table.  This
-  // will be -1 if the symbol should not go into the symbol table.
+  // will be 0 if no value has been assigned yet, and the symbol may
+  // be omitted.  This will be -1U if the symbol should not go into
+  // the symbol table.  This will be -2U if the symbol must go into
+  // the symbol table, but no index has been assigned yet.
   unsigned int output_symtab_index_;
   // The index of this local symbol in the dynamic symbol table.  This
-  // will be -1 if the symbol should not go into the symbol table.
+  // will be -1U if the symbol should not go into the symbol table.
   unsigned int output_dynsym_index_;
   // The section index in the input file in which this symbol is
   // defined.
@@ -1303,6 +1419,10 @@ class Reloc_symbol_changes
   std::vector<Symbol*> vec_;
 };
 
+// Type for mapping section index to uncompressed size.
+
+typedef std::map<unsigned int, section_size_type> Compressed_section_map;
+
 // A regular object file.  This is size and endian specific.
 
 template<int size, bool big_endian>
@@ -1392,6 +1512,14 @@ class Sized_relobj : public Relobj
   {
     gold_assert(sym < this->local_values_.size());
     return this->local_values_[sym].input_shndx(is_ordinary);
+  }
+
+  // Record that local symbol SYM must be in the output symbol table.
+  void
+  set_must_have_output_symtab_entry(unsigned int sym)
+  {
+    gold_assert(sym < this->local_values_.size());
+    this->local_values_[sym].set_must_have_output_symtab_entry();
   }
 
   // Record that local symbol SYM needs a dynamic symbol entry.
@@ -1494,6 +1622,10 @@ class Sized_relobj : public Relobj
   void
   do_add_symbols(Symbol_table*, Read_symbols_data*, Layout*);
 
+  Archive::Should_include
+  do_should_include_member(Symbol_table* symtab, Layout*, Read_symbols_data*,
+                           std::string* why);
+
   // Read the relocs.
   void
   do_read_relocs(Read_relocs_data*);
@@ -1584,6 +1716,11 @@ class Sized_relobj : public Relobj
   void
   do_get_global_symbol_counts(const Symbol_table*, size_t*, size_t*) const;
 
+  // Get the global symbols.
+  const Symbols*
+  do_get_global_symbols() const
+  { return &this->symbols_; }
+
   // Get the offset of a section.
   uint64_t
   do_output_section_offset(unsigned int shndx) const
@@ -1661,7 +1798,26 @@ class Sized_relobj : public Relobj
   void
   set_output_local_symbol_count(unsigned int value)
   { this->output_local_symbol_count_ = value; }
-   
+
+  // Return TRUE if the section is a compressed debug section, and set
+  // *UNCOMPRESSED_SIZE to the size of the uncompressed data.
+  bool
+  do_section_is_compressed(unsigned int shndx,
+			   section_size_type* uncompressed_size) const
+  {
+    if (this->compressed_sections_ == NULL)
+      return false;
+    Compressed_section_map::const_iterator p =
+        this->compressed_sections_->find(shndx);
+    if (p != this->compressed_sections_->end())
+      {
+	if (uncompressed_size != NULL)
+	  *uncompressed_size = p->second;
+	return true;
+      }
+    return false;
+  }
+
  private:
   // For convenience.
   typedef Sized_relobj<size, big_endian> This;
@@ -1902,6 +2058,10 @@ class Sized_relobj : public Relobj
   unsigned int discarded_eh_frame_shndx_;
   // The list of sections whose layout was deferred.
   std::vector<Deferred_layout> deferred_layout_;
+  // The list of relocation sections whose layout was deferred.
+  std::vector<Deferred_layout> deferred_layout_relocs_;
+  // For compressed debug sections, map section index to uncompressed size.
+  Compressed_section_map* compressed_sections_;
 };
 
 // A class to manage the list of all objects.
@@ -1948,6 +2108,10 @@ class Input_objects
   void
   print_symbol_counts(const Symbol_table*) const;
 
+  // Print a cross reference table.
+  void
+  print_cref(const Symbol_table*, FILE*) const;
+
   // Iterate over all regular objects.
 
   Relobj_iterator
@@ -1972,6 +2136,11 @@ class Input_objects
   bool
   any_dynamic() const
   { return !this->dynobj_list_.empty(); }
+
+  // Return the number of non dynamic objects.
+  int
+  number_of_relobjs() const
+  { return this->relobj_list_.size(); }
 
   // Return the number of input objects.
   int

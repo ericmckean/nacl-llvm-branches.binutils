@@ -1,6 +1,6 @@
 /* ldlang.h - linker command language support
    Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
@@ -270,18 +270,22 @@ typedef struct lang_input_statement_struct
 
   /* Whether DT_NEEDED tags should be added for dynamic libraries in
      DT_NEEDED tags from this entry.  */
-  unsigned int add_needed : 1;
+  unsigned int add_DT_NEEDED_for_dynamic : 1;
 
   /* Whether this entry should cause a DT_NEEDED tag only when
      satisfying references from regular files, or always.  */
-  unsigned int as_needed : 1;
+  unsigned int add_DT_NEEDED_for_regular : 1;
 
   /* Whether to include the entire contents of an archive.  */
   unsigned int whole_archive : 1;
 
+  /* Set when bfd opening is successful.  */
   unsigned int loaded : 1;
 
   unsigned int real : 1;
+
+  /* Set if the file does not exist.  */
+  unsigned int missing_file : 1;
 } lang_input_statement_type;
 
 typedef struct
@@ -462,6 +466,7 @@ extern lang_statement_list_type file_chain;
 extern lang_statement_list_type input_file_chain;
 
 extern int lang_statement_iteration;
+extern bfd_boolean missing_file;
 
 extern void lang_init
   (void);
