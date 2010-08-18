@@ -101,7 +101,7 @@ SUBDIRS = testsuite
 
 # FIXME: add @BUILD_INFO@ once we're sure it works for everyone.
 all: stamp-picdir $(TARGETLIB) required-list all-subdir
-	@: $(MAKE) ; exec $(MULTIDO) $(FLAGS_TO_PASS) multi-do DO=all
+	@: $(MAKE) ; $(MULTIDO) $(FLAGS_TO_PASS) multi-do DO=all
 
 .PHONY: check installcheck
 check: check-subdir
@@ -371,10 +371,12 @@ TAGS: $(CFILES)
 	etags `for i in $(CFILES); do echo $(srcdir)/$$i ; done`
 
 # The standalone demangler (c++filt) has been moved to binutils.
-demangle:
+# But make this target work anyway for demangler hacking.
+demangle: $(ALL) $(srcdir)/cp-demangle.c
 	@echo "The standalone demangler, now named c++filt, is now"
 	@echo "a part of binutils."
-	@false
+	$(CC) @DEFS@ $(CFLAGS) $(CPPFLAGS) -I. -I$(INCDIR) $(HDEFINES) \
+	  $(srcdir)/cp-demangle.c -DSTANDALONE_DEMANGLER $(TARGETLIB) -o $@
 
 ls:
 	@echo Makefile $(CFILES)
@@ -722,7 +724,7 @@ $(CONFIGURED_OFILES): stamp-picdir
 
 ./lbasename.o: $(srcdir)/lbasename.c config.h $(INCDIR)/ansidecl.h \
 	$(INCDIR)/filenames.h $(INCDIR)/libiberty.h \
-	$(INCDIR)/safe-ctype.h
+	$(INCDIR)/safe-ctype.h $(INCDIR)/filenames.h
 	if [ x"$(PICFLAG)" != x ]; then \
 	  $(COMPILE.c) $(PICFLAG) $(srcdir)/lbasename.c -o pic/$@; \
 	else true; fi

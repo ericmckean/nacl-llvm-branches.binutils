@@ -1,6 +1,6 @@
 // layout.cc -- lay out output file sections for gold
 
-// Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -26,8 +26,10 @@
 #include <cstring>
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 #include <utility>
 #include <fcntl.h>
+#include <fnmatch.h>
 #include <unistd.h>
 #include "libiberty.h"
 #include "md5.h"
@@ -181,6 +183,7 @@ Layout::Layout(int number_of_input_files, Script_options* script_options)
     dynsym_section_(NULL),
     dynsym_xindex_(NULL),
     dynamic_section_(NULL),
+    dynamic_symbol_(NULL),
     dynamic_data_(NULL),
     eh_frame_section_(NULL),
     eh_frame_data_(NULL),
@@ -191,6 +194,7 @@ Layout::Layout(int number_of_input_files, Script_options* script_options)
     debug_info_(NULL),
     group_signatures_(),
     output_file_size_(-1),
+    have_added_input_section_(false),
     sections_are_attached_(false),
     input_requires_executable_stack_(false),
     input_with_gnu_stack_note_(false),
@@ -239,6 +243,7 @@ static const char* gdb_sections[] =
   // ".debug_aranges",   // not used by gdb as of 6.7.1
   ".debug_frame",
   ".debug_info",
+  ".debug_types",
   ".debug_line",
   ".debug_loc",
   ".debug_macinfo",
@@ -252,6 +257,7 @@ static const char* lines_only_debug_sections[] =
   // ".debug_aranges",   // not used by gdb as of 6.7.1
   // ".debug_frame",
   ".debug_info",
+  // ".debug_types",
   ".debug_line",
   // ".debug_loc",
   // ".debug_macinfo",
@@ -350,6 +356,11 @@ Layout::include_section(Sized_relobj<size, big_endian>*, const char* name,
           if (is_prefix_of(".gnu.lto_", name))
             return false;
         }
+      // The GNU linker strips .gnu_debuglink sections, so we do too.
+      // This is a feature used to keep debugging information in
+      // separate files.
+      if (strcmp(name, ".gnu_debuglink") == 0)
+	return false;
       return true;
 
     default:
@@ -608,19 +619,40 @@ Layout::layout(Sized_relobj<size, big_endian>* object, unsigned int shndx,
 
   Output_section* os;
 
+  // Sometimes .init_array*, .preinit_array* and .fini_array* do not have
+  // correct section types.  Force them here.
+  elfcpp::Elf_Word sh_type = shdr.get_sh_type();
+  if (sh_type == elfcpp::SHT_PROGBITS)
+    {
+      static const char init_array_prefix[] = ".init_array";
+      static const char preinit_array_prefix[] = ".preinit_array";
+      static const char fini_array_prefix[] = ".fini_array";
+      static size_t init_array_prefix_size = sizeof(init_array_prefix) - 1;
+      static size_t preinit_array_prefix_size =
+	sizeof(preinit_array_prefix) - 1;
+      static size_t fini_array_prefix_size = sizeof(fini_array_prefix) - 1;
+
+      if (strncmp(name, init_array_prefix, init_array_prefix_size) == 0)
+	sh_type = elfcpp::SHT_INIT_ARRAY;
+      else if (strncmp(name, preinit_array_prefix, preinit_array_prefix_size)
+	       == 0)
+	sh_type = elfcpp::SHT_PREINIT_ARRAY;
+      else if (strncmp(name, fini_array_prefix, fini_array_prefix_size) == 0)
+	sh_type = elfcpp::SHT_FINI_ARRAY;
+    }
+
   // In a relocatable link a grouped section must not be combined with
   // any other sections.
   if (parameters->options().relocatable()
       && (shdr.get_sh_flags() & elfcpp::SHF_GROUP) != 0)
     {
       name = this->namepool_.add(name, true, NULL);
-      os = this->make_output_section(name, shdr.get_sh_type(),
-				     shdr.get_sh_flags(), false, false,
-				     false, false, false);
+      os = this->make_output_section(name, sh_type, shdr.get_sh_flags(), false,
+				     false, false, false, false);
     }
   else
     {
-      os = this->choose_output_section(object, name, shdr.get_sh_type(),
+      os = this->choose_output_section(object, name, sh_type,
 				       shdr.get_sh_flags(), true, false,
 				       false, false, false, false);
       if (os == NULL)
@@ -640,8 +672,9 @@ Layout::layout(Sized_relobj<size, big_endian>* object, unsigned int shndx,
 
   // FIXME: Handle SHF_LINK_ORDER somewhere.
 
-  *off = os->add_input_section(object, shndx, name, shdr, reloc_shndx,
+  *off = os->add_input_section(this, object, shndx, name, shdr, reloc_shndx,
 			       this->script_options_->saw_sections_clause());
+  this->have_added_input_section_ = true;
 
   return os;
 }
@@ -670,11 +703,20 @@ Layout::layout_reloc(Sized_relobj<size, big_endian>* object,
     gold_unreachable();
   name += data_section->name();
 
-  Output_section* os = this->choose_output_section(object, name.c_str(),
-						   sh_type,
-						   shdr.get_sh_flags(),
-						   false, false, false,
-						   false, false, false);
+  // In a relocatable link relocs for a grouped section must not be
+  // combined with other reloc sections.
+  Output_section* os;
+  if (!parameters->options().relocatable()
+      || (data_section->flags() & elfcpp::SHF_GROUP) == 0)
+    os = this->choose_output_section(object, name.c_str(), sh_type,
+				     shdr.get_sh_flags(), false, false,
+				     false, false, false, false);
+  else
+    {
+      const char* n = this->namepool_.add(name.c_str(), true, NULL);
+      os = this->make_output_section(n, sh_type, shdr.get_sh_flags(),
+				     false, false, false, false, false);
+    }
 
   os->set_should_link_to_symtab();
   os->set_info_section(data_section);
@@ -848,8 +890,9 @@ Layout::layout_eh_frame(Sized_relobj<size, big_endian>* object,
       // We couldn't handle this .eh_frame section for some reason.
       // Add it as a normal section.
       bool saw_sections_clause = this->script_options_->saw_sections_clause();
-      *off = os->add_input_section(object, shndx, name, shdr, reloc_shndx,
+      *off = os->add_input_section(this, object, shndx, name, shdr, reloc_shndx,
 				   saw_sections_clause);
+      this->have_added_input_section_ = true;
     }
 
   return os;
@@ -901,7 +944,16 @@ Layout::section_flags_to_segment(elfcpp::Elf_Xword flags)
 static bool
 is_compressible_debug_section(const char* secname)
 {
-  return (strncmp(secname, ".debug", sizeof(".debug") - 1) == 0);
+  return (is_prefix_of(".debug", secname));
+}
+
+// We may see compressed debug sections in input files.  Return TRUE
+// if this is the name of a compressed debug section.
+
+bool
+is_compressed_debug_section(const char* secname)
+{
+  return (is_prefix_of(".zdebug", secname));
 }
 
 // Make a new Output_section, and attach it to segments as
@@ -1245,10 +1297,11 @@ Layout::create_initial_dynamic_sections(Symbol_table* symtab)
 						       false, false, true,
 						       true, false, false);
 
-  symtab->define_in_output_data("_DYNAMIC", NULL, Symbol_table::PREDEFINED,
-				this->dynamic_section_, 0, 0,
-				elfcpp::STT_OBJECT, elfcpp::STB_LOCAL,
-				elfcpp::STV_HIDDEN, 0, false, false);
+  this->dynamic_symbol_ =
+    symtab->define_in_output_data("_DYNAMIC", NULL, Symbol_table::PREDEFINED,
+				  this->dynamic_section_, 0, 0,
+				  elfcpp::STT_OBJECT, elfcpp::STB_LOCAL,
+				  elfcpp::STV_HIDDEN, 0, false, false);
 
   this->dynamic_data_ =  new Output_data_dynamic(&this->dynpool_);
 
@@ -1536,6 +1589,12 @@ Layout::relaxation_loop_body(
       != General_options::OBJECT_FORMAT_ELF)
     load_seg = NULL;
 
+  // If the user set the address of the text segment, that may not be
+  // compatible with putting the segment headers and file headers into
+  // that segment.
+  if (parameters->options().user_set_Ttext())
+    load_seg = NULL;
+
   gold_assert(phdr_seg == NULL
 	      || load_seg != NULL
 	      || this->script_options_->saw_sections_clause());
@@ -1594,6 +1653,72 @@ Layout::relaxation_loop_body(
 
   *pload_seg = load_seg;
   return off;
+}
+
+// Search the list of patterns and find the postion of the given section
+// name in the output section.  If the section name matches a glob
+// pattern and a non-glob name, then the non-glob position takes
+// precedence.  Return 0 if no match is found.
+
+unsigned int
+Layout::find_section_order_index(const std::string& section_name)
+{
+  Unordered_map<std::string, unsigned int>::iterator map_it;
+  map_it = this->input_section_position_.find(section_name);
+  if (map_it != this->input_section_position_.end())
+    return map_it->second;
+
+  // Absolute match failed.  Linear search the glob patterns.
+  std::vector<std::string>::iterator it;
+  for (it = this->input_section_glob_.begin();
+       it != this->input_section_glob_.end();
+       ++it)
+    {
+       if (fnmatch((*it).c_str(), section_name.c_str(), FNM_NOESCAPE) == 0)
+         {
+           map_it = this->input_section_position_.find(*it);
+           gold_assert(map_it != this->input_section_position_.end());
+           return map_it->second;
+         }
+    }
+  return 0;
+}
+
+// Read the sequence of input sections from the file specified with
+// --section-ordering-file.
+
+void
+Layout::read_layout_from_file()
+{
+  const char* filename = parameters->options().section_ordering_file();
+  std::ifstream in;
+  std::string line;
+
+  in.open(filename);
+  if (!in)
+    gold_fatal(_("unable to open --section-ordering-file file %s: %s"),
+               filename, strerror(errno));
+
+  std::getline(in, line);   // this chops off the trailing \n, if any
+  unsigned int position = 1;
+
+  while (in)
+    {
+      if (!line.empty() && line[line.length() - 1] == '\r')   // Windows
+        line.resize(line.length() - 1);
+      // Ignore comments, beginning with '#'
+      if (line[0] == '#')
+        {
+          std::getline(in, line);
+          continue;
+        }
+      this->input_section_position_[line] = position;
+      // Store all glob patterns in a vector.
+      if (is_wildcard_string(line.c_str()))
+        this->input_section_glob_.push_back(line);
+      position++;
+      std::getline(in, line);
+    }
 }
 
 // Finalize the layout.  When this is called, we have created all the
@@ -1676,6 +1801,10 @@ Layout::finalize(const Input_objects* input_objects, Symbol_table* symtab,
       // dynamic string table is complete.
       this->create_version_sections(&versions, symtab, local_dynamic_count,
 				    dynamic_symbols, dynstr);
+
+      // Set the size of the _DYNAMIC symbol.  We can't do this until
+      // after we call create_version_sections.
+      this->set_dynamic_symbol_size(symtab);
     }
   
   if (this->incremental_inputs_)
@@ -2805,10 +2934,14 @@ Layout::create_shstrtab()
 						 false, false, false, false,
 						 false);
 
-  // We can't write out this section until we've set all the section
-  // names, and we don't set the names of compressed output sections
-  // until relocations are complete.
-  os->set_after_input_sections();
+  if (strcmp(parameters->options().compress_debug_sections(), "none") != 0)
+    {
+      // We can't write out this section until we've set all the
+      // section names, and we don't set the names of compressed
+      // output sections until relocations are complete.  FIXME: With
+      // the current names we use, this is unnecessary.
+      os->set_after_input_sections();
+    }
 
   Output_section_data* posd = new Output_data_strtab(&this->namepool_);
   os->add_output_section_data(posd);
@@ -3035,7 +3168,12 @@ Layout::create_dynamic_symtab(const Input_objects* input_objects,
       hashsec->add_output_section_data(hashdata);
 
       hashsec->set_link_section(dynsym);
-      hashsec->set_entsize(4);
+
+      // For a 64-bit target, the entries in .gnu.hash do not have a
+      // uniform size, so we only set the entry size for a 32-bit
+      // target.
+      if (parameters->target().get_size() == 32)
+	hashsec->set_entsize(4);
 
       odyn->add_section_address(elfcpp::DT_GNU_HASH, hashsec);
     }
@@ -3229,6 +3367,99 @@ Layout::create_interp(const Target* target)
     }
 }
 
+// Add dynamic tags for the PLT and the dynamic relocs.  This is
+// called by the target-specific code.  This does nothing if not doing
+// a dynamic link.
+
+// USE_REL is true for REL relocs rather than RELA relocs.
+
+// If PLT_GOT is not NULL, then DT_PLTGOT points to it.
+
+// If PLT_REL is not NULL, it is used for DT_PLTRELSZ, and DT_JMPREL,
+// and we also set DT_PLTREL.  We use PLT_REL's output section, since
+// some targets have multiple reloc sections in PLT_REL.
+
+// If DYN_REL is not NULL, it is used for DT_REL/DT_RELA,
+// DT_RELSZ/DT_RELASZ, DT_RELENT/DT_RELAENT.
+
+// If ADD_DEBUG is true, we add a DT_DEBUG entry when generating an
+// executable.
+
+void
+Layout::add_target_dynamic_tags(bool use_rel, const Output_data* plt_got,
+				const Output_data* plt_rel,
+				const Output_data_reloc_generic* dyn_rel,
+				bool add_debug, bool dynrel_includes_plt)
+{
+  Output_data_dynamic* odyn = this->dynamic_data_;
+  if (odyn == NULL)
+    return;
+
+  if (plt_got != NULL && plt_got->output_section() != NULL)
+    odyn->add_section_address(elfcpp::DT_PLTGOT, plt_got);
+
+  if (plt_rel != NULL && plt_rel->output_section() != NULL)
+    {
+      odyn->add_section_size(elfcpp::DT_PLTRELSZ, plt_rel->output_section());
+      odyn->add_section_address(elfcpp::DT_JMPREL, plt_rel->output_section());
+      odyn->add_constant(elfcpp::DT_PLTREL,
+			 use_rel ? elfcpp::DT_REL : elfcpp::DT_RELA);
+    }
+
+  if (dyn_rel != NULL && dyn_rel->output_section() != NULL)
+    {
+      odyn->add_section_address(use_rel ? elfcpp::DT_REL : elfcpp::DT_RELA,
+				dyn_rel);
+      if (plt_rel != NULL && dynrel_includes_plt)
+	odyn->add_section_size(use_rel ? elfcpp::DT_RELSZ : elfcpp::DT_RELASZ,
+			       dyn_rel, plt_rel);
+      else
+	odyn->add_section_size(use_rel ? elfcpp::DT_RELSZ : elfcpp::DT_RELASZ,
+			       dyn_rel);
+      const int size = parameters->target().get_size();
+      elfcpp::DT rel_tag;
+      int rel_size;
+      if (use_rel)
+	{
+	  rel_tag = elfcpp::DT_RELENT;
+	  if (size == 32)
+	    rel_size = Reloc_types<elfcpp::SHT_REL, 32, false>::reloc_size;
+	  else if (size == 64)
+	    rel_size = Reloc_types<elfcpp::SHT_REL, 64, false>::reloc_size;
+	  else
+	    gold_unreachable();
+	}
+      else
+	{
+	  rel_tag = elfcpp::DT_RELAENT;
+	  if (size == 32)
+	    rel_size = Reloc_types<elfcpp::SHT_RELA, 32, false>::reloc_size;
+	  else if (size == 64)
+	    rel_size = Reloc_types<elfcpp::SHT_RELA, 64, false>::reloc_size;
+	  else
+	    gold_unreachable();
+	}
+      odyn->add_constant(rel_tag, rel_size);
+
+      if (parameters->options().combreloc())
+	{
+	  size_t c = dyn_rel->relative_reloc_count();
+	  if (c > 0)
+	    odyn->add_constant((use_rel
+				? elfcpp::DT_RELCOUNT
+				: elfcpp::DT_RELACOUNT),
+			       c);
+	}
+    }
+
+  if (add_debug && !parameters->options().shared())
+    {
+      // The value of the DT_DEBUG tag is filled in by the dynamic
+      // linker at run time, and used by the debugger.
+      odyn->add_constant(elfcpp::DT_DEBUG, 0);
+    }
+}
+
 // Finish the .dynamic section and PT_DYNAMIC segment.
 
 void
@@ -3251,7 +3482,14 @@ Layout::finish_dynamic_section(const Input_objects* input_objects,
        p != input_objects->dynobj_end();
        ++p)
     {
-      // FIXME: Handle --as-needed.
+      if (!(*p)->is_needed()
+	  && (*p)->input_file()->options().as_needed())
+	{
+	  // This dynamic object was linked with --as-needed, but it
+	  // is not needed.
+	  continue;
+	}
+
       odyn->add_string(elfcpp::DT_NEEDED, (*p)->soname());
     }
 
@@ -3368,6 +3606,12 @@ Layout::finish_dynamic_section(const Input_objects* input_objects,
       // Add a DT_TEXTREL for compatibility with older loaders.
       odyn->add_constant(elfcpp::DT_TEXTREL, 0);
       flags |= elfcpp::DF_TEXTREL;
+
+      if (parameters->options().text())
+	gold_error(_("read-only segment has dynamic relocations"));
+      else if (parameters->options().warn_shared_textrel()
+	       && parameters->options().shared())
+	gold_warning(_("shared library text segment is not shareable"));
     }
   if (parameters->options().shared() && this->has_static_tls())
     flags |= elfcpp::DF_STATIC_TLS;
@@ -3408,6 +3652,24 @@ Layout::finish_dynamic_section(const Input_objects* input_objects,
     flags |= elfcpp::DF_1_NOW;
   if (flags)
     odyn->add_constant(elfcpp::DT_FLAGS_1, flags);
+}
+
+// Set the size of the _DYNAMIC symbol table to be the size of the
+// dynamic data.
+
+void
+Layout::set_dynamic_symbol_size(const Symbol_table* symtab)
+{
+  Output_data_dynamic* const odyn = this->dynamic_data_;
+  odyn->finalize_data_size();
+  off_t data_size = odyn->data_size();
+  const int size = parameters->target().get_size();
+  if (size == 32)
+    symtab->get_sized_symbol<32>(this->dynamic_symbol_)->set_symsize(data_size);
+  else if (size == 64)
+    symtab->get_sized_symbol<64>(this->dynamic_symbol_)->set_symsize(data_size);
+  else
+    gold_unreachable();
 }
 
 // The mapping of input section name prefixes to output section names.
@@ -3517,6 +3779,20 @@ Layout::output_section_name(const char* name, size_t* plen)
 	  *plen = psnm->tolen;
 	  return psnm->to;
 	}
+    }
+
+  // Compressed debug sections should be mapped to the corresponding
+  // uncompressed section.
+  if (is_compressed_debug_section(name))
+    {
+      size_t len = strlen(name);
+      char *uncompressed_name = new char[len];
+      uncompressed_name[0] = '.';
+      gold_assert(name[0] == '.' && name[1] == 'z');
+      strncpy(&uncompressed_name[1], &name[2], len - 2);
+      uncompressed_name[len - 1] = '\0';
+      *plen = len - 1;
+      return uncompressed_name;
     }
 
   return name;

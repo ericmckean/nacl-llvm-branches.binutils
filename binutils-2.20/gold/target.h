@@ -64,6 +64,27 @@ class Target
   virtual ~Target()
   { }
 
+  // Virtual function which is set to return true by a target if
+  // it can use relocation types to determine if a function's
+  // pointer is taken.
+  virtual bool
+  can_check_for_function_pointers() const
+  { return false; }
+
+  // Whether a section called SECTION_NAME may have function pointers to
+  // sections not eligible for safe ICF folding.
+  virtual bool
+  section_may_have_icf_unsafe_pointers(const char* section_name) const
+  {
+    // We recognize sections for normal vtables, construction vtables and
+    // EH frames.
+    return (!is_prefix_of(".rodata._ZTV", section_name)
+	    && !is_prefix_of(".data.rel.ro._ZTV", section_name)
+	    && !is_prefix_of(".rodata._ZTC", section_name)
+	    && !is_prefix_of(".data.rel.ro._ZTC", section_name)
+	    && !is_prefix_of(".eh_frame", section_name));
+  }
+
   // Return the bit size that this target implements.  This should
   // return 32 or 64.
   int
@@ -229,6 +250,24 @@ class Target
   bool
   is_local_label_name(const char* name) const
   { return this->do_is_local_label_name(name); }
+
+  // Get the symbol index to use for a target specific reloc.
+  unsigned int
+  reloc_symbol_index(void* arg, unsigned int type) const
+  { return this->do_reloc_symbol_index(arg, type); }
+
+  // Get the addend to use for a target specific reloc.
+  uint64_t
+  reloc_addend(void* arg, unsigned int type, uint64_t addend) const
+  { return this->do_reloc_addend(arg, type, addend); }
+
+  // Return true if a reference to SYM from a reloc of type R_TYPE
+  // means that the current function may call an object compiled
+  // without -fsplit-stack.  SYM is known to be defined in an object
+  // compiled without -fsplit-stack.
+  bool
+  is_call_to_non_split(const Symbol* sym, unsigned int r_type) const
+  { return this->do_is_call_to_non_split(sym, r_type); }
 
   // A function starts at OFFSET in section SHNDX in OBJECT.  That
   // function was compiled with -fsplit-stack, but it refers to a
@@ -411,6 +450,24 @@ class Target
   virtual bool
   do_is_local_label_name(const char*) const;
 
+  // Virtual function that must be overridden by a target which uses
+  // target specific relocations.
+  virtual unsigned int
+  do_reloc_symbol_index(void*, unsigned int) const
+  { gold_unreachable(); }
+
+  // Virtual function that must be overidden by a target which uses
+  // target specific relocations.
+  virtual uint64_t
+  do_reloc_addend(void*, unsigned int, uint64_t) const
+  { gold_unreachable(); }
+
+  // Virtual function which may be overridden by the child class.  The
+  // default implementation is that any function not defined by the
+  // ABI is a call to a non-split function.
+  virtual bool
+  do_is_call_to_non_split(const Symbol* sym, unsigned int) const;
+
   // Virtual function which may be overridden by the child class.
   virtual void
   do_calls_non_split(Relobj* object, unsigned int, section_offset_type,
@@ -418,7 +475,7 @@ class Target
 		     std::string*, std::string*) const;
 
   // make_elf_object hooks.  There are four versions of these for
-  // different address sizes and endianities.
+  // different address sizes and endianness.
 
   // Set processor specific flags.
   void
@@ -501,7 +558,7 @@ class Target
 
  private:
   // The implementations of the four do_make_elf_object virtual functions are
-  // almost identical except for their sizes and endianity.  We use a template.
+  // almost identical except for their sizes and endianness.  We use a template.
   // for their implementations.
   template<int size, bool big_endian>
   inline Object*
@@ -644,7 +701,37 @@ class Sized_target : public Target
 			   section_size_type view_size,
 			   unsigned char* reloc_view,
 			   section_size_type reloc_view_size) = 0;
+ 
+  // Perform target-specific processing in a relocatable link.  This is
+  // only used if we use the relocation strategy RELOC_SPECIAL.
+  // RELINFO points to a Relocation_info structure. SH_TYPE is the relocation
+  // section type. PRELOC_IN points to the original relocation.  RELNUM is
+  // the index number of the relocation in the relocation section.
+  // OUTPUT_SECTION is the output section to which the relocation is applied.
+  // OFFSET_IN_OUTPUT_SECTION is the offset of the relocation input section
+  // within the output section.  VIEW points to the output view of the
+  // output section.  VIEW_ADDRESS is output address of the view.  VIEW_SIZE
+  // is the size of the output view and PRELOC_OUT points to the new
+  // relocation in the output object.
+  //
+  // A target only needs to override this if the generic code in
+  // target-reloc.h cannot handle some relocation types.
 
+  virtual void
+  relocate_special_relocatable(const Relocate_info<size, big_endian>*
+				/*relinfo */,
+			       unsigned int /* sh_type */,
+			       const unsigned char* /* preloc_in */,
+			       size_t /* relnum */,
+			       Output_section* /* output_section */,
+			       off_t /* offset_in_output_section */,
+			       unsigned char* /* view */,
+			       typename elfcpp::Elf_types<size>::Elf_Addr
+				 /* view_address */,
+			       section_size_type /* view_size */,
+			       unsigned char* /* preloc_out*/)
+  { gold_unreachable(); }
+ 
  protected:
   Sized_target(const Target::Target_info* pti)
     : Target(pti)

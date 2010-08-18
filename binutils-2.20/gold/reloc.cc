@@ -1,6 +1,6 @@
 // reloc.cc -- relocate input files for gold.
 
-// Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -32,6 +32,7 @@
 #include "target-reloc.h"
 #include "reloc.h"
 #include "icf.h"
+#include "compressed_output.h"
 
 namespace gold
 {
@@ -75,15 +76,15 @@ Read_relocs::run(Workqueue* workqueue)
       workqueue->queue_next(new Gc_process_relocs(this->symtab_,
                                                   this->layout_, 
                                                   this->object_, rd,
-                                                  this->symtab_lock_, 
-                                                  this->blocker_));
+                                                  this->this_blocker_,
+						  this->next_blocker_));
     }
   else
     {
       workqueue->queue_next(new Scan_relocs(this->symtab_, this->layout_,
 					    this->object_, rd,
-                                            this->symtab_lock_, 
-                                            this->blocker_));
+                                            this->this_blocker_,
+					    this->next_blocker_));
     }
 }
 
@@ -97,13 +98,22 @@ Read_relocs::get_name() const
 
 // Gc_process_relocs methods.
 
-// These tasks process the relocations read by Read_relocs and 
+Gc_process_relocs::~Gc_process_relocs()
+{
+  if (this->this_blocker_ != NULL)
+    delete this->this_blocker_;
+}
+
+// These tasks process the relocations read by Read_relocs and
 // determine which sections are referenced and which are garbage.
-// This task is done only when --gc-sections is used.
+// This task is done only when --gc-sections is used.  This is blocked
+// by THIS_BLOCKER_.  It unblocks NEXT_BLOCKER_.
 
 Task_token*
 Gc_process_relocs::is_runnable()
 {
+  if (this->this_blocker_ != NULL && this->this_blocker_->is_blocked())
+    return this->this_blocker_;
   if (this->object_->is_locked())
     return this->object_->token();
   return NULL;
@@ -113,7 +123,7 @@ void
 Gc_process_relocs::locks(Task_locker* tl)
 {
   tl->add(this, this->object_->token());
-  tl->add(this, this->blocker_);
+  tl->add(this, this->next_blocker_);
 }
 
 void
@@ -133,6 +143,12 @@ Gc_process_relocs::get_name() const
 
 // Scan_relocs methods.
 
+Scan_relocs::~Scan_relocs()
+{
+  if (this->this_blocker_ != NULL)
+    delete this->this_blocker_;
+}
+
 // These tasks scan the relocations read by Read_relocs and mark up
 // the symbol table to indicate which relocations are required.  We
 // use a lock on the symbol table to keep them from interfering with
@@ -141,8 +157,8 @@ Gc_process_relocs::get_name() const
 Task_token*
 Scan_relocs::is_runnable()
 {
-  if (!this->symtab_lock_->is_writable())
-    return this->symtab_lock_;
+  if (this->this_blocker_ != NULL && this->this_blocker_->is_blocked())
+    return this->this_blocker_;
   if (this->object_->is_locked())
     return this->object_->token();
   return NULL;
@@ -155,8 +171,7 @@ void
 Scan_relocs::locks(Task_locker* tl)
 {
   tl->add(this, this->object_->token());
-  tl->add(this, this->symtab_lock_);
-  tl->add(this, this->blocker_);
+  tl->add(this, this->next_blocker_);
 }
 
 // Scan the relocs.
@@ -165,9 +180,9 @@ void
 Scan_relocs::run(Workqueue*)
 {
   this->object_->scan_relocs(this->symtab_, this->layout_, this->rd_);
-  this->object_->release();
   delete this->rd_;
   this->rd_ = NULL;
+  this->object_->release();
 }
 
 // Return a debugging name for the task.
@@ -718,10 +733,17 @@ Sized_relobj<size, big_endian>::write_sections(const unsigned char* pshdrs,
 
       off_t view_start;
       section_size_type view_size;
+      bool must_decompress = false;
       if (output_offset != invalid_address)
 	{
 	  view_start = output_section_offset + output_offset;
 	  view_size = convert_to_section_size_type(shdr.get_sh_size());
+	  section_size_type uncompressed_size;
+	  if (this->section_is_compressed(i, &uncompressed_size))
+	    {
+	      view_size = uncompressed_size;
+	      must_decompress = true;
+	    }
 	}
       else
 	{
@@ -740,7 +762,7 @@ Sized_relobj<size, big_endian>::write_sections(const unsigned char* pshdrs,
 	{
 	  unsigned char* buffer = os->postprocessing_buffer();
 	  view = buffer + view_start;
-	  if (output_offset != invalid_address)
+	  if (output_offset != invalid_address && !must_decompress)
 	    {
 	      off_t sh_offset = shdr.get_sh_offset();
 	      if (!rm.empty() && rm.back().file_offset > sh_offset)
@@ -756,13 +778,26 @@ Sized_relobj<size, big_endian>::write_sections(const unsigned char* pshdrs,
 	  else
 	    {
 	      view = of->get_output_view(view_start, view_size);
-	      off_t sh_offset = shdr.get_sh_offset();
-	      if (!rm.empty() && rm.back().file_offset > sh_offset)
-		is_sorted = false;
-	      rm.push_back(File_read::Read_multiple_entry(sh_offset,
-							  view_size, view));
+	      if (!must_decompress)
+		{
+		  off_t sh_offset = shdr.get_sh_offset();
+		  if (!rm.empty() && rm.back().file_offset > sh_offset)
+		    is_sorted = false;
+		  rm.push_back(File_read::Read_multiple_entry(sh_offset,
+							      view_size, view));
+		}
 	    }
 	}
+
+      if (must_decompress)
+        {
+	  // Read and decompress the section.
+          section_size_type len;
+	  const unsigned char* p = this->section_contents(i, &len, false);
+	  if (!decompress_input_section(p, len, view, view_size))
+	    this->error(_("could not decompress section %s"),
+			this->section_name(i).c_str());
+        }
 
       pvs->view = view;
       pvs->address = os->address();
@@ -1092,14 +1127,17 @@ Sized_relobj<size, big_endian>::split_stack_adjust_reltype(
       // cases we will ask for a large stack unnecessarily, but this
       // is not fatal.  FIXME: Some targets have symbols which are
       // functions but are not type STT_FUNC, e.g., STT_ARM_TFUNC.
-      if (gsym->type() == elfcpp::STT_FUNC
-	  && !gsym->is_undefined()
+      if (!gsym->is_undefined()
 	  && gsym->source() == Symbol::FROM_OBJECT
 	  && !gsym->object()->uses_split_stack())
 	{
-	  section_offset_type offset =
-	    convert_to_section_size_type(reloc.get_r_offset());
-	  non_split_refs.push_back(offset);
+	  unsigned int r_type = elfcpp::elf_r_type<size>(reloc.get_r_info());
+	  if (parameters->target().is_call_to_non_split(gsym, r_type))
+	    {
+	      section_offset_type offset =
+		convert_to_section_size_type(reloc.get_r_offset());
+	      non_split_refs.push_back(offset);
+	    }
 	}
     }
 

@@ -34,7 +34,7 @@ AM_YFLAGS = -d
 am__skiplex =
 am__skipyacc =
 
-noinst_PROGRAMS = ld-new
+noinst_PROGRAMS = ld-new incremental-dump
 noinst_LIBRARIES = libgold.a
 
 CCFILES = \
@@ -78,6 +78,7 @@ CCFILES = \
 	symtab.cc \
 	target.cc \
 	target-select.cc \
+	timer.cc \
 	version.cc \
 	workqueue.cc \
 	workqueue-threads.cc
@@ -125,6 +126,7 @@ HFILES = \
 	target.h \
 	target-reloc.h \
 	target-select.h \
+	timer.h \
 	tls.h \
 	token.h \
 	workqueue.h \
@@ -158,6 +160,12 @@ ld_new_LDADD = $(ldadd_var)
 
 EXTRA_ld_new_SOURCES = $(TARGETSOURCES)
 
+incremental_dump_SOURCES = incremental-dump.cc
+incremental_dump_DEPENDENCIES = $(TARGETOBJS) libgold.a $(LIBIBERTY) \
+	$(LIBINTL_DEP)
+incremental_dump_LDADD = $(TARGETOBJS) libgold.a $(LIBIBERTY) $(LIBINTL) \
+	 $(THREADSLIB) $(LIBDL)
+
 # Use an explicit dependency for the bison generated header file.
 expression.$(OBJEXT): yyscript.h
 script-sections.$(OBJEXT): yyscript.h
@@ -170,12 +178,23 @@ check: libgold.a
 
 install-exec-local: ld-new$(EXEEXT)
 	$(mkinstalldirs) $(DESTDIR)$(bindir) $(DESTDIR)$(tooldir)/bin
-	n=`echo ld | sed '$(transform)'`; \
+	n=`echo $(installed_linker) | sed '$(transform)'`; \
 	$(INSTALL_PROGRAM) ld-new$(EXEEXT) $(DESTDIR)$(bindir)/$${n}$(EXEEXT); \
 	if test "$(bindir)" != "$(tooldir)/bin"; then \
-	  rm -f $(DESTDIR)$(tooldir)/bin/ld$(EXEEXT); \
-	  ln $(DESTDIR)$(bindir)/$${n}$(EXEEXT) $(DESTDIR)$(tooldir)/bin/ld$(EXEEXT) >/dev/null 2>/dev/null \
+	  rm -f $(DESTDIR)$(tooldir)/bin/$(installed_linker)$(EXEEXT); \
+	  ln $(DESTDIR)$(bindir)/$${n}$(EXEEXT) $(DESTDIR)$(tooldir)/bin/$(installed_linker)$(EXEEXT) >/dev/null 2>/dev/null \
+	  || $(INSTALL_PROGRAM) ld-new$(EXEEXT) $(DESTDIR)$(tooldir)/bin/$(installed_linker)$(EXEEXT); \
+	fi; \
+	if test "x$(install_as_default)" = "xyes"; then \
+	  ld=`echo ld | sed '$(transform)'`; \
+	  rm -f $(DESTDIR)$(bindir)/$${ld}$(EXEEXT); \
+	  ln $(DESTDIR)$(bindir)/$${n}$(EXEEXT) $(DESTDIR)$(bindir)/$${ld}$(EXEEXT) >/dev/null 2>/dev/null \
+	  || $(INSTALL_PROGRAM) ld-new$(EXEEXT) $(DESTDIR)$(bindir)/$${ld}$(EXEEXT); \
+	  if test "$(bindir)" != "$(tooldir)/bin"; then \
+	    rm -f $(DESTDIR)$(tooldir)/bin/ld$(EXEEXT); \
+	    ln $(DESTDIR)$(bindir)/$${n}$(EXEEXT) $(DESTDIR)$(tooldir)/bin/ld$(EXEEXT) >/dev/null 2>/dev/null \
 	    || $(INSTALL_PROGRAM) ld-new$(EXEEXT) $(DESTDIR)$(tooldir)/bin/ld$(EXEEXT); \
+	  fi; \
 	fi
 
 # We want install to imply install-info as per GNU standards, despite

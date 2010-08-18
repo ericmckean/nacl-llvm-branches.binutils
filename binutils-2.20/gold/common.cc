@@ -1,6 +1,6 @@
 // common.cc -- handle common symbols for gold
 
-// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -36,24 +36,21 @@ namespace gold
 
 // Allocate_commons_task methods.
 
-// This task allocates the common symbols.  We need a lock on the
-// symbol table.
+// This task allocates the common symbols.  We arrange to run it
+// before anything else which needs to access the symbol table.
 
 Task_token*
 Allocate_commons_task::is_runnable()
 {
-  if (!this->symtab_lock_->is_writable())
-    return this->symtab_lock_;
   return NULL;
 }
 
-// Return the locks we hold: one on the symbol table, and one blocker.
+// Release a blocker.
 
 void
 Allocate_commons_task::locks(Task_locker* tl)
 {
   tl->add(this, this->blocker_);
-  tl->add(this, this->symtab_lock_);
 }
 
 // Allocate the common symbols.
@@ -91,7 +88,16 @@ bool
 Sort_commons<size>::operator()(const Symbol* pa, const Symbol* pb) const
 {
   if (pa == NULL)
-    return false;
+    {
+      if (pb == NULL)
+	{
+	  // Stabilize sort.  The order really doesn't matter, because
+	  // these entries will be discarded, but we want to return
+	  // the same result every time we compare pa and pb.
+	  return pa < pb;
+	}
+      return false;
+    }
   if (pb == NULL)
     return true;
 
@@ -312,6 +318,17 @@ Symbol_table::do_allocate_commons_list(
       Symbol* sym = *p;
       if (sym == NULL)
 	break;
+
+      // Because we followed forwarding symbols above, but we didn't
+      // do it reliably before adding symbols to the list, it is
+      // possible for us to have the same symbol on the list twice.
+      // This can happen in the horrible case where a program defines
+      // a common symbol with the same name as a versioned libc
+      // symbol.  That will show up here as a symbol which has already
+      // been allocated and is therefore no longer a common symbol.
+      if (!sym->is_common())
+	continue;
+
       Sized_symbol<size>* ssym = this->get_sized_symbol<size>(sym);
 
       // Record the symbol in the map file now, before we change its

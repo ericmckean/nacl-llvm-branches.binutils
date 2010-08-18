@@ -213,7 +213,9 @@ Output_section_headers::do_sized_write(Output_file* of)
     else
       oshdr.put_sh_link(shstrndx);
 
-    oshdr.put_sh_info(0);
+    size_t segment_count = this->segment_list_->size();
+    oshdr.put_sh_info(segment_count >= elfcpp::PN_XNUM ? segment_count : 0);
+
     oshdr.put_sh_addralign(0);
     oshdr.put_sh_entsize(0);
   }
@@ -470,8 +472,11 @@ Output_file_header::do_sized_write(Output_file* of)
   else
     {
       oehdr.put_e_phentsize(elfcpp::Elf_sizes<size>::phdr_size);
-      oehdr.put_e_phnum(this->segment_header_->data_size()
-			/ elfcpp::Elf_sizes<size>::phdr_size);
+      size_t phnum = (this->segment_header_->data_size()
+		      / elfcpp::Elf_sizes<size>::phdr_size);
+      if (phnum > elfcpp::PN_XNUM)
+	phnum = elfcpp::PN_XNUM;
+      oehdr.put_e_phnum(phnum);
     }
 
   oehdr.put_e_shentsize(elfcpp::Elf_sizes<size>::shdr_size);
@@ -633,9 +638,11 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     unsigned int type,
     Output_data* od,
     Address address,
-    bool is_relative)
+    bool is_relative,
+    bool is_symbolless)
   : address_(address), local_sym_index_(GSYM_CODE), type_(type),
-    is_relative_(is_relative), is_section_symbol_(false), shndx_(INVALID_CODE)
+    is_relative_(is_relative), is_symbolless_(is_symbolless),
+    is_section_symbol_(false), shndx_(INVALID_CODE)
 {
   // this->type_ is a bitfield; make sure TYPE fits.
   gold_assert(this->type_ == type);
@@ -652,9 +659,11 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Sized_relobj<size, big_endian>* relobj,
     unsigned int shndx,
     Address address,
-    bool is_relative)
+    bool is_relative,
+    bool is_symbolless)
   : address_(address), local_sym_index_(GSYM_CODE), type_(type),
-    is_relative_(is_relative), is_section_symbol_(false), shndx_(shndx)
+    is_relative_(is_relative), is_symbolless_(is_symbolless),
+    is_section_symbol_(false), shndx_(shndx)
 {
   gold_assert(shndx != INVALID_CODE);
   // this->type_ is a bitfield; make sure TYPE fits.
@@ -675,10 +684,11 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Output_data* od,
     Address address,
     bool is_relative,
+    bool is_symbolless,
     bool is_section_symbol)
   : address_(address), local_sym_index_(local_sym_index), type_(type),
-    is_relative_(is_relative), is_section_symbol_(is_section_symbol),
-    shndx_(INVALID_CODE)
+    is_relative_(is_relative), is_symbolless_(is_symbolless),
+    is_section_symbol_(is_section_symbol), shndx_(INVALID_CODE)
 {
   gold_assert(local_sym_index != GSYM_CODE
               && local_sym_index != INVALID_CODE);
@@ -698,10 +708,11 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     unsigned int shndx,
     Address address,
     bool is_relative,
+    bool is_symbolless,
     bool is_section_symbol)
   : address_(address), local_sym_index_(local_sym_index), type_(type),
-    is_relative_(is_relative), is_section_symbol_(is_section_symbol),
-    shndx_(shndx)
+    is_relative_(is_relative), is_symbolless_(is_symbolless),
+    is_section_symbol_(is_section_symbol), shndx_(shndx)
 {
   gold_assert(local_sym_index != GSYM_CODE
               && local_sym_index != INVALID_CODE);
@@ -723,7 +734,8 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     Output_data* od,
     Address address)
   : address_(address), local_sym_index_(SECTION_CODE), type_(type),
-    is_relative_(false), is_section_symbol_(true), shndx_(INVALID_CODE)
+    is_relative_(false), is_symbolless_(false),
+    is_section_symbol_(true), shndx_(INVALID_CODE)
 {
   // this->type_ is a bitfield; make sure TYPE fits.
   gold_assert(this->type_ == type);
@@ -743,7 +755,8 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     unsigned int shndx,
     Address address)
   : address_(address), local_sym_index_(SECTION_CODE), type_(type),
-    is_relative_(false), is_section_symbol_(true), shndx_(shndx)
+    is_relative_(false), is_symbolless_(false),
+    is_section_symbol_(true), shndx_(shndx)
 {
   gold_assert(shndx != INVALID_CODE);
   // this->type_ is a bitfield; make sure TYPE fits.
@@ -756,6 +769,76 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
     os->set_needs_symtab_index();
 }
 
+// An absolute relocation.
+
+template<bool dynamic, int size, bool big_endian>
+Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
+    unsigned int type,
+    Output_data* od,
+    Address address)
+  : address_(address), local_sym_index_(0), type_(type),
+    is_relative_(false), is_symbolless_(false),
+    is_section_symbol_(false), shndx_(INVALID_CODE)
+{
+  // this->type_ is a bitfield; make sure TYPE fits.
+  gold_assert(this->type_ == type);
+  this->u1_.relobj = NULL;
+  this->u2_.od = od;
+}
+
+template<bool dynamic, int size, bool big_endian>
+Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
+    unsigned int type,
+    Sized_relobj<size, big_endian>* relobj,
+    unsigned int shndx,
+    Address address)
+  : address_(address), local_sym_index_(0), type_(type),
+    is_relative_(false), is_symbolless_(false),
+    is_section_symbol_(false), shndx_(shndx)
+{
+  gold_assert(shndx != INVALID_CODE);
+  // this->type_ is a bitfield; make sure TYPE fits.
+  gold_assert(this->type_ == type);
+  this->u1_.relobj = NULL;
+  this->u2_.relobj = relobj;
+}
+
+// A target specific relocation.
+
+template<bool dynamic, int size, bool big_endian>
+Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
+    unsigned int type,
+    void* arg,
+    Output_data* od,
+    Address address)
+  : address_(address), local_sym_index_(TARGET_CODE), type_(type),
+    is_relative_(false), is_symbolless_(false),
+    is_section_symbol_(false), shndx_(INVALID_CODE)
+{
+  // this->type_ is a bitfield; make sure TYPE fits.
+  gold_assert(this->type_ == type);
+  this->u1_.arg = arg;
+  this->u2_.od = od;
+}
+
+template<bool dynamic, int size, bool big_endian>
+Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::Output_reloc(
+    unsigned int type,
+    void* arg,
+    Sized_relobj<size, big_endian>* relobj,
+    unsigned int shndx,
+    Address address)
+  : address_(address), local_sym_index_(TARGET_CODE), type_(type),
+    is_relative_(false), is_symbolless_(false),
+    is_section_symbol_(false), shndx_(shndx)
+{
+  gold_assert(shndx != INVALID_CODE);
+  // this->type_ is a bitfield; make sure TYPE fits.
+  gold_assert(this->type_ == type);
+  this->u1_.arg = arg;
+  this->u2_.relobj = relobj;
+}
+
 // Record that we need a dynamic symbol index for this relocation.
 
 template<bool dynamic, int size, bool big_endian>
@@ -763,7 +846,7 @@ void
 Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::
 set_needs_dynsym_index()
 {
-  if (this->is_relative_)
+  if (this->is_symbolless_)
     return;
   switch (this->local_sym_index_)
     {
@@ -776,6 +859,10 @@ set_needs_dynsym_index()
 
     case SECTION_CODE:
       this->u1_.os->set_needs_dynsym_index();
+      break;
+
+    case TARGET_CODE:
+      // The target must take care of this if necessary.
       break;
 
     case 0:
@@ -801,6 +888,8 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::get_symbol_index()
   const
 {
   unsigned int index;
+  if (this->is_symbolless_)
+    return 0;
   switch (this->local_sym_index_)
     {
     case INVALID_CODE:
@@ -820,6 +909,11 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::get_symbol_index()
 	index = this->u1_.os->dynsym_index();
       else
 	index = this->u1_.os->symtab_index();
+      break;
+
+    case TARGET_CODE:
+      index = parameters->target().reloc_symbol_index(this->u1_.arg,
+						      this->type_);
       break;
 
     case 0:
@@ -863,7 +957,9 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::
 {
   gold_assert(this->local_sym_index_ != GSYM_CODE
               && this->local_sym_index_ != SECTION_CODE
+	      && this->local_sym_index_ != TARGET_CODE
               && this->local_sym_index_ != INVALID_CODE
+	      && this->local_sym_index_ != 0
               && this->is_section_symbol_);
   const unsigned int lsi = this->local_sym_index_;
   Output_section* os = this->u1_.relobj->output_section(lsi);
@@ -913,7 +1009,7 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::write_rel(
     Write_rel* wr) const
 {
   wr->put_r_offset(this->get_address());
-  unsigned int sym_index = this->is_relative_ ? 0 : this->get_symbol_index();
+  unsigned int sym_index = this->get_symbol_index();
   wr->put_r_info(elfcpp::elf_r_info<size>(sym_index, this->type_));
 }
 
@@ -942,7 +1038,9 @@ Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian>::symbol_value(
       return sym->value() + addend;
     }
   gold_assert(this->local_sym_index_ != SECTION_CODE
+	      && this->local_sym_index_ != TARGET_CODE
               && this->local_sym_index_ != INVALID_CODE
+	      && this->local_sym_index_ != 0
               && !this->is_section_symbol_);
   const unsigned int lsi = this->local_sym_index_;
   const Symbol_value<size>* symval = this->u1_.relobj->local_symbol(lsi);
@@ -1010,7 +1108,10 @@ Output_reloc<elfcpp::SHT_RELA, dynamic, size, big_endian>::write(
   elfcpp::Rela_write<size, big_endian> orel(pov);
   this->rel_.write_rel(&orel);
   Addend addend = this->addend_;
-  if (this->rel_.is_relative())
+  if (this->rel_.is_target_specific())
+    addend = parameters->target().reloc_addend(this->rel_.target_arg(),
+					       this->rel_.type(), addend);
+  else if (this->rel_.is_symbolless())
     addend = this->rel_.symbol_value(addend);
   else if (this->rel_.is_local_section_symbol())
     addend = this->rel_.local_section_offset(addend);
@@ -1049,7 +1150,7 @@ Output_data_reloc_base<sh_type, dynamic, size, big_endian>::do_write(
   const off_t oview_size = this->data_size();
   unsigned char* const oview = of->get_output_view(off, oview_size);
 
-  if (this->sort_relocs_)
+  if (this->sort_relocs())
     {
       gold_assert(dynamic);
       std::sort(this->relocs_.begin(), this->relocs_.end(),
@@ -1473,6 +1574,8 @@ Output_data_dynamic::Dynamic_entry::write(
 
     case DYNAMIC_SECTION_SIZE:
       val = this->u_.od->data_size();
+      if (this->od2 != NULL)
+	val += this->od2->data_size();
       break;
 
     case DYNAMIC_SYMBOL:
@@ -1519,9 +1622,13 @@ Output_data_dynamic::set_final_data_size()
 {
   // Add the terminating entry if it hasn't been added.
   // Because of relaxation, we can run this multiple times.
-  if (this->entries_.empty()
-      || this->entries_.rbegin()->tag() != elfcpp::DT_NULL)
-    this->add_constant(elfcpp::DT_NULL, 0);
+  if (this->entries_.empty() || this->entries_.back().tag() != elfcpp::DT_NULL)
+    {
+      int extra = parameters->options().spare_dynamic_tags();
+      for (int i = 0; i < extra; ++i)
+	this->add_constant(elfcpp::DT_NULL, 0);
+      this->add_constant(elfcpp::DT_NULL, 0);
+    }
 
   int dyn_size;
   if (parameters->target().get_size() == 32)
@@ -1640,6 +1747,42 @@ Output_section::Input_section::data_size() const
     return this->u1_.data_size;
   else
     return this->u2_.posd->data_size();
+}
+
+// Return the object for an input section.
+
+Relobj*
+Output_section::Input_section::relobj() const
+{
+  if (this->is_input_section())
+    return this->u2_.object;
+  else if (this->is_merge_section())
+    {
+      gold_assert(this->u2_.pomb->first_relobj() != NULL);
+      return this->u2_.pomb->first_relobj();
+    }
+  else if (this->is_relaxed_input_section())
+    return this->u2_.poris->relobj();
+  else
+    gold_unreachable();
+}
+
+// Return the input section index for an input section.
+
+unsigned int
+Output_section::Input_section::shndx() const
+{
+  if (this->is_input_section())
+    return this->shndx_;
+  else if (this->is_merge_section())
+    {
+      gold_assert(this->u2_.pomb->first_relobj() != NULL);
+      return this->u2_.pomb->first_shndx();
+    }
+  else if (this->is_relaxed_input_section())
+    return this->u2_.poris->shndx();
+  else
+    gold_unreachable();
 }
 
 // Set the address and file offset.
@@ -1790,6 +1933,7 @@ Output_section::Output_section(const char* name, elfcpp::Elf_Word type,
     found_in_sections_clause_(false),
     has_load_address_(false),
     info_uses_section_index_(false),
+    input_section_order_specified_(false),
     may_sort_attached_input_sections_(false),
     must_sort_attached_input_sections_(false),
     attached_input_sections_are_sorted_(false),
@@ -1805,12 +1949,10 @@ Output_section::Output_section(const char* name, elfcpp::Elf_Word type,
     is_entsize_zero_(false),
     section_offsets_need_adjustment_(false),
     is_noload_(false),
+    always_keeps_input_sections_(false),
     tls_offset_(0),
     checkpoint_(NULL),
-    merge_section_map_(),
-    merge_section_by_properties_map_(),
-    relaxed_input_section_map_(),
-    is_relaxed_input_section_map_valid_(true)
+    lookup_maps_(new Output_section_lookup_maps)
 {
   // An unallocated section has no address.  Forcing this means that
   // we don't need special treatment for symbols defined in debug
@@ -1854,7 +1996,8 @@ Output_section::set_entsize(uint64_t v)
 
 template<int size, bool big_endian>
 off_t
-Output_section::add_input_section(Sized_relobj<size, big_endian>* object,
+Output_section::add_input_section(Layout* layout,
+				  Sized_relobj<size, big_endian>* object,
 				  unsigned int shndx,
 				  const char* secname,
 				  const elfcpp::Shdr<size, big_endian>& shdr,
@@ -1894,8 +2037,14 @@ Output_section::add_input_section(Sized_relobj<size, big_endian>* object,
       && reloc_shndx == 0
       && shdr.get_sh_size() > 0)
     {
-      if (this->add_merge_input_section(object, shndx, sh_flags,
-					entsize, addralign))
+      // Keep information about merged input sections for rebuilding fast
+      // lookup maps if we have sections-script or we do relaxation.
+      bool keeps_input_sections = (this->always_keeps_input_sections_
+				   || have_sections_script
+				   || parameters->target().may_relax());
+
+      if (this->add_merge_input_section(object, shndx, sh_flags, entsize,
+					addralign, keeps_input_sections))
 	{
 	  // Tell the relocation routines that they need to call the
 	  // output_offset method to determine the final address.
@@ -1940,22 +2089,42 @@ Output_section::add_input_section(Sized_relobj<size, big_endian>* object,
         }
     }
 
+  section_size_type input_section_size = shdr.get_sh_size();
+  section_size_type uncompressed_size;
+  if (object->section_is_compressed(shndx, &uncompressed_size))
+    input_section_size = uncompressed_size;
+
   this->set_current_data_size_for_child(aligned_offset_in_section
-					+ shdr.get_sh_size());
+					+ input_section_size);
 
   // We need to keep track of this section if we are already keeping
   // track of sections, or if we are relaxing.  Also, if this is a
   // section which requires sorting, or which may require sorting in
-  // the future, we keep track of the sections.
-  if (have_sections_script
+  // the future, we keep track of the sections.  If the
+  // --section-ordering-file option is used to specify the order of
+  // sections, we need to keep track of sections.
+  if (this->always_keeps_input_sections_
+      || have_sections_script
       || !this->input_sections_.empty()
       || this->may_sort_attached_input_sections()
       || this->must_sort_attached_input_sections()
       || parameters->options().user_set_Map()
-      || parameters->target().may_relax())
-    this->input_sections_.push_back(Input_section(object, shndx,
-						  shdr.get_sh_size(),
-						  addralign));
+      || parameters->target().may_relax()
+      || parameters->options().section_ordering_file())
+    {
+      Input_section isecn(object, shndx, shdr.get_sh_size(), addralign);
+      if (parameters->options().section_ordering_file())
+        {
+          unsigned int section_order_index =
+            layout->find_section_order_index(std::string(secname));
+	  if (section_order_index != 0)
+            {
+              isecn.set_section_order_index(section_order_index);
+              this->set_input_section_order_specified();
+            }
+        }
+      this->input_sections_.push_back(isecn);
+    }
 
   return aligned_offset_in_section;
 }
@@ -1985,11 +2154,9 @@ Output_section::add_relaxed_input_section(Output_relaxed_input_section* poris)
 {
   Input_section inp(poris);
   this->add_output_section_data(&inp);
-  if (this->is_relaxed_input_section_map_valid_)
-    {
-      Const_section_id csid(poris->relobj(), poris->shndx());
-      this->relaxed_input_section_map_[csid] = poris;
-    }
+  if (this->lookup_maps_->is_valid())
+    this->lookup_maps_->add_relaxed_input_section(poris->relobj(),
+						  poris->shndx(), poris);
 
   // For a relaxed section, we use the current data size.  Linker scripts
   // get all the input sections, including relaxed one from an output
@@ -2035,7 +2202,8 @@ Output_section::add_output_merge_section(Output_section_data* posd,
 bool
 Output_section::add_merge_input_section(Relobj* object, unsigned int shndx,
 					uint64_t flags, uint64_t entsize,
-					uint64_t addralign)
+					uint64_t addralign,
+					bool keeps_input_sections)
 {
   bool is_string = (flags & elfcpp::SHF_STRINGS) != 0;
 
@@ -2048,58 +2216,71 @@ Output_section::add_merge_input_section(Relobj* object, unsigned int shndx,
   gold_assert(this->checkpoint_ == NULL);
 
   // Look up merge sections by required properties.
+  // Currently, we only invalidate the lookup maps in script processing
+  // and relaxation.  We should not have done either when we reach here.
+  // So we assume that the lookup maps are valid to simply code.
+  gold_assert(this->lookup_maps_->is_valid());
   Merge_section_properties msp(is_string, entsize, addralign);
-  Merge_section_by_properties_map::const_iterator p =
-    this->merge_section_by_properties_map_.find(msp);
-  if (p != this->merge_section_by_properties_map_.end())
+  Output_merge_base* pomb = this->lookup_maps_->find_merge_section(msp);
+  bool is_new = false;
+  if (pomb != NULL)
     {
-      Output_merge_base* merge_section = p->second;
-      merge_section->add_input_section(object, shndx);
-      gold_assert(merge_section->is_string() == is_string
-		  && merge_section->entsize() == entsize
-		  && merge_section->addralign() == addralign);
-
-      // Link input section to found merge section.
-      Const_section_id csid(object, shndx);
-      this->merge_section_map_[csid] = merge_section;
-      return true;
+      gold_assert(pomb->is_string() == is_string
+		  && pomb->entsize() == entsize
+		  && pomb->addralign() == addralign);
     }
-
-  // We handle the actual constant merging in Output_merge_data or
-  // Output_merge_string_data.
-  Output_merge_base* pomb;
-  if (!is_string)
-    pomb = new Output_merge_data(entsize, addralign);
   else
     {
-      switch (entsize)
+      // Create a new Output_merge_data or Output_merge_string_data.
+      if (!is_string)
+	pomb = new Output_merge_data(entsize, addralign);
+      else
 	{
-        case 1:
-	  pomb = new Output_merge_string<char>(addralign);
-	  break;
-        case 2:
-	  pomb = new Output_merge_string<uint16_t>(addralign);
-	  break;
-        case 4:
-	  pomb = new Output_merge_string<uint32_t>(addralign);
-	  break;
-        default:
-	  return false;
+	  switch (entsize)
+	    {
+	    case 1:
+	      pomb = new Output_merge_string<char>(addralign);
+	      break;
+	    case 2:
+	      pomb = new Output_merge_string<uint16_t>(addralign);
+	      break;
+	    case 4:
+	      pomb = new Output_merge_string<uint32_t>(addralign);
+	      break;
+	    default:
+	      return false;
+	    }
 	}
+      // If we need to do script processing or relaxation, we need to keep
+      // the original input sections to rebuild the fast lookup maps.
+      if (keeps_input_sections)
+	pomb->set_keeps_input_sections();
+      is_new = true;
     }
 
-  // Add new merge section to this output section and link merge section
-  // properties to new merge section in map.
-  this->add_output_merge_section(pomb, is_string, entsize);
-  this->merge_section_by_properties_map_[msp] = pomb;
+  if (pomb->add_input_section(object, shndx))
+    {
+      // Add new merge section to this output section and link merge
+      // section properties to new merge section in map.
+      if (is_new)
+	{
+	  this->add_output_merge_section(pomb, is_string, entsize);
+	  this->lookup_maps_->add_merge_section(msp, pomb);
+	}
 
-  // Add input section to new merge section and link input section to new
-  // merge section in map.
-  pomb->add_input_section(object, shndx);
-  Const_section_id csid(object, shndx);
-  this->merge_section_map_[csid] = pomb;
-
-  return true;
+      // Add input section to new merge section and link input section to new
+      // merge section in map.
+      this->lookup_maps_->add_merge_input_section(object, shndx, pomb);
+      return true;
+    }
+  else
+    {
+      // If add_input_section failed, delete new merge section to avoid
+      // exporting empty merge sections in Output_section::get_input_section.
+      if (is_new)
+	delete pomb;
+      return false;
+    }
 }
 
 // Build a relaxation map to speed up relaxation of existing input sections.
@@ -2194,12 +2375,12 @@ Output_section::convert_input_sections_to_relaxed_sections(
 	    &this->input_sections_);
 
   // Update fast look-up map.
-  if (this->is_relaxed_input_section_map_valid_)
+  if (this->lookup_maps_->is_valid())
     for (size_t i = 0; i < relaxed_sections.size(); ++i)
       {
 	Output_relaxed_input_section* poris = relaxed_sections[i];
-	Const_section_id csid(poris->relobj(), poris->shndx());
-	this->relaxed_input_section_map_[csid] = poris;
+	this->lookup_maps_->add_relaxed_input_section(poris->relobj(),
+						      poris->shndx(), poris);
       }
 }
 
@@ -2244,17 +2425,47 @@ Output_section_data*
 Output_section::find_merge_section(const Relobj* object,
 				   unsigned int shndx) const
 {
-  Const_section_id csid(object, shndx);
-  Output_section_data_by_input_section_map::const_iterator p =
-    this->merge_section_map_.find(csid);
-  if (p != this->merge_section_map_.end())
+  if (!this->lookup_maps_->is_valid())
+    this->build_lookup_maps();
+  return this->lookup_maps_->find_merge_section(object, shndx);
+}
+
+// Build the lookup maps for merge and relaxed sections.  This is needs
+// to be declared as a const methods so that it is callable with a const
+// Output_section pointer.  The method only updates states of the maps.
+
+void
+Output_section::build_lookup_maps() const
+{
+  this->lookup_maps_->clear();
+  for (Input_section_list::const_iterator p = this->input_sections_.begin();
+       p != this->input_sections_.end();
+       ++p)
     {
-      Output_section_data* posd = p->second;
-      gold_assert(posd->is_merge_section_for(object, shndx));
-      return posd;
+      if (p->is_merge_section())
+	{
+	  Output_merge_base* pomb = p->output_merge_base();
+	  Merge_section_properties msp(pomb->is_string(), pomb->entsize(),
+				       pomb->addralign());
+	  this->lookup_maps_->add_merge_section(msp, pomb);
+	  for (Output_merge_base::Input_sections::const_iterator is =
+		 pomb->input_sections_begin();
+	       is != pomb->input_sections_end();
+	       ++is) 
+	    {
+	      const Const_section_id& csid = *is;
+	    this->lookup_maps_->add_merge_input_section(csid.first,
+							csid.second, pomb);
+	    }
+	    
+	}
+      else if (p->is_relaxed_input_section())
+	{
+	  Output_relaxed_input_section* poris = p->relaxed_input_section();
+	  this->lookup_maps_->add_relaxed_input_section(poris->relobj(),
+							poris->shndx(), poris);
+	}
     }
-  else
-    return NULL;
 }
 
 // Find an relaxed input section corresponding to an input section
@@ -2264,31 +2475,9 @@ const Output_relaxed_input_section*
 Output_section::find_relaxed_input_section(const Relobj* object,
 					   unsigned int shndx) const
 {
-  // Be careful that the map may not be valid due to input section export
-  // to scripts or a check-point restore.
-  if (!this->is_relaxed_input_section_map_valid_)
-    {
-      // Rebuild the map as needed.
-      this->relaxed_input_section_map_.clear();
-      for (Input_section_list::const_iterator p = this->input_sections_.begin();
-	   p != this->input_sections_.end();
-	   ++p)
-	if (p->is_relaxed_input_section())
-	  {
-	    Const_section_id csid(p->relobj(), p->shndx());
-	    this->relaxed_input_section_map_[csid] =
-	      p->relaxed_input_section();
-	  }
-      this->is_relaxed_input_section_map_valid_ = true;
-    }
-
-  Const_section_id csid(object, shndx);
-  Output_relaxed_input_section_by_input_section_map::const_iterator p =
-    this->relaxed_input_section_map_.find(csid);
-  if (p != this->relaxed_input_section_map_.end())
-    return p->second;
-  else
-    return NULL;
+  if (!this->lookup_maps_->is_valid())
+    this->build_lookup_maps();
+  return this->lookup_maps_->find_relaxed_input_section(object, shndx);
 }
 
 // Given an address OFFSET relative to the start of input section
@@ -2459,7 +2648,8 @@ Output_section::set_final_data_size()
       return;
     }
 
-  if (this->must_sort_attached_input_sections())
+  if (this->must_sort_attached_input_sections()
+      || this->input_section_order_specified())
     this->sort_attached_input_sections();
 
   uint64_t address = this->address();
@@ -2536,12 +2726,14 @@ class Output_section::Input_section_sort_entry
   { }
 
   Input_section_sort_entry(const Input_section& input_section,
-			   unsigned int index)
+			   unsigned int index,
+			   bool must_sort_attached_input_sections)
     : input_section_(input_section), index_(index),
       section_has_name_(input_section.is_input_section()
 			|| input_section.is_relaxed_input_section())
   {
-    if (this->section_has_name_)
+    if (this->section_has_name_
+        && must_sort_attached_input_sections)
       {
 	// This is only called single-threaded from Layout::finalize,
 	// so it is OK to lock.  Unfortunately we have no way to pass
@@ -2594,7 +2786,7 @@ class Output_section::Input_section_sort_entry
   has_priority() const
   {
     gold_assert(this->section_has_name_);
-    return this->section_name_.find('.', 1);
+    return this->section_name_.find('.', 1) != std::string::npos;
   }
 
   // Return true if this an input file whose base name matches
@@ -2616,6 +2808,23 @@ class Output_section::Input_section_sort_entry
     if (base_len != match_len + 2 && base_len != match_len + 3)
       return false;
     return memcmp(base_name + base_len - 2, ".o", 2) == 0;
+  }
+
+  // Returns 1 if THIS should appear before S in section order, -1 if S
+  // appears before THIS and 0 if they are not comparable.
+  int
+  compare_section_ordering(const Input_section_sort_entry& s) const
+  {
+    unsigned int this_secn_index = this->input_section_.section_order_index();
+    unsigned int s_secn_index = s.input_section().section_order_index();
+    if (this_secn_index > 0 && s_secn_index > 0)
+      {
+        if (this_secn_index < s_secn_index)
+          return 1;
+        else if (this_secn_index > s_secn_index)
+          return -1;
+      }
+    return 0;
   }
 
  private:
@@ -2672,14 +2881,18 @@ Output_section::Input_section_sort_compare::operator()(
     }
 
   // A section with a priority follows a section without a priority.
-  // The GNU linker does this for all but .init_array sections; until
-  // further notice we'll assume that that is an mistake.
   bool s1_has_priority = s1.has_priority();
   bool s2_has_priority = s2.has_priority();
   if (s1_has_priority && !s2_has_priority)
     return false;
   if (!s1_has_priority && s2_has_priority)
     return true;
+
+  // Check if a section order exists for these sections through a section
+  // ordering file.  If sequence_num is 0, an order does not exist.
+  int sequence_num = s1.compare_section_ordering(s2);
+  if (sequence_num != 0)
+    return sequence_num == 1;
 
   // Otherwise we sort by name.
   int compare = s1.section_name().compare(s2.section_name());
@@ -2688,6 +2901,67 @@ Output_section::Input_section_sort_compare::operator()(
 
   // Otherwise we keep the input order.
   return s1.index() < s2.index();
+}
+
+// Return true if S1 should come before S2 in an .init_array or .fini_array
+// output section.
+
+bool
+Output_section::Input_section_sort_init_fini_compare::operator()(
+    const Output_section::Input_section_sort_entry& s1,
+    const Output_section::Input_section_sort_entry& s2) const
+{
+  // We sort all the sections with no names to the end.
+  if (!s1.section_has_name() || !s2.section_has_name())
+    {
+      if (s1.section_has_name())
+	return true;
+      if (s2.section_has_name())
+	return false;
+      return s1.index() < s2.index();
+    }
+
+  // A section without a priority follows a section with a priority.
+  // This is the reverse of .ctors and .dtors sections.
+  bool s1_has_priority = s1.has_priority();
+  bool s2_has_priority = s2.has_priority();
+  if (s1_has_priority && !s2_has_priority)
+    return true;
+  if (!s1_has_priority && s2_has_priority)
+    return false;
+
+  // Check if a section order exists for these sections through a section
+  // ordering file.  If sequence_num is 0, an order does not exist.
+  int sequence_num = s1.compare_section_ordering(s2);
+  if (sequence_num != 0)
+    return sequence_num == 1;
+
+  // Otherwise we sort by name.
+  int compare = s1.section_name().compare(s2.section_name());
+  if (compare != 0)
+    return compare < 0;
+
+  // Otherwise we keep the input order.
+  return s1.index() < s2.index();
+}
+
+// Return true if S1 should come before S2.  Sections that do not match
+// any pattern in the section ordering file are placed ahead of the sections
+// that match some pattern.
+
+bool
+Output_section::Input_section_sort_section_order_index_compare::operator()(
+    const Output_section::Input_section_sort_entry& s1,
+    const Output_section::Input_section_sort_entry& s2) const
+{
+  unsigned int s1_secn_index = s1.input_section().section_order_index();
+  unsigned int s2_secn_index = s2.input_section().section_order_index();
+
+  // Keep input order if section ordering cannot determine order.
+  if (s1_secn_index == s2_secn_index)
+    return s1.index() < s2.index();
+  
+  return s1_secn_index < s2_secn_index;
 }
 
 // Sort the input sections attached to an output section.
@@ -2715,10 +2989,27 @@ Output_section::sort_attached_input_sections()
   for (Input_section_list::iterator p = this->input_sections_.begin();
        p != this->input_sections_.end();
        ++p, ++i)
-    sort_list.push_back(Input_section_sort_entry(*p, i));
+      sort_list.push_back(Input_section_sort_entry(*p, i,
+                            this->must_sort_attached_input_sections()));
 
   // Sort the input sections.
-  std::sort(sort_list.begin(), sort_list.end(), Input_section_sort_compare());
+  if (this->must_sort_attached_input_sections())
+    {
+      if (this->type() == elfcpp::SHT_PREINIT_ARRAY
+          || this->type() == elfcpp::SHT_INIT_ARRAY
+          || this->type() == elfcpp::SHT_FINI_ARRAY)
+        std::sort(sort_list.begin(), sort_list.end(),
+	          Input_section_sort_init_fini_compare());
+      else
+        std::sort(sort_list.begin(), sort_list.end(),
+	          Input_section_sort_compare());
+    }
+  else
+    {
+      gold_assert(parameters->options().section_ordering_file());
+      std::sort(sort_list.begin(), sort_list.end(),
+	        Input_section_sort_section_order_index_compare());
+    }
 
   // Copy the sorted input sections back to our list.
   this->input_sections_.clear();
@@ -2726,6 +3017,7 @@ Output_section::sort_attached_input_sections()
        p != sort_list.end();
        ++p)
     this->input_sections_.push_back(p->input_section());
+  sort_list.clear();
 
   // Remember that we sorted the input sections, since we might get
   // called again.
@@ -2901,14 +3193,14 @@ uint64_t
 Output_section::get_input_sections(
     uint64_t address,
     const std::string& fill,
-    std::list<Simple_input_section>* input_sections)
+    std::list<Input_section>* input_sections)
 {
   if (this->checkpoint_ != NULL
       && !this->checkpoint_->input_sections_saved())
     this->checkpoint_->save_input_sections();
 
-  // Invalidate the relaxed input section map.
-  this->is_relaxed_input_section_map_valid_ = false;
+  // Invalidate fast look-up maps.
+  this->lookup_maps_->invalidate();
 
   uint64_t orig_address = address;
 
@@ -2919,12 +3211,10 @@ Output_section::get_input_sections(
        p != this->input_sections_.end();
        ++p)
     {
-      if (p->is_input_section())
-	input_sections->push_back(Simple_input_section(p->relobj(),
-						       p->shndx()));
-      else if (p->is_relaxed_input_section())
-	input_sections->push_back(
-	    Simple_input_section(p->relaxed_input_section()));
+      if (p->is_input_section()
+	  || p->is_relaxed_input_section()
+	  || p->is_merge_section())
+	input_sections->push_back(*p);
       else
 	{
 	  uint64_t aligned_address = align_address(address, p->addralign());
@@ -2959,13 +3249,16 @@ Output_section::get_input_sections(
   return data_size;
 }
 
-// Add an simple input section.
+// Add a script input section.  SIS is an Output_section::Input_section,
+// which can be either a plain input section or a special input section like
+// a relaxed input section.  For a special input section, its size must be
+// finalized.
 
 void
-Output_section::add_simple_input_section(const Simple_input_section& sis,
-					 off_t data_size,
-					 uint64_t addralign)
+Output_section::add_script_input_section(const Input_section& sis)
 {
+  uint64_t data_size = sis.data_size();
+  uint64_t addralign = sis.addralign();
   if (addralign > this->addralign_)
     this->addralign_ = addralign;
 
@@ -2976,11 +3269,31 @@ Output_section::add_simple_input_section(const Simple_input_section& sis,
   this->set_current_data_size_for_child(aligned_offset_in_section
 					+ data_size);
 
-  Input_section is =
-    (sis.is_relaxed_input_section()
-     ? Input_section(sis.relaxed_input_section())
-     : Input_section(sis.relobj(), sis.shndx(), data_size, addralign));
-  this->input_sections_.push_back(is);
+  this->input_sections_.push_back(sis);
+
+  // Update fast lookup maps if necessary. 
+  if (this->lookup_maps_->is_valid())
+    {
+      if (sis.is_merge_section())
+	{
+	  Output_merge_base* pomb = sis.output_merge_base();
+	  Merge_section_properties msp(pomb->is_string(), pomb->entsize(),
+				       pomb->addralign());
+	  this->lookup_maps_->add_merge_section(msp, pomb);
+	  for (Output_merge_base::Input_sections::const_iterator p =
+		 pomb->input_sections_begin();
+	       p != pomb->input_sections_end();
+	       ++p)
+	    this->lookup_maps_->add_merge_input_section(p->first, p->second,
+							pomb);
+	}
+      else if (sis.is_relaxed_input_section())
+	{
+	  Output_relaxed_input_section* poris = sis.relaxed_input_section();
+	  this->lookup_maps_->add_relaxed_input_section(poris->relobj(),
+							poris->shndx(), poris);
+	}
+    }
 }
 
 // Save states for relaxation.
@@ -3006,9 +3319,9 @@ Output_section::discard_states()
   this->checkpoint_ = NULL;
   gold_assert(this->fills_.empty());
 
-  // Simply invalidate the relaxed input section map since we do not keep
-  // track of it.
-  this->is_relaxed_input_section_map_valid_ = false;
+  // Simply invalidate the fast lookup maps since we do not keep
+  // track of them.
+  this->lookup_maps_->invalidate();
 }
 
 void
@@ -3040,9 +3353,9 @@ Output_section::restore_states()
   this->attached_input_sections_are_sorted_ =
     checkpoint->attached_input_sections_are_sorted();
 
-  // Simply invalidate the relaxed input section map since we do not keep
-  // track of it.
-  this->is_relaxed_input_section_map_valid_ = false;
+  // Simply invalidate the fast lookup maps since we do not keep
+  // track of them.
+  this->lookup_maps_->invalidate();
 }
 
 // Update the section offsets of input sections in this.  This is required if
@@ -3127,6 +3440,7 @@ Output_segment::add_output_section(Output_section* os,
   gold_assert((os->flags() & elfcpp::SHF_ALLOC) != 0);
   gold_assert(!this->is_max_align_known_);
   gold_assert(os->is_large_data_section() == this->is_large_data_segment());
+  gold_assert(this->type() == elfcpp::PT_LOAD || !do_sort);
 
   this->update_flags_for_output_section(seg_flags);
 
@@ -3141,13 +3455,7 @@ Output_segment::add_output_section(Output_section* os,
   // output segment.  The loops below are expected to be fast.
 
   // So that PT_NOTE segments will work correctly, we need to ensure
-  // that all SHT_NOTE sections are adjacent.  This will normally
-  // happen automatically, because all the SHT_NOTE input sections
-  // will wind up in the same output section.  However, it is possible
-  // for multiple SHT_NOTE input sections to have different section
-  // flags, and thus be in different output sections, but for the
-  // different section flags to map into the same segment flags and
-  // thus the same output segment.
+  // that all SHT_NOTE sections are adjacent.
   if (os->type() == elfcpp::SHT_NOTE && !pdl->empty())
     {
       Output_segment::Output_data_list::iterator p = pdl->end();
@@ -3353,6 +3661,7 @@ Output_segment::add_output_section(Output_section* os,
 	  if ((*p)->is_section() && (*p)->output_section()->is_interp())
 	    ++p;
 	  pdl->insert(p, os);
+	  return;
 	}
 
       // If this section is used by the dynamic linker, and it is not
@@ -3733,11 +4042,14 @@ Output_segment::set_offset(unsigned int increase)
       return;
     }
 
-  const Output_data* first;
-  if (this->output_data_.empty())
-    first = this->output_bss_.front();
-  else
-    first = this->output_data_.front();
+  // Find the first and last section by address.  The sections may
+  // have been sorted for the PT_LOAD segment.
+  const Output_data* first = NULL;
+  const Output_data* last_data = NULL;
+  const Output_data* last_bss = NULL;
+  this->find_first_and_last_list(&this->output_data_, &first, &last_data);
+  this->find_first_and_last_list(&this->output_bss_, &first, &last_bss);
+
   this->vaddr_ = first->address();
   this->paddr_ = (first->has_load_address()
 		  ? first->load_address()
@@ -3748,18 +4060,11 @@ Output_segment::set_offset(unsigned int increase)
   if (this->output_data_.empty())
     this->filesz_ = 0;
   else
-    {
-      const Output_data* last_data = this->output_data_.back();
-      this->filesz_ = (last_data->address()
-		       + last_data->data_size()
-		       - this->vaddr_);
-    }
+    this->filesz_ = (last_data->address()
+		     + last_data->data_size()
+		     - this->vaddr_);
 
-  const Output_data* last;
-  if (this->output_bss_.empty())
-    last = this->output_data_.back();
-  else
-    last = this->output_bss_.back();
+  const Output_data* last = last_bss != NULL ? last_bss : last_data;
   this->memsz_ = (last->address()
 		  + last->data_size()
 		  - this->vaddr_);
@@ -3775,6 +4080,37 @@ Output_segment::set_offset(unsigned int increase)
       uint64_t segment_align = this->maximum_alignment();
       gold_assert(this->vaddr_ == align_address(this->vaddr_, segment_align));
       this->memsz_ = align_address(this->memsz_, segment_align);
+    }
+}
+
+// Look through a list of Output_data objects and find the first and
+// last by address.
+
+void
+Output_segment::find_first_and_last_list(const Output_data_list* pdl,
+					 const Output_data** pfirst,
+					 const Output_data** plast) const
+{
+  const Output_data* first = *pfirst;
+  const Output_data* last = *plast;
+  for (Output_data_list::const_iterator p = pdl->begin(); p != pdl->end(); ++p)
+    {
+      if (first == NULL
+	  || (*p)->address() < first->address()
+	  || ((*p)->address() == first->address()
+	      && (*p)->data_size() < first->data_size()))
+	{
+	  first = *p;
+	  *pfirst = first;
+	}
+      if (last == NULL
+	  || (*p)->address() > last->address()
+	  || ((*p)->address() == last->address()
+	      && (*p)->data_size() > last->data_size()))
+	{
+	  last = *p;
+	  *plast = last;
+	}
     }
 }
 
@@ -4244,6 +4580,7 @@ Output_file::close()
 template
 off_t
 Output_section::add_input_section<32, false>(
+    Layout* layout,
     Sized_relobj<32, false>* object,
     unsigned int shndx,
     const char* secname,
@@ -4256,6 +4593,7 @@ Output_section::add_input_section<32, false>(
 template
 off_t
 Output_section::add_input_section<32, true>(
+    Layout* layout,
     Sized_relobj<32, true>* object,
     unsigned int shndx,
     const char* secname,
@@ -4268,6 +4606,7 @@ Output_section::add_input_section<32, true>(
 template
 off_t
 Output_section::add_input_section<64, false>(
+    Layout* layout,
     Sized_relobj<64, false>* object,
     unsigned int shndx,
     const char* secname,
@@ -4280,6 +4619,7 @@ Output_section::add_input_section<64, false>(
 template
 off_t
 Output_section::add_input_section<64, true>(
+    Layout* layout,
     Sized_relobj<64, true>* object,
     unsigned int shndx,
     const char* secname,

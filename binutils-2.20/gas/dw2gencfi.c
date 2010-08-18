@@ -1,5 +1,5 @@
 /* dw2gencfi.c - Support for generating Dwarf2 CFI information.
-   Copyright 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   Copyright 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Michal Ludvig <mludvig@suse.cz>
 
@@ -34,6 +34,14 @@
 # else
 #  define CFI_DIFF_EXPR_OK 0
 # endif
+#endif
+
+#ifndef CFI_DIFF_LSDA_OK
+# define CFI_DIFF_LSDA_OK CFI_DIFF_EXPR_OK
+#endif
+
+#if CFI_DIFF_EXPR_OK == 1 && CFI_DIFF_LSDA_OK == 0
+# error "CFI_DIFF_EXPR_OK should imply CFI_DIFF_LSDA_OK"
 #endif
 
 /* We re-use DWARF2_LINE_MIN_INSN_LENGTH for the code alignment field
@@ -758,7 +766,7 @@ dot_cfi_lsda (int ignored ATTRIBUTE_UNUSED)
 
   if ((encoding & 0xff) != encoding
       || ((encoding & 0x70) != 0
-#if CFI_DIFF_EXPR_OK || defined tc_cfi_emit_pcrel_expr
+#if CFI_DIFF_LSDA_OK || defined tc_cfi_emit_pcrel_expr
 	  && (encoding & 0x70) != DW_EH_PE_pcrel
 #endif
 	  )
@@ -1295,9 +1303,9 @@ output_cie (struct cie_entry *cie, bfd_boolean eh_frame, int align)
       if (cie->lsda_encoding != DW_EH_PE_omit)
 	out_one ('L');
       out_one ('R');
-      if (cie->signal_frame)
-	out_one ('S');
     }
+  if (cie->signal_frame)
+    out_one ('S');
   out_one (0);
   out_uleb128 (DWARF2_LINE_MIN_INSN_LENGTH);	/* Code alignment.  */
   out_sleb128 (DWARF2_CIE_DATA_ALIGNMENT);	/* Data alignment.  */
@@ -1311,29 +1319,31 @@ output_cie (struct cie_entry *cie, bfd_boolean eh_frame, int align)
       if (cie->per_encoding != DW_EH_PE_omit)
 	augmentation_size += 1 + encoding_size (cie->per_encoding);
       out_uleb128 (augmentation_size);		/* Augmentation size.  */
-    }
-  if (cie->per_encoding != DW_EH_PE_omit)
-    {
-      offsetT size = encoding_size (cie->per_encoding);
-      out_one (cie->per_encoding);
-      exp = cie->personality;
-      if ((cie->per_encoding & 0x70) == DW_EH_PE_pcrel)
+
+      if (cie->per_encoding != DW_EH_PE_omit)
 	{
+	  offsetT size = encoding_size (cie->per_encoding);
+	  out_one (cie->per_encoding);
+	  exp = cie->personality;
+	  if ((cie->per_encoding & 0x70) == DW_EH_PE_pcrel)
+	    {
 #if CFI_DIFF_EXPR_OK
-	  exp.X_op = O_subtract;
-	  exp.X_op_symbol = symbol_temp_new_now ();
-	  emit_expr (&exp, size);
+	      exp.X_op = O_subtract;
+	      exp.X_op_symbol = symbol_temp_new_now ();
+	      emit_expr (&exp, size);
 #elif defined (tc_cfi_emit_pcrel_expr)
-	  tc_cfi_emit_pcrel_expr (&exp, size);
+	      tc_cfi_emit_pcrel_expr (&exp, size);
 #else
-	  abort ();
+	      abort ();
 #endif
+	    }
+	  else
+	    emit_expr (&exp, size);
 	}
-      else
-	emit_expr (&exp, size);
+
+      if (cie->lsda_encoding != DW_EH_PE_omit)
+	out_one (cie->lsda_encoding);
     }
-  if (cie->lsda_encoding != DW_EH_PE_omit)
-    out_one (cie->lsda_encoding);
 
   switch (DWARF2_FDE_RELOC_SIZE)
     {
@@ -1445,7 +1455,7 @@ output_fde (struct fde_entry *fde, struct cie_entry *cie,
       exp = fde->lsda;
       if ((fde->lsda_encoding & 0x70) == DW_EH_PE_pcrel)
 	{
-#if CFI_DIFF_EXPR_OK
+#if CFI_DIFF_LSDA_OK
 	  exp.X_op = O_subtract;
 	  exp.X_op_symbol = symbol_temp_new_now ();
 	  emit_expr (&exp, augmentation_size);
@@ -1708,7 +1718,6 @@ cfi_finish (void)
       for (fde = all_fde_data; fde ; fde = fde->next)
 	{
 	  struct cfi_insn_data *first;
-	  struct cie_entry *cie;
 
 	  if (fde->end_address == NULL)
 	    {

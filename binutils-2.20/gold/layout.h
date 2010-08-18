@@ -51,12 +51,17 @@ class Output_segment_headers;
 class Output_file_header;
 class Output_segment;
 class Output_data;
+class Output_data_reloc_generic;
 class Output_data_dynamic;
 class Output_symtab_xindex;
 class Output_reduced_debug_abbrev_section;
 class Output_reduced_debug_info_section;
 class Eh_frame;
 class Target;
+
+// Return TRUE if SECNAME is the name of a compressed debug section.
+extern bool
+is_compressed_debug_section(const char* secname);
 
 // This task function handles mapping the input sections to output
 // sections and laying them out in memory.
@@ -307,6 +312,12 @@ class Layout
 	 const char* name, const elfcpp::Shdr<size, big_endian>& shdr,
 	 unsigned int reloc_shndx, unsigned int reloc_type, off_t* offset);
 
+  unsigned int
+  find_section_order_index(const std::string&);
+
+  void
+  read_layout_from_file();
+
   // Layout an input reloc section when doing a relocatable link.  The
   // section is RELOC_SHNDX in OBJECT, with data in SHDR.
   // DATA_SECTION is the reloc section to which it refers.  RR is the
@@ -433,12 +444,18 @@ class Layout
   is_linkonce(const char* name)
   { return strncmp(name, ".gnu.linkonce", sizeof(".gnu.linkonce") - 1) == 0; }
 
+  // Whether we have added an input section.
+  bool
+  have_added_input_section() const
+  { return this->have_added_input_section_; }
+
   // Return true if a section is a debugging section.
   static inline bool
   is_debug_info_section(const char* name)
   {
     // Debugging sections can only be recognized by name.
     return (strncmp(name, ".debug", sizeof(".debug") - 1) == 0
+            || strncmp(name, ".zdebug", sizeof(".zdebug") - 1) == 0
             || strncmp(name, ".gnu.linkonce.wi.",
                        sizeof(".gnu.linkonce.wi.") - 1) == 0
             || strncmp(name, ".line", sizeof(".line") - 1) == 0
@@ -550,6 +567,14 @@ class Layout
   Incremental_inputs*
   incremental_inputs()
   { return this->incremental_inputs_; }
+
+  // For the target-specific code to add dynamic tags which are common
+  // to most targets.
+  void
+  add_target_dynamic_tags(bool use_rel, const Output_data* plt_got,
+			  const Output_data* plt_rel,
+			  const Output_data_reloc_generic* dyn_rel,
+			  bool add_debug, bool dynrel_includes_plt);
 
   // Compute and write out the build ID if needed.
   void
@@ -718,6 +743,10 @@ class Layout
   // Finish the .dynamic section and PT_DYNAMIC segment.
   void
   finish_dynamic_section(const Input_objects*, const Symbol_table*);
+
+  // Set the size of the _DYNAMIC symbol.
+  void
+  set_dynamic_symbol_size(const Symbol_table*);
 
   // Create the .interp section and PT_INTERP segment.
   void
@@ -965,6 +994,8 @@ class Layout
   Output_symtab_xindex* dynsym_xindex_;
   // The SHT_DYNAMIC output section if there is one.
   Output_section* dynamic_section_;
+  // The _DYNAMIC symbol if there is one.
+  Symbol* dynamic_symbol_;
   // The dynamic data which goes into dynamic_section_.
   Output_data_dynamic* dynamic_data_;
   // The exception frame output section if there is one.
@@ -985,6 +1016,8 @@ class Layout
   Group_signatures group_signatures_;
   // The size of the output file.
   off_t output_file_size_;
+  // Whether we have added an input section to an output section.
+  bool have_added_input_section_;
   // Whether we have attached the sections to the segments.
   bool sections_are_attached_;
   // Whether we have seen an object file marked to require an
@@ -1015,6 +1048,10 @@ class Layout
   Segment_states* segment_states_;
   // A relaxation debug checker.  We only create one when in debugging mode.
   Relaxation_debug_check* relaxation_debug_check_;
+  // Hash a pattern to its position in the section ordering file.
+  Unordered_map<std::string, unsigned int> input_section_position_;
+  // Vector of glob only patterns in the section_ordering file.
+  std::vector<std::string> input_section_glob_;
 };
 
 // This task handles writing out data in output sections which is not

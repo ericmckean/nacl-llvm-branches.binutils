@@ -278,7 +278,7 @@ Attributes_section_data::Attributes_section_data(
 
   const unsigned char *p = view;
   p = view;
-  if (*(p++) == 'A')
+  if (size > 0 && p != NULL && *(p++) == 'A')
     {
       size--;
       while (size > 0)
@@ -451,7 +451,7 @@ Output_attributes_section_data::do_write(Output_file* of)
   std::vector<unsigned char> buffer;
   this->attributes_section_data_.write(&buffer);
   gold_assert(convert_to_section_size_type(buffer.size()) == oview_size);
-  memcpy(oview, buffer.data(), buffer.size());
+  memcpy(oview, &buffer.front(), buffer.size());
   of->write_output_view(this->offset(), oview_size, oview);
 }
 

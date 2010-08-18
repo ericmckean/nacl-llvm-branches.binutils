@@ -85,6 +85,8 @@ class Orphan_section_placement
     PLACE_TEXT,
     PLACE_RODATA,
     PLACE_DATA,
+    PLACE_TLS,
+    PLACE_TLS_BSS,
     PLACE_BSS,
     PLACE_REL,
     PLACE_INTERP,
@@ -122,6 +124,8 @@ Orphan_section_placement::Orphan_section_placement()
   this->initialize_place(PLACE_TEXT, ".text");
   this->initialize_place(PLACE_RODATA, ".rodata");
   this->initialize_place(PLACE_DATA, ".data");
+  this->initialize_place(PLACE_TLS, NULL);
+  this->initialize_place(PLACE_TLS_BSS, NULL);
   this->initialize_place(PLACE_BSS, ".bss");
   this->initialize_place(PLACE_REL, NULL);
   this->initialize_place(PLACE_INTERP, ".interp");
@@ -232,6 +236,13 @@ Orphan_section_placement::find_place(Output_section* os,
     index = PLACE_LAST;
   else if (type == elfcpp::SHT_NOTE)
     index = PLACE_INTERP;
+  else if ((flags & elfcpp::SHF_TLS) != 0)
+    {
+      if (type == elfcpp::SHT_NOBITS)
+	index = PLACE_TLS_BSS;
+      else
+	index = PLACE_TLS;
+    }
   else if (type == elfcpp::SHT_NOBITS)
     index = PLACE_BSS;
   else if ((flags & elfcpp::SHF_WRITE) != 0)
@@ -264,6 +275,14 @@ Orphan_section_placement::find_place(Output_section* os,
 	  break;
 	case PLACE_INTERP:
 	  follow = PLACE_TEXT;
+	  break;
+	case PLACE_TLS:
+	  follow = PLACE_DATA;
+	  break;
+	case PLACE_TLS_BSS:
+	  follow = PLACE_TLS;
+	  if (!this->places_[PLACE_TLS].have_location)
+	    follow = PLACE_DATA;
 	  break;
 	}
       if (follow != PLACE_MAX && this->places_[follow].have_location)
@@ -527,7 +546,7 @@ class Output_section_element
 {
  public:
   // A list of input sections.
-  typedef std::list<Output_section::Simple_input_section> Input_section_list;
+  typedef std::list<Output_section::Input_section> Input_section_list;
 
   Output_section_element()
   { }
@@ -964,15 +983,6 @@ class Output_section_element_fill : public Output_section_element
   Expression* val_;
 };
 
-// Return whether STRING contains a wildcard character.  This is used
-// to speed up matching.
-
-static inline bool
-is_wildcard_string(const std::string& s)
-{
-  return strpbrk(s.c_str(), "?*[") != NULL;
-}
-
 // An input section specification in an output section
 
 class Output_section_element_input : public Output_section_element
@@ -1016,7 +1026,7 @@ class Output_section_element_input : public Output_section_element
     Input_section_pattern(const char* patterna, size_t patternlena,
 			  Sort_wildcard sorta)
       : pattern(patterna, patternlena),
-	pattern_is_wildcard(is_wildcard_string(this->pattern)),
+	pattern_is_wildcard(is_wildcard_string(this->pattern.c_str())),
 	sort(sorta)
     { }
   };
@@ -1083,7 +1093,7 @@ Output_section_element_input::Output_section_element_input(
   if (spec->file.name.length != 1 || spec->file.name.value[0] != '*')
     this->filename_pattern_.assign(spec->file.name.value,
 				   spec->file.name.length);
-  this->filename_is_wildcard_ = is_wildcard_string(this->filename_pattern_);
+  this->filename_is_wildcard_ = is_wildcard_string(this->filename_pattern_.c_str());
 
   if (spec->input_sections.exclude != NULL)
     {
@@ -1092,7 +1102,7 @@ Output_section_element_input::Output_section_element_input(
 	   p != spec->input_sections.exclude->end();
 	   ++p)
 	{
-	  bool is_wildcard = is_wildcard_string(*p);
+	  bool is_wildcard = is_wildcard_string((*p).c_str());
 	  this->filename_exclusions_.push_back(std::make_pair(*p,
 							      is_wildcard));
 	}
@@ -1176,13 +1186,13 @@ Output_section_element_input::match_name(const char* file_name,
 class Input_section_info
 {
  public:
-  Input_section_info(const Output_section::Simple_input_section& input_section)
+  Input_section_info(const Output_section::Input_section& input_section)
     : input_section_(input_section), section_name_(),
       size_(0), addralign_(1)
   { }
 
   // Return the simple input section.
-  const Output_section::Simple_input_section&
+  const Output_section::Input_section&
   input_section() const
   { return this->input_section_; }
 
@@ -1228,7 +1238,7 @@ class Input_section_info
 
  private:
   // Input section, can be a relaxed section.
-  Output_section::Simple_input_section input_section_;
+  Output_section::Input_section input_section_;
   // Name of the section. 
   std::string section_name_;
   // Section size.
@@ -1399,9 +1409,20 @@ Output_section_element_input::set_section_addresses(
 	   p != matching_sections[i].end();
 	   ++p)
 	{
-	  uint64_t this_subalign = p->addralign();
+	  // Override the original address alignment if SUBALIGN is specified
+	  // and is greater than the original alignment.  We need to make a
+	  // copy of the input section to modify the alignment.
+	  Output_section::Input_section sis(p->input_section());
+
+	  uint64_t this_subalign = sis.addralign();
+	  if (!sis.is_input_section())
+	    sis.output_section_data()->finalize_data_size();	
+	  uint64_t data_size = sis.data_size();
 	  if (this_subalign < subalign)
-	    this_subalign = subalign;
+	    {
+	      this_subalign = subalign;
+	      sis.set_addralign(subalign);
+	    }
 
 	  uint64_t address = align_address(dot, this_subalign);
 
@@ -1415,11 +1436,8 @@ Output_section_element_input::set_section_addresses(
 	      layout->new_output_section_data_from_script(posd);
 	    }
 
-	  output_section->add_simple_input_section(p->input_section(),
-						   p->size(),
-						   this_subalign);
-
-	  dot = address + p->size();
+	  output_section->add_script_input_section(sis);
+	  dot = address + data_size;
 	}
     }
 
@@ -2374,7 +2392,7 @@ Orphan_output_section::set_section_addresses(Symbol_table*, Layout*,
 					     uint64_t*,
                                              uint64_t* load_address)
 {
-  typedef std::list<Output_section::Simple_input_section> Input_section_list;
+  typedef std::list<Output_section::Input_section> Input_section_list;
 
   bool have_load_address = *load_address != *dot_value;
 
@@ -2396,25 +2414,12 @@ Orphan_output_section::set_section_addresses(Symbol_table*, Layout*,
        p != input_sections.end();
        ++p)
     {
-      uint64_t addralign;
-      uint64_t size;
-
-      // We know what are single-threaded, so it is OK to lock the
-      // object.
-      {
-	const Task* task = reinterpret_cast<const Task*>(-1);
-	Task_lock_obj<Object> tl(task, p->relobj());
-	addralign = p->relobj()->section_addralign(p->shndx());
-	if (p->is_relaxed_input_section())
-	  // We use current data size because relxed section sizes may not
-	  // have finalized yet.
-	  size = p->relaxed_input_section()->current_data_size();
-	else
-	  size = p->relobj()->section_size(p->shndx());
-      }
-
+      uint64_t addralign = p->addralign();
+      if (!p->is_input_section())
+	p->output_section_data()->finalize_data_size();	
+      uint64_t size = p->data_size();
       address = align_address(address, addralign);
-      this->os_->add_simple_input_section(*p, size, addralign);
+      this->os_->add_script_input_section(*p);
       address += size;
     }
 

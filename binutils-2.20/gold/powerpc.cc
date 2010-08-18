@@ -183,6 +183,28 @@ class Target_powerpc : public Sized_target<size, big_endian>
 	   const elfcpp::Rela<size, big_endian>& reloc, unsigned int r_type,
 	   Symbol* gsym);
 
+    inline bool
+    local_reloc_may_be_function_pointer(Symbol_table* , Layout* ,
+					Target_powerpc* ,
+	          			Sized_relobj<size, big_endian>* ,
+			                unsigned int ,
+	          			Output_section* ,
+	          			const elfcpp::Rela<size, big_endian>& ,
+					unsigned int ,
+	          			const elfcpp::Sym<size, big_endian>&)
+    { return false; }
+
+    inline bool
+    global_reloc_may_be_function_pointer(Symbol_table* , Layout* ,
+					 Target_powerpc* ,
+		   			 Sized_relobj<size, big_endian>* ,
+		   			 unsigned int ,
+		   			 Output_section* ,
+		   			 const elfcpp::Rela<size,
+							    big_endian>& ,
+					 unsigned int , Symbol*)
+    { return false; }
+
   private:
     static void
     unsupported_reloc_local(Sized_relobj<size, big_endian>*,
@@ -948,6 +970,11 @@ Target_powerpc<size, big_endian>::make_plt_entry(Symbol_table* symtab,
       // Create the GOT section first.
       this->got_section(symtab, layout);
 
+      // Ensure that .rela.dyn always appears before .rela.plt  This is
+      // necessary due to how, on PowerPC and some other targets, .rela.dyn
+      // needs to include .rela.plt in it's range.
+      this->rela_dyn_section(layout);
+
       this->plt_ = new Output_data_plt_powerpc<size, big_endian>(layout);
       layout->add_output_section_data(".plt", elfcpp::SHT_PROGBITS,
 				      (elfcpp::SHF_ALLOC
@@ -1466,7 +1493,8 @@ Target_powerpc<size, big_endian>::gc_process_relocs(
   typedef Target_powerpc<size, big_endian> Powerpc;
   typedef typename Target_powerpc<size, big_endian>::Scan Scan;
 
-  gold::gc_process_relocs<size, big_endian, Powerpc, elfcpp::SHT_RELA, Scan>(
+  gold::gc_process_relocs<size, big_endian, Powerpc, elfcpp::SHT_RELA, Scan,
+			  typename Target_powerpc::Relocatable_size_for_reloc>(
     symtab,
     layout,
     this,
@@ -1552,35 +1580,11 @@ Target_powerpc<size, big_endian>::do_finalize_sections(
     Symbol_table*)
 {
   // Fill in some more dynamic tags.
-  Output_data_dynamic* const odyn = layout->dynamic_data();
-  if (odyn != NULL)
-    {
-      if (this->plt_ != NULL)
-	{
-	  const Output_data* od = this->plt_->rel_plt();
-	  odyn->add_section_size(elfcpp::DT_PLTRELSZ, od);
-	  odyn->add_section_address(elfcpp::DT_JMPREL, od);
-	  odyn->add_constant(elfcpp::DT_PLTREL, elfcpp::DT_RELA);
-
-	  odyn->add_section_address(elfcpp::DT_PLTGOT, this->plt_);
-	}
-
-      if (this->rela_dyn_ != NULL)
-	{
-	  const Output_data* od = this->rela_dyn_;
-	  odyn->add_section_address(elfcpp::DT_RELA, od);
-	  odyn->add_section_size(elfcpp::DT_RELASZ, od);
-	  odyn->add_constant(elfcpp::DT_RELAENT,
-			     elfcpp::Elf_sizes<size>::rela_size);
-	}
-
-      if (!parameters->options().shared())
-	{
-	  // The value of the DT_DEBUG tag is filled in by the dynamic
-	  // linker at run time, and used by the debugger.
-	  odyn->add_constant(elfcpp::DT_DEBUG, 0);
-	}
-    }
+  const Reloc_section* rel_plt = (this->plt_ == NULL
+				  ? NULL
+				  : this->plt_->rel_plt());
+  layout->add_target_dynamic_tags(false, this->plt_, rel_plt,
+				  this->rela_dyn_, true, size == 32);
 
   // Emit any relocs we saved in an attempt to avoid generating COPY
   // relocs.
@@ -1633,7 +1637,6 @@ Target_powerpc<size, big_endian>::Relocate::relocate(
   // Get the GOT offset if needed.  Unlike i386 and x86_64, our GOT
   // pointer points to the beginning, not the end, of the table.
   // So we just use the plain offset.
-  bool have_got_offset = false;
   unsigned int got_offset = 0;
   unsigned int got2_offset = 0;
   switch (r_type)
@@ -1665,7 +1668,6 @@ Target_powerpc<size, big_endian>::Relocate::relocate(
           gold_assert(object->local_has_got_offset(r_sym, GOT_TYPE_STANDARD));
           got_offset = object->local_got_offset(r_sym, GOT_TYPE_STANDARD);
         }
-      have_got_offset = true;
       break;
 
       // R_PPC_PLTREL24 is rather special.  If non-zero,
@@ -1678,7 +1680,6 @@ Target_powerpc<size, big_endian>::Relocate::relocate(
 	  got2_offset = got2->offset();
 	  addend += got2_offset;
 	}
-      have_got_offset = true;
       break;
 
     default:
