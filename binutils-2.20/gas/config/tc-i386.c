@@ -3308,6 +3308,8 @@ parse_insn (char *line, char *mnemonic)
 		  case 2:
 		    single_standalone_prefix = 1;
 		    break;
+                  default:  
+		    break;
 		}
 	      break;
 	    }
@@ -8572,8 +8574,8 @@ const char *md_shortopts = "qn";
 #define OPTION_MSSE2AVX (OPTION_MD_BASE + 10)
 #define OPTION_MSSE_CHECK (OPTION_MD_BASE + 11)
 #define OPTION_MAVXSCALAR (OPTION_MD_BASE + 12)
-#define OPTION_NACL_ALIGN (OPTION_MD_BASE + 12)
-#define OPTION_NACL_LIBRARY_MODE (OPTION_MD_BASE + 13)
+#define OPTION_NACL_ALIGN (OPTION_MD_BASE + 13)
+#define OPTION_NACL_LIBRARY_MODE (OPTION_MD_BASE + 14)
 
 struct option md_longopts[] =
 {
