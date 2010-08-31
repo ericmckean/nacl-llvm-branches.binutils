@@ -342,14 +342,6 @@ case $basic_machine in
 	  basic_machine=i686-pc
 	  os=-nacl
 	  ;;
-	nacl64*)
-	  basic_machine=x86_64-pc
-	  os=-nacl
-	  ;;
-	nacl*)
-	  basic_machine=i686-pc
-	  os=-nacl
-	  ;;
 	# Object if more than one company name word.
 	*-*-*)
 		echo Invalid configuration \`$1\': machine \`$basic_machine\' not recognized 1>&2
@@ -1352,9 +1344,6 @@ case $os in
 	-nacl*)
 		os=-nacl
 		;;
-	-nacl*)
-		os=-nacl
-		;;
 	-nto-qnx*)
 		;;
 	-nto*)
@@ -1476,8 +1465,6 @@ case $os in
 	-dicos*)
 		os=-dicos
 		;;
-        -nacl*)
-	        ;;
 	-none)
 		;;
 	*)

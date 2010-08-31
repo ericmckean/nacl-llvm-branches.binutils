@@ -31,7 +31,8 @@
 
 #include "elf/x86-64.h"
 
-#ifdef ELF64_NACL_C
+/* @LOCALMOD(abetul): Linker sandboxing for Pnacl translators */
+#if defined(ELF64_NACL_C) || defined(__native_client__) 
 #include "elf/nacl.h"
 #endif
 
@@ -376,7 +377,7 @@ elf64_x86_64_grok_psinfo (bfd *abfd, Elf_Internal_Note *note)
 
 /* The size in bytes of an entry in the procedure linkage table.  */
 
-#ifdef ELF64_NACL_C
+#if defined(ELF64_NACL_C)
 #define PLT_ENTRY_SIZE 64
 #else
 #define PLT_ENTRY_SIZE 16
@@ -385,7 +386,7 @@ elf64_x86_64_grok_psinfo (bfd *abfd, Elf_Internal_Note *note)
 /* The first entry in a procedure linkage table looks like this.  See the
    SVR4 ABI i386 supplement and the x86-64 ABI to see how this works.  */
 
-#ifdef ELF64_NACL_C
+#if defined(ELF64_NACL_C)
 static const bfd_byte elf64_x86_64_plt0_entry[PLT_ENTRY_SIZE] =
 {
   0xff, 0x35, 8, 0, 0, 0,	/* pushq GOT+8(%rip) */
@@ -424,7 +425,7 @@ static const bfd_byte elf64_x86_64_plt0_entry[PLT_ENTRY_SIZE] =
 
 /* Subsequent entries in a procedure linkage table look like this.  */
 
-#ifdef ELF64_NACL_C
+#if defined(ELF64_NACL_C)
 static const bfd_byte elf64_x86_64_plt_entry[PLT_ENTRY_SIZE] =
 {
   0x4c, 0x8b, 0x1d,	    /* movq name@GOTPC(%rip), %r11 */
@@ -766,7 +767,7 @@ elf64_x86_64_create_dynamic_sections (bfd *dynobj, struct bfd_link_info *info)
       || (!info->shared && !htab->srelbss))
     abort ();
 
-#ifdef ELF64_NACL_C
+#if defined(ELF64_NACL_C)
   if (!bfd_set_section_alignment(dynobj, htab->elf.splt, 5))
     return FALSE;
 #endif
@@ -4531,20 +4532,26 @@ static const struct bfd_elf_special_section
   { NULL,	                0,          0, 0,            0 }
 };
 
-#ifdef ELF64_NACL_C
+#if defined(ELF64_NACL_C)
 #define TARGET_LITTLE_SYM		    bfd_elf64_nacl_vec
 #define TARGET_LITTLE_NAME		    "elf64-nacl"
-/* NativeClient defines its own ABI.*/
-#undef ELF_OSABI
-#define ELF_OSABI ELFOSABI_NACL
-#else
+#else 
 #define TARGET_LITTLE_SYM		    bfd_elf64_x86_64_vec
 #define TARGET_LITTLE_NAME		    "elf64-x86-64"
 #endif
+
 #define ELF_ARCH			    bfd_arch_i386
 #define ELF_MACHINE_CODE		    EM_X86_64
 #define ELF_MAXPAGESIZE			    0x200000
-#ifdef ELF64_NACL_C
+
+/* @LOCALMOD(abetul): Linker sandboxing for Pnacl translators */
+#if defined(ELF64_NACL_C) || defined(__native_client__)
+/* NativeClient defines its own ABI.*/
+#undef ELF_OSABI
+#define ELF_OSABI ELFOSABI_NACL
+#endif
+
+#if defined(ELF64_NACL_C)
 #define ELF_MINPAGESIZE			    0x10000
 #define ELF_COMMONPAGESIZE		    0x10000
 #else
@@ -4617,7 +4624,8 @@ static const struct bfd_elf_special_section
 #undef  elf_backend_post_process_headers
 #define elf_backend_post_process_headers  _bfd_elf_set_osabi
 
-#ifdef ELF64_NACL_C
+/* @LOCALMOD(abetul): Linker sandboxing for Pnacl translators */
+#if defined(ELF64_NACL_C) || defined(__native_client__)
 #define bfd_elf64_bfd_merge_private_bfd_data \
   elf64_nacl_merge_private_bfd_data
 
