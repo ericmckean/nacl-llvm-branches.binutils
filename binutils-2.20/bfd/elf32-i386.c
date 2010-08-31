@@ -34,7 +34,8 @@
 
 #include "elf/i386.h"
 
-#ifdef ELF32_NACL_C
+/* @LOCALMOD(abetul): Linker sandboxing for Pnacl translators */
+#if defined(ELF32_NACL_C) || defined(__native_client__)
 #include "elf/nacl.h"
 #endif
 
@@ -4788,18 +4789,24 @@ elf_i386_add_symbol_hook (bfd * abfd,
   return TRUE;
 }
 
-#ifdef ELF32_NACL_C
+#if defined(ELF32_NACL_C)
 #define TARGET_LITTLE_SYM		bfd_elf32_nacl_vec
 #define TARGET_LITTLE_NAME		"elf32-nacl"
-/* NativeClient defines its own ABI.*/
-#undef ELF_OSABI
-#define ELF_OSABI ELFOSABI_NACL
 #else
 #define TARGET_LITTLE_SYM		bfd_elf32_i386_vec
 #define TARGET_LITTLE_NAME		"elf32-i386"
 #endif
+
 #define ELF_ARCH			bfd_arch_i386
 #define ELF_MACHINE_CODE		EM_386
+
+/* @LOCALMOD(abetul): Linker sandboxing for Pnacl translators */
+#if defined(ELF32_NACL_C) || defined(__native_client__)
+/* NativeClient defines its own ABI.*/
+#undef ELF_OSABI
+#define ELF_OSABI ELFOSABI_NACL
+#endif 
+
 #ifdef ELF32_NACL_C
 #define ELF_MAXPAGESIZE			0x10000
 #else
@@ -4849,7 +4856,8 @@ elf_i386_add_symbol_hook (bfd * abfd,
 #undef	elf_backend_post_process_headers
 #define	elf_backend_post_process_headers	_bfd_elf_set_osabi
 
-#ifdef ELF32_NACL_C
+/* @LOCALMOD(abetul): Linker sandboxing for Pnacl translators */
+#if defined(ELF32_NACL_C) || defined(__native_client__)
 #define bfd_elf32_bfd_merge_private_bfd_data \
   elf32_nacl_merge_private_bfd_data
 
