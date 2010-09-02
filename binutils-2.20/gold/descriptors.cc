@@ -124,6 +124,7 @@ Descriptors::open(int descriptor, const char* name, int flags, int mode)
 
       if (new_descriptor >= 0)
 	{
+#if ! defined(__native_client__)
 	  // If we have any plugins, we really do need to set the
 	  // close-on-exec flag, even if O_CLOEXEC is not defined.
 	  // FIXME: In some cases O_CLOEXEC may be defined in the
@@ -134,7 +135,7 @@ Descriptors::open(int descriptor, const char* name, int flags, int mode)
 	      && parameters->options_valid()
 	      && parameters->options().has_plugins())
 	    fcntl(new_descriptor, F_SETFD, FD_CLOEXEC);
-
+#endif
 	  {
 	    Hold_optional_lock hl(this->lock_);
 
