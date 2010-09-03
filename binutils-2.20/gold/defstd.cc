@@ -304,6 +304,55 @@ const Define_symbol_in_segment in_segment[] =
 
 const int in_segment_count = sizeof in_segment / sizeof in_segment[0];
 
+const Define_symbol_in_segment in_segment_nacl[] =
+{
+  {
+    "__tls_template_end",	// name
+    elfcpp::PT_TLS,		// segment_type
+    elfcpp::PF_R,		// segment_flags_set
+    elfcpp::PF(0),		// segment_flags_clear
+    0,				// value
+    0,				// size
+    elfcpp::STT_NOTYPE,		// type
+    elfcpp::STB_GLOBAL,		// binding
+    elfcpp::STV_DEFAULT,	// visibility
+    0,				// nonvis
+    Symbol::SEGMENT_END,	// offset_from_base
+    true			// only_if_ref
+  },
+  {
+    "__tls_template_start",	// name
+    elfcpp::PT_TLS,		// segment_type
+    elfcpp::PF_R,		// segment_flags_set
+    elfcpp::PF(0),		// segment_flags_clear
+    0,				// value
+    0,				// size
+    elfcpp::STT_NOTYPE,		// type
+    elfcpp::STB_GLOBAL,		// binding
+    elfcpp::STV_DEFAULT,	// visibility
+    0,				// nonvis
+    Symbol::SEGMENT_START,	// offset_from_base
+    true			// only_if_ref
+  },
+  {
+    "__tls_template_tdata_end",	// name
+    elfcpp::PT_TLS,		// segment_type
+    elfcpp::PF_R,		// segment_flags_set
+    elfcpp::PF(0),		// segment_flags_clear
+    0,				// value
+    0,				// size
+    elfcpp::STT_NOTYPE,		// type
+    elfcpp::STB_GLOBAL,		// binding
+    elfcpp::STV_DEFAULT,	// visibility
+    0,				// nonvis
+    Symbol::SEGMENT_BSS,	// offset_from_base
+    true			// only_if_ref
+  }
+};
+
+const int in_segment_count_nacl = sizeof in_segment_nacl
+                                  / sizeof in_segment_nacl[0];
+
 } // End anonymous namespace.
 
 namespace gold
@@ -317,6 +366,10 @@ define_standard_symbols(Symbol_table* symtab, const Layout* layout)
 			 saw_sections_clause);
   symtab->define_symbols(layout, in_segment_count, in_segment,
 			 saw_sections_clause);
+
+  if (parameters->options().native_client())
+    symtab->define_symbols(layout, in_segment_count_nacl, in_segment_nacl,
+                           saw_sections_clause);
 }
 
 } // End namespace gold.
