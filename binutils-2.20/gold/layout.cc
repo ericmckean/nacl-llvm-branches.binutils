@@ -2441,6 +2441,7 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
   Output_segment* last_load_segment = NULL;
 
   bool was_readonly = false;
+  bool was_executable = false;
   for (Segment_list::iterator p = this->segment_list_.begin();
        p != this->segment_list_.end();
        ++p)
@@ -2510,14 +2511,24 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
 		  // unaligned address. It should be probably be passing
 		  // the address of the start of the page it loaded this
 		  // data into.
-                  if (!parameters->options().native_client()
-		      && ((*p)->flags() & elfcpp::PF_W) != 0)
+                  if (!parameters->options().native_client())
                     {
-                      if ((addr & (abi_pagesize - 1)) != 0)
-                        addr = addr + abi_pagesize;
+                      if (((*p)->flags() & elfcpp::PF_W) != 0)
+                        {
+                          if ((addr & (abi_pagesize - 1)) != 0)
+                            addr = addr + abi_pagesize;
+                        }
+                      else
+                        addr = align_address(addr, abi_pagesize);
                     }
                   else
-                    addr = align_address(addr, abi_pagesize);
+                    {
+                      // If the last segment was executable,
+                      // NaCl wants space in the end to add hlts.
+                      if (was_executable)
+                        addr += 32;
+                      addr = align_address(addr, abi_pagesize);
+                    }
                 }
 
 	      off = orig_off + ((addr - orig_addr) & (abi_pagesize - 1));
@@ -2575,6 +2586,8 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
 	    }
 
 	  addr = new_addr;
+
+          was_executable = (*p)->flags() & elfcpp::PF_X;
 
 	  if (((*p)->flags() & elfcpp::PF_W) == 0)
 	    was_readonly = true;
