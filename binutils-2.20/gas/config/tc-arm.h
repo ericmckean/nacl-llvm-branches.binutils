@@ -254,6 +254,15 @@ struct current_it
 # define GLOBAL_OFFSET_TABLE_NAME	"_GLOBAL_OFFSET_TABLE_"
 # define TC_SEGMENT_INFO_TYPE 		struct arm_segment_info_type
 
+/* @LOCALMOD-BEGIN */
+/* We need to be able to make relocations involving the difference of
+   two symbols.  This includes the difference of two symbols when
+   one of them is undefined (this comes up in PIC code generation
+   when we move constants out of constant pools).
+ */
+#define UNDEFINED_DIFFERENCE_OK
+/* @LOCALMOD-END */
+
 /* This is not really an alignment operation, but it's something we
    need to do at the same time: whenever we are figuring out the
    alignment for data, we should check whether a $d symbol is
