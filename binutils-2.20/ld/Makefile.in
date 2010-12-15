@@ -79,7 +79,11 @@ am_ld_new_OBJECTS = ldgram.$(OBJEXT) ldlex-wrapper.$(OBJEXT) \
 	ldctor.$(OBJEXT) ldmain.$(OBJEXT) ldwrite.$(OBJEXT) \
 	ldexp.$(OBJEXT) ldemul.$(OBJEXT) ldver.$(OBJEXT) \
 	ldmisc.$(OBJEXT) ldfile.$(OBJEXT) ldcref.$(OBJEXT)
+ifeq ($(NACL_SRPC),1)
+ld_new_OBJECTS = $(am_ld_new_OBJECTS) nacl_file.$(OBJEXT)
+else
 ld_new_OBJECTS = $(am_ld_new_OBJECTS)
+endif
 am__DEPENDENCIES_1 =
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/../depcomp
@@ -91,9 +95,17 @@ LTCOMPILE = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
+ifeq ($(NACL_SRPC),1)
+LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
+	$(LDFLAGS) -Xlinker --wrap=open -Xlinker --wrap=read \
+        -Xlinker --wrap=write -Xlinker --wrap=close -Xlinker --wrap=lseek \
+	-lav -lsrpc -lpthread -lm -o $@
+else
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
+endif
 @MAINTAINER_MODE_FALSE@am__skiplex = test -f $@ ||
 LEXCOMPILE = $(LEX) $(LFLAGS) $(AM_LFLAGS)
 LTLEXCOMPILE = $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -748,11 +760,9 @@ ALL_EMUL_EXTRA_OFILES = \
 CFILES = ldctor.c ldemul.c ldexp.c ldfile.c ldlang.c \
 	ldmain.c ldmisc.c ldver.c ldwrite.c lexsup.c \
 	mri.c ldcref.c pe-dll.c pep-dll.c ldlex-wrapper.c
-
 HFILES = ld.h ldctor.h ldemul.h ldexp.h ldfile.h \
 	ldlang.h ldlex.h ldmain.h ldmisc.h ldver.h \
 	ldwrite.h mri.h deffile.h pe-dll.h pep-dll.h elf-hints-local.h
-
 GENERATED_CFILES = ldgram.c ldlex.c deffilep.c
 GENERATED_HFILES = ldgram.h ldemul-list.h deffilep.h
 
@@ -762,7 +772,6 @@ BUILT_SOURCES = $(GENERATED_HFILES)
 OFILES = ldgram.@OBJEXT@ ldlex-wrapper.@OBJEXT@ lexsup.@OBJEXT@ ldlang.@OBJEXT@ mri.@OBJEXT@ ldctor.@OBJEXT@ ldmain.@OBJEXT@ \
 	ldwrite.@OBJEXT@ ldexp.@OBJEXT@  ldemul.@OBJEXT@ ldver.@OBJEXT@ ldmisc.@OBJEXT@ \
 	ldfile.@OBJEXT@ ldcref.@OBJEXT@ ${EMULATION_OFILES} ${EMUL_EXTRA_OFILES}
-
 STAGESTUFF = *.@OBJEXT@ ldscripts/* e*.c
 
 # At the moment this is just a list of those emulation template files
@@ -783,9 +792,14 @@ ELF_GEN_DEPS = $(srcdir)/emultempl/generic.em $(srcdir)/emultempl/elf-generic.em
 EXTRA_ld_new_SOURCES = deffilep.y ldlex.l pep-dll.c pe-dll.c \
 	$(ALL_EMULATIONS:.@OBJEXT@=.c) \
 	$(ALL_64_EMULATIONS:.@OBJEXT@=.c)
-ld_new_SOURCES = ldgram.y ldlex-wrapper.c lexsup.c ldlang.c mri.c ldctor.c ldmain.c \
-	ldwrite.c ldexp.c ldemul.c ldver.c ldmisc.c ldfile.c ldcref.c
-
+ifeq ($(NACL_SRPC),1)
+ld_new_SOURCES = ldgram.y ldlex-wrapper.c lexsup.c ldlang.c mri.c ldctor.c \
+        ldmain.c ldwrite.c ldexp.c ldemul.c ldver.c ldmisc.c ldfile.c \
+        ldcref.c nacl_file.c
+else 
+ld_new_SOURCES = ldgram.y ldlex-wrapper.c lexsup.c ldlang.c mri.c ldctor.c \
+        ldmain.c ldwrite.c ldexp.c ldemul.c ldver.c ldmisc.c ldfile.c ldcref.c
+endif
 ld_new_DEPENDENCIES = $(EMULATION_OFILES) $(EMUL_EXTRA_OFILES) $(BFDLIB) $(LIBIBERTY) $(LIBINTL_DEP)
 ld_new_LDADD = $(EMULATION_OFILES) $(EMUL_EXTRA_OFILES) $(BFDLIB) $(LIBIBERTY) $(LIBINTL)
 MAINTAINERCLEANFILES = configdoc.texi ld.1 ld.info

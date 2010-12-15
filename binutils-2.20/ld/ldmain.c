@@ -60,6 +60,18 @@ extern void *sbrk ();
 
 /* EXPORTS */
 
+#if defined(__native_client__) && defined(NACL_SRPC)
+
+#include <fcntl.h>
+#include <sys/nacl_syscalls.h>
+#include <sys/stat.h>
+#include <nacl/nacl_srpc.h>
+
+extern int get_real_fd_by_name(char* pathname);
+extern int NaClFile_fd(char *pathname, int fd);
+extern int NaClFile_new(char *pathname);
+#endif
+
 FILE *saved_script_handle = NULL;
 FILE *previous_script_handle = NULL;
 bfd_boolean force_make_executable = FALSE;
@@ -181,7 +193,7 @@ remove_output (void)
 }
 
 int
-main (int argc, char **argv)
+ldmain (int argc, char **argv)
 {
   char *emulation;
   long start_time = get_run_time ();
@@ -557,9 +569,74 @@ main (int argc, char **argv)
   /* Prevent remove_output from doing anything, after a successful link.  */
   output_filename = NULL;
 
-  xexit (0);
   return 0;
 }
+
+#if !defined(NACL_SRPC)
+int
+main (int argc, char **argv) {
+  int ret_code = ldmain(argc, argv);
+  xexit (0);
+  return ret_code;
+}
+#elif defined(__native_client__)
+void
+add_file(NaClSrpcRpc *rpc,
+         NaClSrpcArg **in_args,
+         NaClSrpcArg **out_args,
+         NaClSrpcClosure *done) {
+  NaClFile_fd(in_args[0]->arrays.str, in_args[1]->u.hval);
+
+  rpc->result = NACL_SRPC_RESULT_OK;
+  done->Run(done);
+}
+
+void
+ldlink(NaClSrpcRpc *rpc,
+       NaClSrpcArg **in_args,
+       NaClSrpcArg **out_args,
+       NaClSrpcClosure *done) {
+  char *argv[] = {"ld", "-nostdlib", "-T", "ld_script",
+                  "crt1.o", "crti.o", "crtbegin.o",
+                  "obj_combined", "-o", "a.out",
+                  "libcrt_platform.a", "crtend.o",
+                  "crtn.o", "libgcc_eh.a", "libgcc.a"};
+  int kArgvLength = sizeof argv / sizeof argv[0];
+  /* Input obj file. */
+  NaClFile_fd("obj_combined", in_args[0]->u.hval);
+
+  /* Define output file. */
+  NaClFile_new("a.out");
+
+  /* Call main. */
+  ldmain(kArgvLength, argv);
+
+  /* Save nexe fd for return. */
+  out_args[0]->u.hval = get_real_fd_by_name("a.out");
+
+  /* TODO(abetul): Close all open fd's */
+  rpc->result = NACL_SRPC_RESULT_OK;
+  done->Run(done);
+}
+
+const struct NaClSrpcHandlerDesc srpc_methods[] = {
+  { "AddFile:sh:", add_file },
+  { "Link:h:h", ldlink },
+  { NULL, NULL },
+};
+
+int
+main() {
+  if (!NaClSrpcModuleInit()) {
+    return 1;
+  }
+  if (!NaClSrpcAcceptClientConnection(srpc_methods)) {
+    return 1;
+  }
+  NaClSrpcModuleFini();
+  return 0;
+}
+#endif
 
 /* If the configured sysroot is relocatable, try relocating it based on
    default prefix FROM.  Return the relocated directory if it exists,

@@ -82,7 +82,11 @@ am__objects_1 = app.$(OBJEXT) as.$(OBJEXT) atof-generic.$(OBJEXT) \
 	messages.$(OBJEXT) output-file.$(OBJEXT) read.$(OBJEXT) \
 	remap.$(OBJEXT) sb.$(OBJEXT) stabs.$(OBJEXT) subsegs.$(OBJEXT) \
 	symbols.$(OBJEXT) write.$(OBJEXT)
+ifeq ($(NACL_SRPC),1)
+am_as_new_OBJECTS = $(am__objects_1) nacl_file.$(OBJEXT)
+else 
 am_as_new_OBJECTS = $(am__objects_1)
+endif
 as_new_OBJECTS = $(am_as_new_OBJECTS)
 am__DEPENDENCIES_1 =
 am__DEPENDENCIES_2 = ../bfd/libbfd.la ../libiberty/libiberty.a
@@ -101,9 +105,17 @@ LTCOMPILE = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
+ifeq ($(NACL_SRPC),1)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
-	$(LDFLAGS) -o $@
+	$(LDFLAGS) -Xlinker --wrap=open -Xlinker --wrap=read \
+	-Xlinker --wrap=write -Xlinker --wrap=close -Xlinker --wrap=lseek \
+	-lav -lsrpc -lpthread -lm -o $@
+else
+LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
+	$(LDFLAGS) -lm -o $@
+endif
 @MAINTAINER_MODE_FALSE@am__skiplex = test -f $@ ||
 LEXCOMPILE = $(LEX) $(LFLAGS) $(AM_LFLAGS)
 LTLEXCOMPILE = $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -617,7 +629,11 @@ GASLIBS = @OPCODES_LIB@ ../bfd/libbfd.la ../libiberty/libiberty.a
 
 # Files to be copied away after each stage in building.
 STAGESTUFF = *.@OBJEXT@ $(noinst_PROGRAMS)
+ifeq ($(NACL_SRPC),1)
+as_new_SOURCES = $(GAS_CFILES) nacl_file.c
+else
 as_new_SOURCES = $(GAS_CFILES)
+endif
 as_new_LDADD = $(TARG_CPU_O) $(OBJ_FORMAT_O) $(ATOF_TARG_O) \
 	$(extra_objects) $(GASLIBS) $(LIBINTL) $(LIBM)
 
