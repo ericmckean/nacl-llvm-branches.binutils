@@ -49,7 +49,9 @@
 #include <nacl/nacl_srpc.h>
 
 extern int get_real_fd_by_name(char* pathname);
-extern int NaClFile_fd(char *pathname, int fd);
+extern size_t get_real_size_by_name(char* pathname);
+extern int NaClFile_fd(char *pathname, int fd,
+                       int has_real_size, size_t real_size_opt);
 extern int NaClFile_new(char *pathname);
 #endif
 
@@ -1312,7 +1314,7 @@ assemble(NaClSrpcRpc *rpc,
                   "-o", "obj_combined"};
   int kArgvLength = sizeof argv / sizeof argv[0];
   /* Input asm file. */
-  NaClFile_fd("asm_combined", in_args[0]->u.hval);
+  NaClFile_fd("asm_combined", in_args[0]->u.hval, 1, in_args[1]->u.ival);
 
   /* Define output file. */
   NaClFile_new("obj_combined");
@@ -1322,13 +1324,14 @@ assemble(NaClSrpcRpc *rpc,
 
   /* Save obj fd for return. */
   out_args[0]->u.hval = get_real_fd_by_name("obj_combined");
+  out_args[1]->u.ival = get_real_size_by_name("obj_combined");
 
   rpc->result = NACL_SRPC_RESULT_OK;
   done->Run(done);
 }
 
 const struct NaClSrpcHandlerDesc srpc_methods[] = {
-  { "Assemble:h:h", assemble },
+  { "Assemble:hi:hi", assemble },
   { NULL, NULL },
 };
 
@@ -1344,4 +1347,3 @@ main() {
   return 0;
 }
 #endif
-
