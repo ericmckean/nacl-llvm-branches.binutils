@@ -67,8 +67,10 @@ extern void *sbrk ();
 #include <sys/stat.h>
 #include <nacl/nacl_srpc.h>
 
+/* TODO(robertm): get a real header file for nacl_file */
 extern int get_real_fd_by_name(char* pathname);
-extern int NaClFile_fd(char *pathname, int fd);
+extern int NaClFile_fd(char *pathname, int fd,
+                       int has_real_size, size_t real_size_opt);
 extern int NaClFile_new(char *pathname);
 #endif
 
@@ -585,7 +587,10 @@ add_file(NaClSrpcRpc *rpc,
          NaClSrpcArg **in_args,
          NaClSrpcArg **out_args,
          NaClSrpcClosure *done) {
-  NaClFile_fd(in_args[0]->arrays.str, in_args[1]->u.hval);
+  /* These are urlAsNaClDesc'ed files, and have an accurate size
+   * from fstat */
+  NaClFile_fd(in_args[0]->arrays.str, in_args[1]->u.hval,
+              0, 0);
 
   rpc->result = NACL_SRPC_RESULT_OK;
   done->Run(done);
@@ -596,14 +601,19 @@ ldlink(NaClSrpcRpc *rpc,
        NaClSrpcArg **in_args,
        NaClSrpcArg **out_args,
        NaClSrpcClosure *done) {
+  /* TODO(robertm): receive command line arguments from SRPC.
+     That way, we can supply x86-32 params and ARM params as well. */
   char *argv[] = {"ld", "-nostdlib", "-T", "ld_script",
                   "crt1.o", "crti.o", "crtbegin.o",
                   "obj_combined", "-o", "a.out",
                   "libcrt_platform.a", "crtend.o",
                   "crtn.o", "libgcc_eh.a", "libgcc.a"};
   int kArgvLength = sizeof argv / sizeof argv[0];
+
+  int input_fd = in_args[0]->u.hval;
+  size_t in_file_size = in_args[1]->u.ival;
   /* Input obj file. */
-  NaClFile_fd("obj_combined", in_args[0]->u.hval);
+  NaClFile_fd("obj_combined", input_fd, 1, in_file_size);
 
   /* Define output file. */
   NaClFile_new("a.out");
@@ -613,6 +623,7 @@ ldlink(NaClSrpcRpc *rpc,
 
   /* Save nexe fd for return. */
   out_args[0]->u.hval = get_real_fd_by_name("a.out");
+  out_args[1]->u.ival = get_real_size_by_name("a.out");
 
   /* TODO(abetul): Close all open fd's */
   rpc->result = NACL_SRPC_RESULT_OK;
@@ -621,7 +632,7 @@ ldlink(NaClSrpcRpc *rpc,
 
 const struct NaClSrpcHandlerDesc srpc_methods[] = {
   { "AddFile:sh:", add_file },
-  { "Link:h:h", ldlink },
+  { "Link:hi:hi", ldlink },
   { NULL, NULL },
 };
 
