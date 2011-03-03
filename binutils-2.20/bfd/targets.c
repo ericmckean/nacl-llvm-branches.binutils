@@ -582,6 +582,7 @@ extern const bfd_target bfd_elf32_bfinfdpic_vec;
 extern const bfd_target bfd_elf32_big_generic_vec;
 extern const bfd_target bfd_elf32_bigarc_vec;
 extern const bfd_target bfd_elf32_bigarm_vec;
+extern const bfd_target bfd_elf32_bigarm_nacl_vec;
 extern const bfd_target bfd_elf32_bigarm_symbian_vec;
 extern const bfd_target bfd_elf32_bigarm_vxworks_vec;
 extern const bfd_target bfd_elf32_bigmips_vec;
@@ -618,6 +619,7 @@ extern const bfd_target bfd_elf32_lm32fdpic_vec;
 extern const bfd_target bfd_elf32_little_generic_vec;
 extern const bfd_target bfd_elf32_littlearc_vec;
 extern const bfd_target bfd_elf32_littlearm_vec;
+extern const bfd_target bfd_elf32_littlearm_nacl_vec;
 extern const bfd_target bfd_elf32_littlearm_symbian_vec;
 extern const bfd_target bfd_elf32_littlearm_vxworks_vec;
 extern const bfd_target bfd_elf32_littlemips_vec;
@@ -964,6 +966,7 @@ static const bfd_target * const _bfd_target_vector[] =
 	&bfd_elf32_little_generic_vec,
 	&bfd_elf32_littlearc_vec,
 	&bfd_elf32_littlearm_vec,
+	&bfd_elf32_littlearm_nacl_vec,
 	&bfd_elf32_littlearm_symbian_vec,
 	&bfd_elf32_littlearm_vxworks_vec,
 	&bfd_elf32_littlemips_vec,

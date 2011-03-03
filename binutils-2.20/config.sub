@@ -239,10 +239,6 @@ case $os in
 		basic_machine=m68k-atari
 		os=-mint
 		;;
-	-nacl*)
-        	basic_machine=i686-pc
-	        os=-nacl
-        	;;
 esac
 
 # Decode aliases for certain CPU-COMPANY combinations.
