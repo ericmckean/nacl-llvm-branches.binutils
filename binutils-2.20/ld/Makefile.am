@@ -132,6 +132,7 @@ ALL_EMULATIONS = \
 	earmelf_linux_eabi.@OBJEXT@ \
 	earmelfb_linux.@OBJEXT@ \
 	earmelfb_linux_eabi.@OBJEXT@ \
+	earmelf_nacl.@OBJEXT@ \
 	earmelf_nbsd.@OBJEXT@ \
 	earmelfb_nbsd.@OBJEXT@ \
 	earmelf_vxworks.@OBJEXT@ \
@@ -654,6 +655,12 @@ earmelfb_linux_eabi.c: $(srcdir)/emulparams/armelfb_linux_eabi.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/armelf.em \
   $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 	${GENSCRIPTS} armelfb_linux_eabi "$(tdir_armelfb_linux_abi)"
+earmelf_nacl.c: $(srcdir)/emulparams/armelf_nacl.sh \
+  $(srcdir)/emulparams/armelf_linux_eabi.sh \
+  $(srcdir)/emulparams/armelf_linux.sh \
+  $(ELF_DEPS) $(srcdir)/emultempl/armelf.em \
+  $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+	${GENSCRIPTS} armelf_nacl "$(tdir_armelf_nacl)"
 earmelf_nbsd.c: $(srcdir)/emulparams/armelf_nbsd.sh \
   $(srcdir)/emulparams/armelf.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/armelf.em \

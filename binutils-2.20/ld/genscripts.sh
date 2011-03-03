@@ -418,7 +418,6 @@ if test -n "$GENERATE_AUTO_IMPORT_SCRIPT"; then
   ) | sed -e '/^ *$/d;s/[ 	]*$//' > ldscripts/${EMULATION_NAME}.xa
 fi
 
-# @LOCALMOD: This is disabled in nacl-binutils
 case " $EMULATION_LIBPATH " in
   *" ${EMULATION_NAME} "*) COMPILE_IN=true;;
 esac

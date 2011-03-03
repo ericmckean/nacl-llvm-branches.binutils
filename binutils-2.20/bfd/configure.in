@@ -725,6 +725,7 @@ do
     bfd_elf32_littlearm_vxworks_vec)
                                 tb="$tb elf32-arm.lo elf32.lo elf-vxworks.lo $elf" ;;
     bfd_elf32_littlearm_vec)	tb="$tb elf32-arm.lo elf32.lo elf-vxworks.lo $elf" ;;
+    bfd_elf32_littlearm_nacl_vec)	tb="$tb elf32-arm.lo elf32.lo elf-vxworks.lo $elf" ;;
     bfd_elf32_littlemips_vec) 	tb="$tb elf32-mips.lo elfxx-mips.lo elf-vxworks.lo elf32.lo $elf ecofflink.lo" ;;
     bfd_elf32_littlemips_vxworks_vec)
 			 	tb="$tb elf32-mips.lo elfxx-mips.lo elf-vxworks.lo elf32.lo $elf ecofflink.lo" ;;

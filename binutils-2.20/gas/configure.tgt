@@ -117,6 +117,7 @@ case ${generic_target} in
   arm-*-conix*)				fmt=elf ;;
   arm-*-linux*aout*)			fmt=aout em=linux ;;
   arm-*-linux-*eabi*)			fmt=elf  em=armlinuxeabi ;;
+  arm-*-nacl)				fmt=elf  em=armnacl ;;
   arm-*-linux-*)			fmt=elf  em=linux ;;
   arm-*-uclinux*eabi*)			fmt=elf  em=armlinuxeabi ;;
   arm-*-uclinux*)			fmt=elf  em=linux ;;

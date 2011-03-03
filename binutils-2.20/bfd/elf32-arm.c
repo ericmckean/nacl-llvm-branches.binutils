@@ -13948,6 +13948,43 @@ const struct elf_size_info elf32_arm_size_info =
 
 #include "elf32-target.h"
 
+/* Native Client targets. */
+
+#undef  TARGET_LITTLE_SYM
+#define TARGET_LITTLE_SYM               bfd_elf32_littlearm_nacl_vec
+#undef  TARGET_LITTLE_NAME
+#define TARGET_LITTLE_NAME              "elf32-littlearm-nacl"
+#undef  TARGET_BIG_SYM
+#define TARGET_BIG_SYM                  bfd_elf32_bigarm_nacl_vec
+#undef  TARGET_BIG_NAME
+#define TARGET_BIG_NAME                 "elf32-bigarm-nacl"
+
+#include "elf/nacl.h"
+
+#undef ELF_OSABI
+#define ELF_OSABI  ELFOSABI_NACL
+
+static void
+elf32_arm_nacl_final_write_processing (bfd *abfd, bfd_boolean linker)
+{
+  elf32_arm_final_write_processing (abfd, linker);
+
+  elf_elfheader (abfd)->e_ident[EI_OSABI] = ELFOSABI_NACL;
+  elf_elfheader (abfd)->e_ident[EI_ABIVERSION] = EF_NACL_ABIVERSION;
+  elf_elfheader (abfd)->e_flags |= EF_NACL_ALIGN_16;
+}
+
+#undef  elf32_bed
+#define elf32_bed elf32_arm_nacl_bed
+
+#undef  elf_backend_final_write_processing
+#define elf_backend_final_write_processing	elf32_arm_nacl_final_write_processing
+
+#undef  ELF_MAXPAGESIZE
+#define ELF_MAXPAGESIZE			0x10000
+
+#include "elf32-target.h"
+
 /* VxWorks Targets.  */
 
 #undef  TARGET_LITTLE_SYM
