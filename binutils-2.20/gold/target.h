@@ -1,6 +1,6 @@
 // target.h -- target support for gold   -*- C++ -*-
 
-// Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -53,8 +53,10 @@ class Symbol;
 template<int size>
 class Sized_symbol;
 class Symbol_table;
+class Output_data;
 class Output_section;
 class Input_objects;
+class Task;
 
 // The abstract class for target specific handling.
 
@@ -69,6 +71,13 @@ class Target
   // pointer is taken.
   virtual bool
   can_check_for_function_pointers() const
+  { return false; }
+
+  // This function is used in ICF (icf.cc).  This is set to true by
+  // the target if a relocation to a merged section can be processed
+  // to retrieve the contents of the merged section.
+  virtual bool
+  can_icf_inline_merge_sections () const
   { return false; }
 
   // Whether a section called SECTION_NAME may have function pointers to
@@ -261,6 +270,18 @@ class Target
   reloc_addend(void* arg, unsigned int type, uint64_t addend) const
   { return this->do_reloc_addend(arg, type, addend); }
 
+  // Return the PLT section to use for a global symbol.  This is used
+  // for STT_GNU_IFUNC symbols.
+  Output_data*
+  plt_section_for_global(const Symbol* sym) const
+  { return this->do_plt_section_for_global(sym); }
+
+  // Return the PLT section to use for a local symbol.  This is used
+  // for STT_GNU_IFUNC symbols.
+  Output_data*
+  plt_section_for_local(const Relobj* object, unsigned int symndx) const
+  { return this->do_plt_section_for_local(object, symndx); }
+
   // Return true if a reference to SYM from a reloc of type R_TYPE
   // means that the current function may call an object compiled
   // without -fsplit-stack.  SYM is known to be defined in an object
@@ -312,13 +333,13 @@ class Target
   // Perform a relaxation pass.  Return true if layout may be changed.
   bool
   relax(int pass, const Input_objects* input_objects, Symbol_table* symtab,
-	Layout* layout)
+	Layout* layout, const Task* task)
   {
     // Run the dummy relaxation pass twice if relaxation debugging is enabled.
     if (is_debugging_enabled(DEBUG_RELAXATION))
       return pass < 2;
 
-    return this->do_relax(pass, input_objects, symtab, layout);
+    return this->do_relax(pass, input_objects, symtab, layout, task);
   } 
 
   // Return the target-specific name of attributes section.  This is
@@ -446,7 +467,7 @@ class Target
   do_adjust_elf_header(unsigned char*, int) const
   { }
 
-  // Virtual function which may be overriden by the child class.
+  // Virtual function which may be overridden by the child class.
   virtual bool
   do_is_local_label_name(const char*) const;
 
@@ -456,10 +477,20 @@ class Target
   do_reloc_symbol_index(void*, unsigned int) const
   { gold_unreachable(); }
 
-  // Virtual function that must be overidden by a target which uses
+  // Virtual function that must be overridden by a target which uses
   // target specific relocations.
   virtual uint64_t
   do_reloc_addend(void*, unsigned int, uint64_t) const
+  { gold_unreachable(); }
+
+  // Virtual functions that must be overridden by a target that uses
+  // STT_GNU_IFUNC symbols.
+  virtual Output_data*
+  do_plt_section_for_global(const Symbol*) const
+  { gold_unreachable(); }
+
+  virtual Output_data*
+  do_plt_section_for_local(const Relobj*, unsigned int) const
   { gold_unreachable(); }
 
   // Virtual function which may be overridden by the child class.  The
@@ -486,46 +517,46 @@ class Target
   }
   
 #ifdef HAVE_TARGET_32_LITTLE
-  // Virtual functions which may be overriden by the child class.
+  // Virtual functions which may be overridden by the child class.
   virtual Object*
   do_make_elf_object(const std::string&, Input_file*, off_t,
 		     const elfcpp::Ehdr<32, false>&);
 #endif
 
 #ifdef HAVE_TARGET_32_BIG
-  // Virtual functions which may be overriden by the child class.
+  // Virtual functions which may be overridden by the child class.
   virtual Object*
   do_make_elf_object(const std::string&, Input_file*, off_t,
 		     const elfcpp::Ehdr<32, true>&);
 #endif
 
 #ifdef HAVE_TARGET_64_LITTLE
-  // Virtual functions which may be overriden by the child class.
+  // Virtual functions which may be overridden by the child class.
   virtual Object*
   do_make_elf_object(const std::string&, Input_file*, off_t,
 		     const elfcpp::Ehdr<64, false>& ehdr);
 #endif
 
 #ifdef HAVE_TARGET_64_BIG
-  // Virtual functions which may be overriden by the child class.
+  // Virtual functions which may be overridden by the child class.
   virtual Object*
   do_make_elf_object(const std::string& name, Input_file* input_file,
 		     off_t offset, const elfcpp::Ehdr<64, true>& ehdr);
 #endif
 
-  // Virtual functions which may be overriden by the child class.
+  // Virtual functions which may be overridden by the child class.
   virtual Output_section*
   do_make_output_section(const char* name, elfcpp::Elf_Word type,
 			 elfcpp::Elf_Xword flags);
 
-  // Virtual function which may be overriden by the child class.
+  // Virtual function which may be overridden by the child class.
   virtual bool
   do_may_relax() const
   { return parameters->options().relax(); }
 
-  // Virtual function which may be overriden by the child class.
+  // Virtual function which may be overridden by the child class.
   virtual bool
-  do_relax(int, const Input_objects*, Symbol_table*, Layout*)
+  do_relax(int, const Input_objects*, Symbol_table*, Layout*, const Task*)
   { return false; }
 
   // A function for targets to call.  Return whether BYTES/LEN matches
@@ -540,7 +571,7 @@ class Target
   set_view_to_nop(unsigned char* view, section_size_type view_size,
 		  section_offset_type offset, size_t len) const;
 
-  // This must be overriden by the child class if it has target-specific
+  // This must be overridden by the child class if it has target-specific
   // attributes subsection in the attribute section. 
   virtual int
   do_attribute_arg_type(int) const
@@ -732,6 +763,38 @@ class Sized_target : public Target
 			       unsigned char* /* preloc_out*/)
   { gold_unreachable(); }
  
+  // Return the number of entries in the GOT.  This is only used for
+  // laying out the incremental link info sections.  A target needs
+  // to implement this to support incremental linking.
+
+  virtual unsigned int
+  got_entry_count() const
+  { gold_unreachable(); }
+
+  // Return the number of entries in the PLT.  This is only used for
+  // laying out the incremental link info sections.  A target needs
+  // to implement this to support incremental linking.
+
+  virtual unsigned int
+  plt_entry_count() const
+  { gold_unreachable(); }
+
+  // Return the offset of the first non-reserved PLT entry.  This is
+  // only used for laying out the incremental link info sections.
+  // A target needs to implement this to support incremental linking.
+
+  virtual unsigned int
+  first_plt_entry_offset() const
+  { gold_unreachable(); }
+
+  // Return the size of each PLT entry.  This is only used for
+  // laying out the incremental link info sections.  A target needs
+  // to implement this to support incremental linking.
+
+  virtual unsigned int
+  plt_entry_size() const
+  { gold_unreachable(); }
+
  protected:
   Sized_target(const Target::Target_info* pti)
     : Target(pti)

@@ -109,6 +109,9 @@ if { $linux_gnu } {
 if { [istarget mips64*-linux-gnu] } {
     set o32_as_flags "-32 -EB"
     set o32_ld_flags "-melf32btsmip"
+} elseif { [istarget mips64*-*freebsd*] } {
+    set o32_as_flags "-32 -EB"
+    set o32_ld_flags "-melf32btsmip_fbsd"
 } else {
     set o32_as_flags ""
     set o32_ld_flags ""
@@ -321,6 +324,8 @@ run_dump_test "jaloverflow-2"
 if {$has_newabi} {
     run_dump_test "jalbal"
 }
+
+run_dump_test "mode-change-error-1"
 
 run_dump_test "mips16-hilo"
 if {$has_newabi} {

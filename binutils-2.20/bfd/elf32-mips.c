@@ -1506,7 +1506,7 @@ elf32_mips_grok_prstatus (bfd *abfd, Elf_Internal_Note *note)
 	elf_tdata (abfd)->core_signal = bfd_get_16 (abfd, note->descdata + 12);
 
 	/* pr_pid */
-	elf_tdata (abfd)->core_pid = bfd_get_32 (abfd, note->descdata + 24);
+	elf_tdata (abfd)->core_lwpid = bfd_get_32 (abfd, note->descdata + 24);
 
 	/* pr_reg */
 	offset = 72;
@@ -1605,6 +1605,7 @@ static const struct ecoff_debug_swap mips_elf32_ecoff_debug_swap = {
 };
 
 #define ELF_ARCH			bfd_arch_mips
+#define ELF_TARGET_ID			MIPS_ELF_DATA
 #define ELF_MACHINE_CODE		EM_MIPS
 
 #define elf_backend_collect		TRUE
@@ -1676,7 +1677,6 @@ static const struct ecoff_debug_swap mips_elf32_ecoff_debug_swap = {
 #define bfd_elf32_set_section_contents	_bfd_mips_elf_set_section_contents
 #define bfd_elf32_bfd_get_relocated_section_contents \
 				_bfd_elf_mips_get_relocated_section_contents
-#define bfd_elf32_mkobject		_bfd_mips_elf_mkobject
 #define bfd_elf32_bfd_link_hash_table_create \
 					_bfd_mips_elf_link_hash_table_create
 #define bfd_elf32_bfd_final_link	_bfd_mips_elf_final_link
@@ -1725,6 +1725,37 @@ static const struct ecoff_debug_swap mips_elf32_ecoff_debug_swap = {
 /* Include the target file again for this target.  */
 #include "elf32-target.h"
 
+/* FreeBSD support.  */
+
+#undef TARGET_LITTLE_SYM
+#undef TARGET_LITTLE_NAME
+#undef TARGET_BIG_SYM
+#undef TARGET_BIG_NAME
+
+#define	TARGET_LITTLE_SYM		bfd_elf32_tradlittlemips_freebsd_vec
+#define	TARGET_LITTLE_NAME		"elf32-tradlittlemips-freebsd"
+#define	TARGET_BIG_SYM			bfd_elf32_tradbigmips_freebsd_vec
+#define	TARGET_BIG_NAME			"elf32-tradbigmips-freebsd"
+
+#undef	ELF_OSABI
+#define	ELF_OSABI			ELFOSABI_FREEBSD
+
+/* The kernel recognizes executables as valid only if they carry a
+   "FreeBSD" label in the ELF header.  So we put this label on all
+   executables and (for simplicity) also all other object files.  */
+
+static void
+elf_fbsd_post_process_headers (bfd *abfd, struct bfd_link_info *info)
+{
+  _bfd_elf_set_osabi (abfd, info);
+}
+
+#undef	elf_backend_post_process_headers
+#define	elf_backend_post_process_headers	elf_fbsd_post_process_headers
+#undef	elf32_bed
+#define elf32_bed				elf32_fbsd_tradbed
+
+#include "elf32-target.h"
 /* Implement elf_backend_final_write_processing for VxWorks.  */
 
 static void

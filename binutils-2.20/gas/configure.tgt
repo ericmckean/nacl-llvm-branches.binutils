@@ -45,7 +45,7 @@ case ${cpu} in
   ip2k)			cpu_type=ip2k endian=big ;; 
   iq2000)		cpu_type=iq2000 endian=big ;; 
   lm32)			cpu_type=lm32 ;;
-  m32c)			cpu_type=m32c endian=big ;;
+  m32c)			cpu_type=m32c endian=little ;;
   m32r)			cpu_type=m32r endian=big ;;
   m32rle)		cpu_type=m32r endian=little ;;
   m5200)		cpu_type=m68k ;;
@@ -263,6 +263,7 @@ case ${generic_target} in
   m68hc11-*-* | m6811-*-*)		fmt=elf ;;
   m68hc12-*-* | m6812-*-*)		fmt=elf ;;
 
+  m68k-*-aout)				fmt=aout bfd_gas=yes ;;
   m68k-*-elf*)				fmt=elf ;;
   m68k-*-sysv4*)			fmt=elf em=svr4 ;;
   m68k-*-rtems*)			fmt=elf ;;
@@ -293,6 +294,8 @@ case ${generic_target} in
   mips-*-lnews*)			fmt=ecoff em=lnews ;;
   mips-*-riscos*)			fmt=ecoff ;;
   mips*-*-linux*)			fmt=elf em=tmips ;;
+  mips*-*-freebsd* | mips*-*-kfreebsd*-gnu)
+					fmt=elf em=freebsd ;;
   mips-*-sysv4*MP* | mips-*-gnu*)	fmt=elf em=tmips ;;
   mips*-sde-elf*)			fmt=elf em=tmips ;;
   mips-*-sysv*)				fmt=ecoff ;;
@@ -372,6 +375,7 @@ case ${generic_target} in
   shle*-*-kaos*)			fmt=elf ;;
   sh64-*-elf*)				fmt=elf ;;
 
+  sparc64-*-rtems*)			fmt=elf ;;
   sparc-*-rtems*)			fmt=elf ;;
   sparc-*-sunos4*)			fmt=aout em=sun3 ;;
   sparc-*-aout)				fmt=aout em=sparcaout ;;

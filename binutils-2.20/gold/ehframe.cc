@@ -1,6 +1,6 @@
 // ehframe.cc -- handle exception frame sections for gold
 
-// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -104,7 +104,7 @@ Eh_frame_hdr::set_final_data_size()
   this->set_data_size(data_size);
 }
 
-// Write the data to the flie.
+// Write the data to the file.
 
 void
 Eh_frame_hdr::do_write(Output_file* of)
@@ -683,7 +683,7 @@ Eh_frame::read_cie(Sized_relobj<size, big_endian>* object,
 		   section_size_type symbol_names_size,
 		   const unsigned char* pcontents,
 		   const unsigned char* pcie,
-		   const unsigned char *pcieend,
+		   const unsigned char* pcieend,
 		   Track_relocs<size, big_endian>* relocs,
 		   Offsets_to_cie* cies,
 		   New_cies* new_cies)
@@ -936,7 +936,7 @@ Eh_frame::read_fde(Sized_relobj<size, big_endian>* object,
 		   const unsigned char* pcontents,
 		   unsigned int offset,
 		   const unsigned char* pfde,
-		   const unsigned char *pfdeend,
+		   const unsigned char* pfdeend,
 		   Track_relocs<size, big_endian>* relocs,
 		   Offsets_to_cie* cies)
 {
