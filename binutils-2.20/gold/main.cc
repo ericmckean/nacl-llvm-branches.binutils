@@ -136,13 +136,13 @@ int
 main(int argc, char** argv)
 {
 #if defined (HAVE_SETLOCALE) && defined (HAVE_LC_MESSAGES)
-  setlocale (LC_MESSAGES, "");
+  setlocale(LC_MESSAGES, "");
 #endif
 #if defined (HAVE_SETLOCALE)
-  setlocale (LC_CTYPE, "");
+  setlocale(LC_CTYPE, "");
 #endif
-  bindtextdomain (PACKAGE, LOCALEDIR);
-  textdomain (PACKAGE);
+  bindtextdomain(PACKAGE, LOCALEDIR);
+  textdomain(PACKAGE);
 
   program_name = argv[0];
 
@@ -214,7 +214,7 @@ main(int argc, char** argv)
   // The symbol table.  We're going to guess here how many symbols
   // we're going to see based on the number of input files.  Even when
   // this is off, it means at worst we don't quite optimize hashtable
-  // resizing as well as we could have (perhap using more memory).
+  // resizing as well as we could have (perhaps using more memory).
   Symbol_table symtab(command_line.number_of_input_files() * 1024,
                       command_line.version_script());
 
@@ -229,10 +229,7 @@ main(int argc, char** argv)
 		&command_line.script_options());
 
   if (layout.incremental_inputs() != NULL)
-    {
-      layout.incremental_inputs()->report_command_line(argc, argv);
-      layout.incremental_inputs()->report_inputs(command_line.inputs());
-    }
+    layout.incremental_inputs()->report_command_line(argc, argv);
 
   if (parameters->options().section_ordering_file())
     layout.read_layout_from_file();

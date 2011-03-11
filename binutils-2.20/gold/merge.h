@@ -1,6 +1,6 @@
 // merge.h -- handle section merging for gold  -*- C++ -*-
 
-// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -70,7 +70,7 @@ class Object_merge_map
   bool
   get_output_offset(const Merge_map*, unsigned int shndx,
 		    section_offset_type offset,
-		    section_offset_type *output_offset);
+		    section_offset_type* output_offset);
 
   // Return whether this is the merge map for section SHNDX.
   bool
@@ -152,7 +152,7 @@ class Object_merge_map
   Input_merge_map*
   get_input_merge_map(unsigned int shndx);
 
-  // Get or make the the Input_merge_map to use for the section SHNDX
+  // Get or make the Input_merge_map to use for the section SHNDX
   // with MERGE_MAP.
   Input_merge_map*
   get_or_make_input_merge_map(const Merge_map* merge_map, unsigned int shndx);
@@ -200,7 +200,7 @@ class Merge_map
   bool
   get_output_offset(const Relobj* object, unsigned int shndx,
 		    section_offset_type offset,
-		    section_offset_type *output_offset) const;
+		    section_offset_type* output_offset) const;
 
   // Return whether this is the merge mapping for section SHNDX in
   // OBJECT.  This should return true when get_output_offset would
@@ -300,7 +300,7 @@ class Output_merge_base : public Output_section_data
     this->merge_map_.add_mapping(object, shndx, offset, length, output_offset);
   }
 
-  // This may be overriden by the child class.
+  // This may be overridden by the child class.
   virtual bool
   do_is_string()
   { return false; }
@@ -462,7 +462,7 @@ class Output_merge_string : public Output_merge_base
  public:
   Output_merge_string(uint64_t addralign)
     : Output_merge_base(sizeof(Char_type), addralign), stringpool_(),
-      merged_strings_lists_(), input_count_(0)
+      merged_strings_lists_(), input_count_(0), input_size_(0)
   {
     gold_assert(addralign <= sizeof(Char_type));
     this->stringpool_.set_no_zero_null();
@@ -566,6 +566,8 @@ class Output_merge_string : public Output_merge_base
   Merged_strings_lists merged_strings_lists_;
   // The number of entries seen in input files.
   size_t input_count_;
+  // The total size of input sections.
+  size_t input_size_;
 };
 
 } // End namespace gold.

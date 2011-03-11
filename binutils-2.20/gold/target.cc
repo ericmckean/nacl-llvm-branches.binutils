@@ -1,6 +1,6 @@
 // target.cc
 
-// Copyright 2009 Free Software Foundation, Inc.
+// Copyright 2009, 2010 Free Software Foundation, Inc.
 // Written by Doug Kwan <dougkwan@google.com>.
 
 // This file is part of gold.
@@ -31,12 +31,12 @@ namespace gold
 {
 
 // Return whether NAME is a local label name.  This is used to implement the
-// --discard-locals options and can be overriden by children classes to
+// --discard-locals options and can be overridden by child classes to
 // implement system-specific behaviour.  The logic here is the same as that
 // in _bfd_elf_is_local_label_name().
 
 bool
-Target::do_is_local_label_name (const char* name) const
+Target::do_is_local_label_name(const char* name) const
 {
   // Normal local symbols start with ``.L''.
   if (name[0] == '.' && name[1] == 'L')

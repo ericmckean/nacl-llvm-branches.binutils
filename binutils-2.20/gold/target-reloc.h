@@ -36,7 +36,7 @@ namespace gold
 // template parameter Scan must be a class type which provides two
 // functions: local() and global().  Those functions implement the
 // machine specific part of scanning.  We do it this way to
-// avoidmaking a function call for each relocation, and to avoid
+// avoid making a function call for each relocation, and to avoid
 // repeating the generic code for each target.
 
 template<int size, bool big_endian, typename Target_type, int sh_type,
@@ -284,6 +284,10 @@ relocate_section(
 	  else
 	    symval.set_no_output_symtab_entry();
 	  symval.set_output_value(sym->value());
+	  if (gsym->type() == elfcpp::STT_TLS)
+	    symval.set_is_tls_symbol();
+	  else if (gsym->type() == elfcpp::STT_GNU_IFUNC)
+	    symval.set_is_ifunc_symbol();
 	  psymval = &symval;
 
 	  is_defined_in_discarded_section =

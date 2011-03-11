@@ -1,6 +1,6 @@
 // plugin.cc -- plugin manager for gold      -*- C++ -*-
 
-// Copyright 2008, 2009, 2010 Free Software Foundation, Inc.
+// Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Cary Coutant <ccoutant@google.com>.
 
 // This file is part of gold.
@@ -132,7 +132,7 @@ Plugin::load()
   // Allocate and populate a transfer vector.
   const int tv_fixed_size = 16;
   int tv_size = this->args_.size() + tv_fixed_size;
-  ld_plugin_tv *tv = new ld_plugin_tv[tv_size];
+  ld_plugin_tv* tv = new ld_plugin_tv[tv_size];
 
   // Put LDPT_MESSAGE at the front of the list so the plugin can use it
   // while processing subsequent entries.
@@ -224,7 +224,7 @@ Plugin::load()
 // Call the plugin claim-file handler.
 
 inline bool
-Plugin::claim_file(struct ld_plugin_input_file *plugin_input_file)
+Plugin::claim_file(struct ld_plugin_input_file* plugin_input_file)
 {
   int claimed = 0;
 
@@ -260,6 +260,45 @@ Plugin::cleanup()
       (*this->cleanup_handler_)();
     }
 }
+
+// This task is used to rescan archives as needed.
+
+class Plugin_rescan : public Task
+{
+ public:
+  Plugin_rescan(Task_token* this_blocker, Task_token* next_blocker)
+    : this_blocker_(this_blocker), next_blocker_(next_blocker)
+  { }
+
+  ~Plugin_rescan()
+  {
+    delete this->this_blocker_;
+  }
+
+  Task_token*
+  is_runnable()
+  {
+    if (this->this_blocker_->is_blocked())
+      return this->this_blocker_;
+    return NULL;
+  }
+
+  void
+  locks(Task_locker* tl)
+  { tl->add(this, this->next_blocker_); }
+
+  void
+  run(Workqueue*)
+  { parameters->options().plugins()->rescan(this); }
+
+  std::string
+  get_name() const
+  { return "Plugin_rescan"; }
+
+ private:
+  Task_token* this_blocker_;
+  Task_token* next_blocker_;
+};
 
 // Plugin_manager methods.
 
@@ -311,6 +350,8 @@ Plugin_manager::claim_file(Input_file* input_file, off_t offset,
     {
       if ((*this->current_)->claim_file(&this->plugin_input_file_))
         {
+	  this->any_claimed_ = true;
+
           if (this->objects_.size() > handle)
             return this->objects_[handle];
 
@@ -322,6 +363,31 @@ Plugin_manager::claim_file(Input_file* input_file, off_t offset,
     }
 
   return NULL;
+}
+
+// Save an archive.  This is used so that a plugin can add a file
+// which refers to a symbol which was not previously referenced.  In
+// that case we want to pretend that the symbol was referenced before,
+// and pull in the archive object.
+
+void
+Plugin_manager::save_archive(Archive* archive)
+{
+  if (this->in_replacement_phase_ || !this->any_claimed_)
+    delete archive;
+  else
+    this->rescannable_.push_back(Rescannable(archive));
+}
+
+// Save an Input_group.  This is like save_archive.
+
+void
+Plugin_manager::save_input_group(Input_group* input_group)
+{
+  if (this->in_replacement_phase_ || !this->any_claimed_)
+    delete input_group;
+  else
+    this->rescannable_.push_back(Rescannable(input_group));
 }
 
 // Call the all-symbols-read handlers.
@@ -348,7 +414,144 @@ Plugin_manager::all_symbols_read(Workqueue* workqueue, Task* task,
        ++this->current_)
     (*this->current_)->all_symbols_read();
 
+  if (this->any_added_)
+    {
+      Task_token* next_blocker = new Task_token(true);
+      next_blocker->add_blocker();
+      workqueue->queue(new Plugin_rescan(this->this_blocker_, next_blocker));
+      this->this_blocker_ = next_blocker;
+    }
+
   *last_blocker = this->this_blocker_;
+}
+
+// This is called when we see a new undefined symbol.  If we are in
+// the replacement phase, this means that we may need to rescan some
+// archives we have previously seen.
+
+void
+Plugin_manager::new_undefined_symbol(Symbol* sym)
+{
+  if (this->in_replacement_phase_)
+    this->undefined_symbols_.push_back(sym);
+}
+
+// Rescan archives as needed.  This handles the case where a new
+// object file added by a plugin has an undefined reference to some
+// symbol defined in an archive.
+
+void
+Plugin_manager::rescan(Task* task)
+{
+  size_t rescan_pos = 0;
+  size_t rescan_size = this->rescannable_.size();
+  while (!this->undefined_symbols_.empty())
+    {
+      if (rescan_pos >= rescan_size)
+	{
+	  this->undefined_symbols_.clear();
+	  return;
+	}
+
+      Undefined_symbol_list undefs;
+      undefs.reserve(this->undefined_symbols_.size());
+      this->undefined_symbols_.swap(undefs);
+
+      size_t min_rescan_pos = rescan_size;
+
+      for (Undefined_symbol_list::const_iterator p = undefs.begin();
+	   p != undefs.end();
+	   ++p)
+	{
+	  if (!(*p)->is_undefined())
+	    continue;
+
+	  this->undefined_symbols_.push_back(*p);
+
+	  // Find the first rescan archive which defines this symbol,
+	  // starting at the current rescan position.  The rescan position
+	  // exists so that given -la -lb -lc we don't look for undefined
+	  // symbols in -lb back in -la, but instead get the definition
+	  // from -lc.  Don't bother to look past the current minimum
+	  // rescan position.
+	  for (size_t i = rescan_pos; i < min_rescan_pos; ++i)
+	    {
+	      if (this->rescannable_defines(i, *p))
+		{
+		  min_rescan_pos = i;
+		  break;
+		}
+	    }
+	}
+
+      if (min_rescan_pos >= rescan_size)
+	{
+	  // We didn't find any rescannable archives which define any
+	  // undefined symbols.
+	  return;
+	}
+
+      const Rescannable& r(this->rescannable_[min_rescan_pos]);
+      if (r.is_archive)
+	{
+	  Task_lock_obj<Archive> tl(task, r.u.archive);
+	  r.u.archive->add_symbols(this->symtab_, this->layout_,
+				   this->input_objects_, this->mapfile_);
+	}
+      else
+	{
+	  size_t next_saw_undefined = this->symtab_->saw_undefined();
+	  size_t saw_undefined;
+	  do
+	    {
+	      saw_undefined = next_saw_undefined;
+
+	      for (Input_group::const_iterator p = r.u.input_group->begin();
+		   p != r.u.input_group->end();
+		   ++p)
+		{
+		  Task_lock_obj<Archive> tl(task, *p);
+
+		  (*p)->add_symbols(this->symtab_, this->layout_,
+				    this->input_objects_, this->mapfile_);
+		}
+
+	      next_saw_undefined = this->symtab_->saw_undefined();
+	    }
+	  while (saw_undefined != next_saw_undefined);
+	}
+
+      for (size_t i = rescan_pos; i < min_rescan_pos + 1; ++i)
+	{
+	  if (this->rescannable_[i].is_archive)
+	    delete this->rescannable_[i].u.archive;
+	  else
+	    delete this->rescannable_[i].u.input_group;
+	}
+
+      rescan_pos = min_rescan_pos + 1;
+    }
+}
+
+// Return whether the rescannable at index I defines SYM.
+
+bool
+Plugin_manager::rescannable_defines(size_t i, Symbol* sym)
+{
+  const Rescannable& r(this->rescannable_[i]);
+  if (r.is_archive)
+    return r.u.archive->defines_symbol(sym);
+  else
+    {
+      for (Input_group::const_iterator p = r.u.input_group->begin();
+	   p != r.u.input_group->end();
+	   ++p)
+	{
+	  if ((*p)->defines_symbol(sym))
+	    return true;
+	}
+      return false;
+    }
 }
 
 // Layout deferred objects.
@@ -361,7 +564,14 @@ Plugin_manager::layout_deferred_objects()
   for (obj = this->deferred_layout_objects_.begin();
        obj != this->deferred_layout_objects_.end();
        ++obj)
-    (*obj)->layout_deferred_sections(this->layout_);
+    {
+      // Lock the object so we can read from it.  This is only called
+      // single-threaded from queue_middle_tasks, so it is OK to lock.
+      // Unfortunately we have no way to pass in a Task token.
+      const Task* dummy_task = reinterpret_cast<const Task*>(-1);
+      Task_lock_obj<Object> tl(dummy_task, *obj);
+      (*obj)->layout_deferred_sections(this->layout_);
+    }
 }
 
 // Call the cleanup handlers.
@@ -397,7 +607,7 @@ Plugin_manager::make_plugin_object(unsigned int handle)
 
 ld_plugin_status
 Plugin_manager::get_input_file(unsigned int handle,
-                               struct ld_plugin_input_file *file)
+                               struct ld_plugin_input_file* file)
 {
   Pluginobj* obj = this->object(handle);
   if (obj == NULL)
@@ -428,7 +638,7 @@ Plugin_manager::release_input_file(unsigned int handle)
 // Add a new library path.
 
 ld_plugin_status
-Plugin_manager::set_extra_library_path(const char *path)
+Plugin_manager::set_extra_library_path(const char* path)
 {
   this->extra_search_path_ = std::string(path);
   return LDPS_OK;
@@ -437,7 +647,7 @@ Plugin_manager::set_extra_library_path(const char *path)
 // Add a new input file.
 
 ld_plugin_status
-Plugin_manager::add_input_file(const char *pathname, bool is_lib)
+Plugin_manager::add_input_file(const char* pathname, bool is_lib)
 {
   Input_file_argument file(pathname,
                            (is_lib
@@ -451,7 +661,7 @@ Plugin_manager::add_input_file(const char *pathname, bool is_lib)
   Input_argument* input_argument = new Input_argument(file);
   Task_token* next_blocker = new Task_token(true);
   next_blocker->add_blocker();
-  if (this->layout_->incremental_inputs())
+  if (parameters->incremental())
     gold_error(_("input files added by plug-ins in --incremental mode not "
 		 "supported yet"));
   this->workqueue_->queue_soon(new Read_symbols(this->input_objects_,
@@ -466,6 +676,7 @@ Plugin_manager::add_input_file(const char *pathname, bool is_lib)
                                                 this->this_blocker_,
                                                 next_blocker));
   this->this_blocker_ = next_blocker;
+  this->any_added_ = true;
   return LDPS_OK;
 }
 
@@ -488,6 +699,8 @@ is_visible_from_outside(Symbol* lsym)
     return true;
   if (parameters->options().relocatable())
     return true;
+  if (parameters->options().is_undefined(lsym->name()))
+    return true;
   if (parameters->options().export_dynamic() || parameters->options().shared())
     return lsym->is_externally_visible();
   return false;
@@ -505,7 +718,7 @@ Pluginobj::get_symbol_resolution_info(int nsyms, ld_plugin_symbol* syms) const
     {
       // We never decided to include this object. We mark all symbols as
       // preempted.
-      gold_assert (this->symbols_.size() == 0);
+      gold_assert(this->symbols_.size() == 0);
       for (int i = 0; i < nsyms; i++)
         syms[i].resolution = LDPR_PREEMPTED_REG;
       return LDPS_OK;
@@ -626,7 +839,7 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
 
   for (int i = 0; i < this->nsyms_; ++i)
     {
-      const struct ld_plugin_symbol *isym = &this->syms_[i];
+      const struct ld_plugin_symbol* isym = &this->syms_[i];
       const char* name = isym->name;
       const char* ver = isym->version;
       elfcpp::Elf_Half shndx;
@@ -1000,7 +1213,7 @@ register_cleanup(ld_plugin_cleanup_handler handler)
 // Add symbols from a plugin-claimed input file.
 
 static enum ld_plugin_status
-add_symbols(void* handle, int nsyms, const ld_plugin_symbol *syms)
+add_symbols(void* handle, int nsyms, const ld_plugin_symbol* syms)
 {
   gold_assert(parameters->options().has_plugins());
   Pluginobj* obj = parameters->options().plugins()->make_plugin_object(
@@ -1015,7 +1228,7 @@ add_symbols(void* handle, int nsyms, const ld_plugin_symbol *syms)
 // file descriptor.
 
 static enum ld_plugin_status
-get_input_file(const void *handle, struct ld_plugin_input_file *file)
+get_input_file(const void* handle, struct ld_plugin_input_file* file)
 {
   gold_assert(parameters->options().has_plugins());
   unsigned int obj_index =
@@ -1026,7 +1239,7 @@ get_input_file(const void *handle, struct ld_plugin_input_file *file)
 // Release the input file.
 
 static enum ld_plugin_status
-release_input_file(const void *handle)
+release_input_file(const void* handle)
 {
   gold_assert(parameters->options().has_plugins());
   unsigned int obj_index =
@@ -1037,7 +1250,7 @@ release_input_file(const void *handle)
 // Get the symbol resolution info for a plugin-claimed input file.
 
 static enum ld_plugin_status
-get_symbols(const void * handle, int nsyms, ld_plugin_symbol* syms)
+get_symbols(const void* handle, int nsyms, ld_plugin_symbol* syms)
 {
   gold_assert(parameters->options().has_plugins());
   Pluginobj* obj = parameters->options().plugins()->object(
@@ -1050,7 +1263,7 @@ get_symbols(const void * handle, int nsyms, ld_plugin_symbol* syms)
 // Add a new (real) input file generated by a plugin.
 
 static enum ld_plugin_status
-add_input_file(const char *pathname)
+add_input_file(const char* pathname)
 {
   gold_assert(parameters->options().has_plugins());
   return parameters->options().plugins()->add_input_file(pathname, false);
@@ -1059,7 +1272,7 @@ add_input_file(const char *pathname)
 // Add a new (real) library required by a plugin.
 
 static enum ld_plugin_status
-add_input_library(const char *pathname)
+add_input_library(const char* pathname)
 {
   gold_assert(parameters->options().has_plugins());
   return parameters->options().plugins()->add_input_file(pathname, true);
@@ -1069,7 +1282,7 @@ add_input_library(const char *pathname)
 // add_input_library
 
 static enum ld_plugin_status
-set_extra_library_path(const char *path)
+set_extra_library_path(const char* path)
 {
   gold_assert(parameters->options().has_plugins());
   return parameters->options().plugins()->set_extra_library_path(path);
@@ -1078,7 +1291,7 @@ set_extra_library_path(const char *path)
 // Issue a diagnostic message from a plugin.
 
 static enum ld_plugin_status
-message(int level, const char * format, ...)
+message(int level, const char* format, ...)
 {
   va_list args;
   va_start(args, format);
