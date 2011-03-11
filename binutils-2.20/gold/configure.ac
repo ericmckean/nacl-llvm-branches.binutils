@@ -41,27 +41,33 @@ AC_DEFINE_UNQUOTED(TARGET_SYSTEM_ROOT_RELOCATABLE, $sysroot_relocatable,
 dnl "install_as_default" is true if the linker to be installed as the
 dnl default linker, ld.
 dnl "installed_linker" is the installed gold linker name.
-AC_ARG_ENABLE(gold,
-[[  --enable-gold[=ARG]     build gold [ARG={both}[/{gold,ld}]]]],
+
+default_ld=
+AC_ARG_ENABLE(ld,
+[[  --enable-ld[=ARG]     build ld [ARG={default,yes,no}]]],
 [case "${enableval}" in 
- yes)
-   install_as_default=gold
-   installed_linker=ld
-   ;;
- both/gold)
-   install_as_default=yes
+  default)
+    default_ld=ld.bfd
+    ;;
+esac])
+
+AC_ARG_ENABLE(gold,
+[[  --enable-gold[=ARG]     build gold [ARG={default,yes,no}]]],
+[case "${enableval}" in
+ yes|default)
+   if test x${default_ld} = x; then
+     install_as_default=yes
+   fi
    installed_linker=ld.gold
    ;;
- both|both/ld)
-   install_as_default=no
-   installed_linker=ld.gold
+ no)
    ;;
  *)
    AC_MSG_ERROR([invalid --enable-gold argument])
    ;;
  esac],
-[install_as_default=gold
- installed_linker=ld])
+[install_as_default=no
+ installed_linker=ld.gold])
 AC_SUBST(install_as_default)
 AC_SUBST(installed_linker)
 
@@ -252,6 +258,9 @@ AM_CONDITIONAL(NATIVE_LINKER,
   test "x$target_alias" = "x" -o "x$host_alias" = "x$target_alias")
 AM_CONDITIONAL(GCC, test "$GCC" = yes)
 
+AM_CONDITIONAL(NATIVE_OR_CROSS_LINKER,
+  test "x$target_alias" = "x" -o "x$host_alias" = "x$target_alias" -o "x$host_alias" = "x$build_alias")
+
 dnl Some architectures do not support taking pointers of functions
 dnl defined in shared libraries except in -fPIC mode.  We need to
 dnl tell the unittest framework if we're compiling for one of those
@@ -358,6 +367,21 @@ if test "$gold_cv_c_random_seed" = "yes"; then
   RANDOM_SEED_CFLAGS=-frandom-seed=\$@
 fi
 AC_SUBST(RANDOM_SEED_CFLAGS)
+
+dnl On GNU/Linux ifunc is supported by the dynamic linker in glibc
+dnl 2.11 or later, and by binutils 2.20.1 or later.
+AC_CACHE_CHECK([for glibc >= 2.11], [gold_cv_lib_glibc2_11],
+[AC_COMPILE_IFELSE([
+#include <features.h>
+#if !defined __GLIBC__
+error
+#elif __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 11)
+error
+#endif
+__asm__(".type foo, %gnu_indirect_function");
+], [gold_cv_lib_glibc2_11=yes], [gold_cv_lib_glibc2_11=no])])
+
+AM_CONDITIONAL(IFUNC, test "$gold_cv_lib_glibc2_11" = "yes")
 
 AM_BINUTILS_WARNINGS
 

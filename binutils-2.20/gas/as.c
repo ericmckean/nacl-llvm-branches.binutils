@@ -1,6 +1,7 @@
 /* as.c - GAS main program.
    Copyright 1987, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+   2010, 2011
    Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
@@ -258,12 +259,14 @@ Options:\n\
 
   fprintf (stream, _("\
   --alternate             initially turn on alternate macro syntax\n"));
+#ifdef HAVE_ZLIB_H
   fprintf (stream, _("\
   --compress-debug-sections\n\
                           compress DWARF debug sections using zlib\n"));
   fprintf (stream, _("\
   --nocompress-debug-sections\n\
                           don't compress DWARF debug sections\n"));
+#endif /* HAVE_ZLIB_H */
   fprintf (stream, _("\
   -D                      produce assembler debugging messages\n"));
   fprintf (stream, _("\
@@ -628,7 +631,7 @@ parse_args (int * pargc, char *** pargv)
 	case OPTION_VERSION:
 	  /* This output is intended to follow the GNU standards document.  */
 	  printf (_("GNU assembler %s\n"), BFD_VERSION_STRING);
-	  printf (_("Copyright 2010 Free Software Foundation, Inc.\n"));
+	  printf (_("Copyright 2011 Free Software Foundation, Inc.\n"));
 	  printf (_("\
 This program is free software; you may redistribute it under the terms of\n\
 the GNU General Public License version 3 or later.\n\
@@ -659,7 +662,11 @@ This program has absolutely no warranty.\n"));
 	  exit (EXIT_SUCCESS);
 
 	case OPTION_COMPRESS_DEBUG:
+#ifdef HAVE_ZLIB_H
 	  flag_compress_debug = 1;
+#else
+	  as_warn (_("cannot compress debug sections (zlib not installed)"));
+#endif /* HAVE_ZLIB_H */
 	  break;
 
 	case OPTION_NOCOMPRESS_DEBUG:
@@ -1187,6 +1194,8 @@ as_main (int argc, char ** argv)
 
   output_file_create (out_file_name);
   gas_assert (stdoutput != 0);
+
+  dot_symbol_init ();
 
 #ifdef tc_init_after_args
   tc_init_after_args ();

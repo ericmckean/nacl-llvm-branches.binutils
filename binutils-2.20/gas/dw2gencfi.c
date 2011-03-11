@@ -76,6 +76,24 @@
 # define DWARF2_ADDR_SIZE(bfd) (bfd_arch_bits_per_address (bfd) / 8)
 #endif
 
+/* ??? Share this with dwarf2cfg.c.  */
+#ifndef TC_DWARF2_EMIT_OFFSET
+#define TC_DWARF2_EMIT_OFFSET  generic_dwarf2_emit_offset
+
+/* Create an offset to .dwarf2_*.  */
+
+static void
+generic_dwarf2_emit_offset (symbolS *symbol, unsigned int size)
+{
+  expressionS exp;
+
+  exp.X_op = O_symbol;
+  exp.X_add_symbol = symbol;
+  exp.X_add_number = 0;
+  emit_expr (&exp, size);
+}
+#endif
+
 struct cfi_escape_data {
   struct cfi_escape_data *next;
   expressionS exp;
@@ -1405,19 +1423,21 @@ output_fde (struct fde_entry *fde, struct cie_entry *cie,
 
   if (eh_frame)
     {
+      exp.X_op = O_subtract;
       exp.X_add_symbol = after_size_address;
       exp.X_op_symbol = cie->start_address;
+      exp.X_add_number = 0;
+      emit_expr (&exp, offset_size);		/* CIE offset.  */
     }
   else
     {
-      exp.X_op = O_symbol;
-      exp.X_add_symbol = cie->start_address;
-      exp.X_op_symbol = NULL;
+      TC_DWARF2_EMIT_OFFSET (cie->start_address, offset_size);
     }
-  emit_expr (&exp, offset_size);		/* CIE offset.  */
 
   if (eh_frame)
     {
+      exp.X_op = O_subtract;
+      exp.X_add_number = 0;
 #if CFI_DIFF_EXPR_OK
       exp.X_add_symbol = fde->start_address;
       exp.X_op_symbol = symbol_temp_new_now ();
@@ -1425,7 +1445,6 @@ output_fde (struct fde_entry *fde, struct cie_entry *cie,
 #else
       exp.X_op = O_symbol;
       exp.X_add_symbol = fde->start_address;
-      exp.X_op_symbol = NULL;
 #ifdef tc_cfi_emit_pcrel_expr
       tc_cfi_emit_pcrel_expr (&exp, DWARF2_FDE_RELOC_SIZE);	 /* Code offset.  */
 #else
@@ -1436,7 +1455,9 @@ output_fde (struct fde_entry *fde, struct cie_entry *cie,
     }
   else
     {
+      exp.X_op = O_symbol;
       exp.X_add_symbol = fde->start_address;
+      exp.X_add_number = 0;
       addr_size = DWARF2_ADDR_SIZE (stdoutput);
       emit_expr (&exp, addr_size);
     }
@@ -1444,6 +1465,7 @@ output_fde (struct fde_entry *fde, struct cie_entry *cie,
   exp.X_op = O_subtract;
   exp.X_add_symbol = fde->end_address;
   exp.X_op_symbol = fde->start_address;		/* Code length.  */
+  exp.X_add_number = 0;
   emit_expr (&exp, addr_size);
 
   augmentation_size = encoding_size (fde->lsda_encoding);
@@ -1735,6 +1757,43 @@ cfi_finish (void)
 }
 
 #else /* TARGET_USE_CFIPOP */
+
+/* Emit an intelligible error message for missing support.  */
+
+static void
+dot_cfi_dummy (int ignored ATTRIBUTE_UNUSED)
+{
+  as_bad (_("CFI is not supported for this target"));
+  ignore_rest_of_line ();
+}
+
+const pseudo_typeS cfi_pseudo_table[] =
+  {
+    { "cfi_sections", dot_cfi_dummy, 0 },
+    { "cfi_startproc", dot_cfi_dummy, 0 },
+    { "cfi_endproc", dot_cfi_dummy, 0 },
+    { "cfi_def_cfa", dot_cfi_dummy, 0 },
+    { "cfi_def_cfa_register", dot_cfi_dummy, 0 },
+    { "cfi_def_cfa_offset", dot_cfi_dummy, 0 },
+    { "cfi_adjust_cfa_offset", dot_cfi_dummy, 0 },
+    { "cfi_offset", dot_cfi_dummy, 0 },
+    { "cfi_rel_offset", dot_cfi_dummy, 0 },
+    { "cfi_register", dot_cfi_dummy, 0 },
+    { "cfi_return_column", dot_cfi_dummy, 0 },
+    { "cfi_restore", dot_cfi_dummy, 0 },
+    { "cfi_undefined", dot_cfi_dummy, 0 },
+    { "cfi_same_value", dot_cfi_dummy, 0 },
+    { "cfi_remember_state", dot_cfi_dummy, 0 },
+    { "cfi_restore_state", dot_cfi_dummy, 0 },
+    { "cfi_window_save", dot_cfi_dummy, 0 },
+    { "cfi_escape", dot_cfi_dummy, 0 },
+    { "cfi_signal_frame", dot_cfi_dummy, 0 },
+    { "cfi_personality", dot_cfi_dummy, 0 },
+    { "cfi_lsda", dot_cfi_dummy, 0 },
+    { "cfi_val_encoded_addr", dot_cfi_dummy, 0 },
+    { NULL, NULL, 0 }
+  };
+
 void
 cfi_finish (void)
 {

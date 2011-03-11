@@ -423,7 +423,7 @@ elf_i386_grok_prstatus (bfd *abfd, Elf_Internal_Note *note)
       elf_tdata (abfd)->core_signal = bfd_get_32 (abfd, note->descdata + 20);
 
       /* pr_pid */
-      elf_tdata (abfd)->core_pid = bfd_get_32 (abfd, note->descdata + 24);
+      elf_tdata (abfd)->core_lwpid = bfd_get_32 (abfd, note->descdata + 24);
 
       /* pr_reg */
       offset = 28;
@@ -441,7 +441,7 @@ elf_i386_grok_prstatus (bfd *abfd, Elf_Internal_Note *note)
 	  elf_tdata (abfd)->core_signal = bfd_get_16 (abfd, note->descdata + 12);
 
 	  /* pr_pid */
-	  elf_tdata (abfd)->core_pid = bfd_get_32 (abfd, note->descdata + 24);
+	  elf_tdata (abfd)->core_lwpid = bfd_get_32 (abfd, note->descdata + 24);
 
 	  /* pr_reg */
 	  offset = 72;
@@ -479,6 +479,8 @@ elf_i386_grok_psinfo (bfd *abfd, Elf_Internal_Note *note)
 	  return FALSE;
 
 	case 124:		/* Linux/i386 elf_prpsinfo.  */
+	  elf_tdata (abfd)->core_pid
+	    = bfd_get_32 (abfd, note->descdata + 12);
 	  elf_tdata (abfd)->core_program
 	    = _bfd_elfcore_strndup (abfd, note->descdata + 28, 16);
 	  elf_tdata (abfd)->core_command
@@ -1908,23 +1910,10 @@ elf_i386_gc_sweep_hook (bfd *abfd,
       r_symndx = ELF32_R_SYM (rel->r_info);
       if (r_symndx >= symtab_hdr->sh_info)
 	{
-	  struct elf_i386_link_hash_entry *eh;
-	  struct elf_dyn_relocs **pp;
-	  struct elf_dyn_relocs *p;
-
 	  h = sym_hashes[r_symndx - symtab_hdr->sh_info];
 	  while (h->root.type == bfd_link_hash_indirect
 		 || h->root.type == bfd_link_hash_warning)
 	    h = (struct elf_link_hash_entry *) h->root.u.i.link;
-	  eh = (struct elf_i386_link_hash_entry *) h;
-
-	  for (pp = &eh->dyn_relocs; (p = *pp) != NULL; pp = &p->next)
-	    if (p->sec == sec)
-	      {
-		/* Everything must go for SEC.  */
-		*pp = p->next;
-		break;
-	      }
 	}
       else
 	{
@@ -1942,6 +1931,22 @@ elf_i386_gc_sweep_hook (bfd *abfd,
 	      if (h == NULL)
 		abort ();
 	    }
+	}
+
+      if (h)
+	{
+	  struct elf_i386_link_hash_entry *eh;
+	  struct elf_dyn_relocs **pp;
+	  struct elf_dyn_relocs *p;
+
+	  eh = (struct elf_i386_link_hash_entry *) h;
+	  for (pp = &eh->dyn_relocs; (p = *pp) != NULL; pp = &p->next)
+	    if (p->sec == sec)
+	      {
+		/* Everything must go for SEC.  */
+		*pp = p->next;
+		break;
+	      }
 	}
 
       r_type = ELF32_R_TYPE (rel->r_info);
@@ -1984,7 +1989,8 @@ elf_i386_gc_sweep_hook (bfd *abfd,
 
 	case R_386_32:
 	case R_386_PC32:
-	  if (info->shared)
+	  if (info->shared
+	      && (h == NULL || h->type != STT_GNU_IFUNC))
 	    break;
 	  /* Fall through */
 
@@ -2660,10 +2666,17 @@ elf_i386_size_dynamic_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
 
   if (htab->elf.sgotplt)
     {
+      struct elf_link_hash_entry *got;
+      got = elf_link_hash_lookup (elf_hash_table (info),
+				  "_GLOBAL_OFFSET_TABLE_",
+				  FALSE, FALSE, FALSE);
+
       /* Don't allocate .got.plt section if there are no GOT nor PLT
-         entries.  */
-      if ((htab->elf.sgotplt->size
-	   == get_elf_backend_data (output_bfd)->got_header_size)
+         entries and there is no refeence to _GLOBAL_OFFSET_TABLE_.  */
+      if ((got == NULL
+	   || !got->ref_regular_nonweak)
+	  && (htab->elf.sgotplt->size
+	      == get_elf_backend_data (output_bfd)->got_header_size)
 	  && (htab->elf.splt == NULL
 	      || htab->elf.splt->size == 0)
 	  && (htab->elf.sgot == NULL
@@ -2922,11 +2935,16 @@ static bfd_vma
 elf_i386_tpoff (struct bfd_link_info *info, bfd_vma address)
 {
   struct elf_link_hash_table *htab = elf_hash_table (info);
+  const struct elf_backend_data *bed = get_elf_backend_data (info->output_bfd);
+  bfd_vma static_tls_size;
 
   /* If tls_sec is NULL, we should have signalled an error already.  */
   if (htab->tls_sec == NULL)
     return 0;
-  return htab->tls_size + htab->tls_sec->vma - address;
+
+  /* Consider special static TLS alignment requirements.  */
+  static_tls_size = BFD_ALIGN (htab->tls_size, bed->static_tls_alignment);
+  return static_tls_size + htab->tls_sec->vma - address;
 }
 
 /* Relocate an i386 ELF section.  */
@@ -3213,7 +3231,7 @@ elf_i386_relocate_section (bfd *output_bfd,
 		     internal symbol, we have updated addend.  */
 		  continue;
 		}
-
+	      /* FALLTHROUGH */
 	    case R_386_PC32:
 	    case R_386_PLT32:
 	      goto do_relocation;
@@ -4721,6 +4739,13 @@ elf_i386_finish_dynamic_sections (bfd *output_bfd,
 
   if (htab->elf.sgotplt)
     {
+      if (bfd_is_abs_section (htab->elf.sgotplt->output_section))
+	{
+	  (*_bfd_error_handler)
+	    (_("discarded output section: `%A'"), htab->elf.sgotplt);
+	  return FALSE;
+	}
+
       /* Fill in the first three entries in the global offset table.  */
       if (htab->elf.sgotplt->size > 0)
 	{
@@ -4799,6 +4824,7 @@ elf_i386_add_symbol_hook (bfd * abfd,
 #define TARGET_LITTLE_NAME		"elf32-i386"
 #endif
 #define ELF_ARCH			bfd_arch_i386
+#define ELF_TARGET_ID			I386_ELF_DATA
 #define ELF_MACHINE_CODE		EM_386
 
 #ifdef ELF32_NACL_C
@@ -4956,6 +4982,11 @@ elf_i386_fbsd_post_process_headers (bfd *abfd, struct bfd_link_info *info)
 #undef	elf32_bed
 #define	elf32_bed			elf32_i386_sol2_bed
 
+/* The 32-bit static TLS arena size is rounded to the nearest 8-byte
+   boundary.  */
+#undef elf_backend_static_tls_alignment
+#define elf_backend_static_tls_alignment 8
+
 /* The Solaris 2 ABI requires a plt symbol on all platforms.
 
    Cf. Linker and Libraries Guide, Ch. 2, Link-Editor, Generating the Output
@@ -5009,6 +5040,7 @@ elf_i386_vxworks_link_hash_table_create (bfd *abfd)
 #undef elf_backend_final_write_processing
 #define elf_backend_final_write_processing \
   elf_vxworks_final_write_processing
+#undef elf_backend_static_tls_alignment
 
 /* On VxWorks, we emit relocations against _PROCEDURE_LINKAGE_TABLE_, so
    define it.  */

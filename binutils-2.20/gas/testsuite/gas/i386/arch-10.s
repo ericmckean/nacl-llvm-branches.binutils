@@ -58,3 +58,9 @@ vmload
 lzcnt %ecx,%ebx
 # PadLock
 xstorerng
+# nop
+nopl (%eax)
+# BMI
+blsr %ecx,%ebx
+# TBM
+blcfill %ecx,%ebx

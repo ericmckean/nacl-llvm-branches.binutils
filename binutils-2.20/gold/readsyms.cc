@@ -1,6 +1,6 @@
 // readsyms.cc -- read input file symbols for gold
 
-// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -167,7 +167,7 @@ Read_symbols::run(Workqueue* workqueue)
 					    this->next_blocker_));
 }
 
-// Handle a whole lib group. Other then collecting statisticts, this just
+// Handle a whole lib group. Other than collecting statistics, this just
 // mimics what we do for regular object files in the command line.
 
 bool
@@ -248,7 +248,7 @@ Read_symbols::do_lib_group(Workqueue* workqueue)
 					     m, NULL, next_blocker));
     }
 
-  add_lib_group_symbols->set_blocker(next_blocker);
+  add_lib_group_symbols->set_blocker(next_blocker, this->this_blocker_);
   workqueue->queue_soon(add_lib_group_symbols);
 
   return true;
@@ -301,12 +301,6 @@ Read_symbols::do_read_symbols(Workqueue* workqueue)
 				      input_file, is_thin_archive,
 				      this->dirpath_, this);
 	  arch->setup();
-
-	  if (this->layout_->incremental_inputs())
-	    {
-	      const Input_argument* ia = this->input_argument_;
-	      this->layout_->incremental_inputs()->report_archive(ia, arch);
-	    }
 
 	  // Unlock the archive so it can be used in the next task.
 	  arch->unlock(this);
@@ -388,12 +382,6 @@ Read_symbols::do_read_symbols(Workqueue* workqueue)
 
       Read_symbols_data* sd = new Read_symbols_data;
       obj->read_symbols(sd);
-
-      if (this->layout_->incremental_inputs())
-	{
-	  const Input_argument* ia = this->input_argument_;
-	  this->layout_->incremental_inputs()->report_object(ia, obj);
-	}
 
       // Opening the file locked it, so now we need to unlock it.  We
       // need to unlock it before queuing the Add_symbols task,
@@ -599,12 +587,29 @@ Add_symbols::run(Workqueue*)
     }
   else
     {
+      Incremental_inputs* incremental_inputs =
+          this->layout_->incremental_inputs();
+      if (incremental_inputs != NULL)
+	incremental_inputs->report_object(this->object_, NULL);
       this->object_->layout(this->symtab_, this->layout_, this->sd_);
       this->object_->add_symbols(this->symtab_, this->sd_, this->layout_);
       delete this->sd_;
       this->sd_ = NULL;
       this->object_->release();
     }
+}
+
+// Class Input_group.
+
+// When we delete an Input_group we can delete the archive
+// information.
+
+Input_group::~Input_group()
+{
+  for (Input_group::const_iterator p = this->begin();
+       p != this->end();
+       ++p)
+    delete *p;
 }
 
 // Class Start_group.
@@ -688,12 +693,23 @@ Finish_group::run(Workqueue*)
 	}
     }
 
-  // Delete all the archives now that we no longer need them.
+  // Now that we're done with the archives, record the incremental
+  // layout information.
   for (Input_group::const_iterator p = this->input_group_->begin();
        p != this->input_group_->end();
        ++p)
-    delete *p;
-  delete this->input_group_;
+    {
+      // For an incremental link, finish recording the layout information.
+      Incremental_inputs* incremental_inputs =
+          this->layout_->incremental_inputs();
+      if (incremental_inputs != NULL)
+	incremental_inputs->report_archive_end(*p);
+    }
+
+  if (parameters->options().has_plugins())
+    parameters->options().plugins()->save_input_group(this->input_group_);
+  else
+    delete this->input_group_;
 }
 
 // Class Read_script
