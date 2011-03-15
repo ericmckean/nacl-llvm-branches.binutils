@@ -1333,7 +1333,9 @@ parse_args (unsigned argc, char **argv)
 	      int level = strtoul (optarg, &end, 0);
 	      if (*end)
 		einfo (_("%P%F: invalid number `%s'\n"), optarg);
+#ifdef ENABLE_PLUGINS
 	      report_plugin_symbols = level > 1;
+#endif
 	    }
 	  break;
 	case 'v':
