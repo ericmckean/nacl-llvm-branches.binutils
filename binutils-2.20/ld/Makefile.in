@@ -842,7 +842,7 @@ EXTRA_ld_new_SOURCES = deffilep.y ldlex.l pep-dll.c pe-dll.c \
 ifeq ($(NACL_SRPC),1)
 ld_new_SOURCES = ldgram.y ldlex-wrapper.c lexsup.c ldlang.c mri.c ldctor.c \
         ldmain.c ldwrite.c ldexp.c ldemul.c ldver.c ldmisc.c ldfile.c \
-        ldcref.c nacl_file.c $(PLUGIN_C)
+        ldcref.c nacl_file.c
 else 
 ld_new_SOURCES = ldgram.y ldlex-wrapper.c lexsup.c ldlang.c mri.c ldctor.c \
         ldmain.c ldwrite.c ldexp.c ldemul.c ldver.c ldmisc.c ldfile.c ldcref.c $(PLUGIN_C)
