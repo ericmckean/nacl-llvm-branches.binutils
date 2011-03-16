@@ -2331,6 +2331,14 @@ class Input_objects
   void
   print_cref(const Symbol_table*, FILE*) const;
 
+// @LOCALMOD-BEGIN
+  // Print (dynamic) sonames needed to the given filename.
+  // If add_needed is true, add any unmatched needed dependencies
+  // within the dynamic libraries as well.
+  void
+  print_sonames(const std::string filename, bool add_needed) const;
+
+// @LOCALMOD-END
   // Iterate over all regular objects.
 
   Relobj_iterator
