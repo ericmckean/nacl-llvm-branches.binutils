@@ -28,8 +28,12 @@
 
 #include "i386-opc.h"
 
+#ifdef ENABLE_NLS
 #include <libintl.h>
 #define _(String) gettext (String)
+#else
+#define _(String) (String)
+#endif
 
 static const char *program_name = NULL;
 static int debug = 0;
