@@ -23,6 +23,8 @@
 #ifndef GOLD_DEFSTD_H
 #define GOLD_DEFSTD_H
 
+#include <string>
+#include <set>
 #include "symtab.h"
 
 namespace gold
@@ -30,6 +32,11 @@ namespace gold
 
 extern void
 define_standard_symbols(Symbol_table*, const Layout*);
+
+// @LOCALMOD-BEGIN
+extern void
+get_standard_symbols(std::set<std::string> &symbols);
+// @LOCALMOD-END
 
 } // End namespace gold.
 

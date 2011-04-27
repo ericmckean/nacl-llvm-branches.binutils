@@ -1001,6 +1001,11 @@ class General_options
               N_("Produce a native client app"),
               N_("Don't produce a native client app (default)"));
 
+  DEFINE_bool(undef_sym_check, options::TWO_DASHES, '\0', false,
+              N_("Check for undefined symbols before plugin replacement phase"),
+              N_("Don't check for undefined symbols before plugin replacement"
+                 " phase (default)"));
+
   DEFINE_bool(gc_sections, options::TWO_DASHES, '\0', false,
               N_("Remove unused sections"),
               N_("Don't remove unused sections (default)"));

@@ -29,6 +29,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <set>
 
 #include "elfcpp.h"
 #include "parameters.h"
@@ -1390,6 +1391,11 @@ class Symbol_table
   // Return the real symbol associated with the forwarder symbol FROM.
   Symbol*
   resolve_forwards(const Symbol* from) const;
+
+  // @LOCALMOD-BEGIN
+  void
+  assert_no_undefined_symbols(const std::set<std::string> &exceptions) const;
+  // @LOCALMOD-END
 
   // Return the sized version of a symbol in this table.
   template<int size>
