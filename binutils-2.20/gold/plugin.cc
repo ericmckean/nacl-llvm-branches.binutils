@@ -27,6 +27,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <set> // @LOCALMOD
 
 #ifdef ENABLE_PLUGINS
 #include <dlfcn.h>
@@ -42,6 +43,7 @@
 #include "readsyms.h"
 #include "symtab.h"
 #include "elfcpp.h"
+#include "defstd.h"
 
 namespace gold
 {
@@ -1125,6 +1127,44 @@ class Plugin_finish : public Task
   Task_token* this_blocker_;
   Task_token* next_blocker_;
 };
+
+
+
+// @LOCALMOD-BEGIN
+Undefined_Symbols_hook::~Undefined_Symbols_hook()
+{
+}
+
+// Return whether a Undefined_Symbols_hook task is runnable.
+
+Task_token*
+Undefined_Symbols_hook::is_runnable()
+{
+  if (this->this_blocker_ != NULL && this->this_blocker_->is_blocked())
+    return this->this_blocker_;
+  return NULL;
+}
+
+// Return a Task_locker for a Undefined_Symbols_hook task.
+
+void
+Undefined_Symbols_hook::locks(Task_locker* tl)
+{
+  tl->add(this, this->next_blocker_);
+}
+
+// Run the undefined symbols plugin hook.
+
+void
+Undefined_Symbols_hook::run(Workqueue* workqueue)
+{
+  std::set<std::string> exceptions;
+  get_standard_symbols(exceptions);
+  exceptions.insert("_GLOBAL_OFFSET_TABLE_");
+  this->symtab_->assert_no_undefined_symbols(exceptions);
+}
+// @LOCALMOD-END
+
 
 // Class Plugin_hook.
 

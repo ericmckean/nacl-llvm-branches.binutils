@@ -324,4 +324,20 @@ define_standard_symbols(Symbol_table* symtab, const Layout* layout)
                            saw_sections_clause);
 }
 
+// @LOCALMOD-BEGIN
+void get_standard_symbols(std::set<std::string> &symbols)
+{
+  for (int i=0; i < in_section_count; i++)
+    symbols.insert(in_section[i].name);
+
+  for (int i=0; i < in_segment_count; i++)
+    symbols.insert(in_segment[i].name);
+
+  if (parameters->options().native_client()) {
+    for (int i=0; i < in_segment_count_nacl; i++)
+      symbols.insert(in_segment_nacl[i].name);
+  }
+}
+// @LOCALMOD-END
+
 } // End namespace gold.
