@@ -1,6 +1,6 @@
 /* tc-arm.c -- Assemble for the ARM
    Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-   2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+   2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Richard Earnshaw (rwe@pegasus.esprit.ec.org)
 	Modified by David Taylor (dtaylor@armltd.co.uk)
@@ -207,7 +207,6 @@ static const arm_feature_set arm_arch_any = ARM_ANY;
 static const arm_feature_set arm_arch_full = ARM_FEATURE (-1, -1);
 static const arm_feature_set arm_arch_t2 = ARM_ARCH_THUMB2;
 static const arm_feature_set arm_arch_none = ARM_ARCH_NONE;
-static const arm_feature_set arm_arch_v6m_only = ARM_ARCH_V6M_ONLY;
 
 static const arm_feature_set arm_cext_iwmmxt2 =
   ARM_FEATURE (0, ARM_CEXT_IWMMXT2);
@@ -1472,10 +1471,6 @@ arm_typed_reg_parse (char **ccp, enum arm_reg_type type,
   if (reg == FAIL)
     return FAIL;
 
-  /* Do not allow regname(... to parse as a register.  */
-  if (*str == '(')
-    return FAIL;
-
   /* Do not allow a scalar (reg+index) to parse as a register.  */
   if ((atype.defined & NTA_HASINDEX) != 0)
     {
@@ -2218,7 +2213,7 @@ create_neon_reg_alias (char *newname, char *p)
   struct reg_entry mybasereg;
   struct neon_type ntype;
   struct neon_typed_alias typeinfo;
-  char *namebuf, *nameend ATTRIBUTE_UNUSED;
+  char *namebuf, *nameend;
   int namelen;
 
   typeinfo.defined = 0;
@@ -4275,30 +4270,6 @@ s_arm_eabi_attribute (int ignored ATTRIBUTE_UNUSED)
   if (tag < NUM_KNOWN_OBJ_ATTRIBUTES)
     attributes_set_explicitly[tag] = 1;
 }
-
-/* Emit a tls fix for the symbol.  */
-
-static void
-s_arm_tls_descseq (int ignored ATTRIBUTE_UNUSED)
-{
-  char *p;
-  expressionS exp;
-#ifdef md_flush_pending_output
-  md_flush_pending_output ();
-#endif
-
-#ifdef md_cons_align
-  md_cons_align (4);
-#endif
-
-  /* Since we're just labelling the code, there's no need to define a
-     mapping symbol.  */
-  expression (&exp);
-  p = obstack_next_free (&frchain_now->frch_obstack);
-  fix_new_arm (frag_now, p - frag_now->fr_literal, 4, &exp, 0,
-	       thumb_mode ? BFD_RELOC_ARM_THM_TLS_DESCSEQ
-	       : BFD_RELOC_ARM_TLS_DESCSEQ);
-}
 #endif /* OBJ_ELF */
 
 static void s_arm_arch (int);
@@ -4380,7 +4351,6 @@ const pseudo_typeS md_pseudo_table[] =
   { "setfp",		s_arm_unwind_setfp,	0 },
   { "unwind_raw",	s_arm_unwind_raw,	0 },
   { "eabi_attribute",	s_arm_eabi_attribute,	0 },
-  { "tlsdescseq",	s_arm_tls_descseq,      0 },
 #else
   { "word",	   cons, 4},
 
@@ -7310,15 +7280,14 @@ encode_branch (int default_reloc)
 {
   if (inst.operands[0].hasreloc)
     {
-      constraint (inst.operands[0].imm != BFD_RELOC_ARM_PLT32
-		  && inst.operands[0].imm != BFD_RELOC_ARM_TLS_CALL,
-		  _("the only valid suffixes here are '(plt)' and '(tlscall)'"));
-      inst.reloc.type = inst.operands[0].imm == BFD_RELOC_ARM_PLT32
-	? BFD_RELOC_ARM_PLT32
-	: thumb_mode ? BFD_RELOC_ARM_THM_TLS_CALL : BFD_RELOC_ARM_TLS_CALL;
+      constraint (inst.operands[0].imm != BFD_RELOC_ARM_PLT32,
+		  _("the only suffix valid here is '(plt)'"));
+      inst.reloc.type  = BFD_RELOC_ARM_PLT32;
     }
   else
-    inst.reloc.type = (bfd_reloc_code_real_type) default_reloc;
+    {
+      inst.reloc.type = (bfd_reloc_code_real_type) default_reloc;
+    }
   inst.reloc.pc_rel = 1;
 }
 
@@ -9687,7 +9656,8 @@ do_t_blx (void)
     {
       /* No register.  This must be BLX(1).  */
       inst.instruction = 0xf000e800;
-      encode_branch (BFD_RELOC_THUMB_PCREL_BLX);
+      inst.reloc.type = BFD_RELOC_THUMB_PCREL_BLX;
+      inst.reloc.pc_rel = 1;
     }
 }
 
@@ -9696,7 +9666,6 @@ do_t_branch (void)
 {
   int opcode;
   int cond;
-  int reloc;
 
   cond = inst.cond;
   set_it_insn_type (IF_INSIDE_IT_LAST_INSN);
@@ -9715,35 +9684,33 @@ do_t_branch (void)
   else
     opcode = inst.instruction;
 
-  if (unified_syntax
-      && (inst.size_req == 4
-	  || (inst.size_req != 2 && inst.operands[0].hasreloc)))
+  if (unified_syntax && inst.size_req == 4)
     {
       inst.instruction = THUMB_OP32(opcode);
       if (cond == COND_ALWAYS)
-	reloc = BFD_RELOC_THUMB_PCREL_BRANCH25;
+	inst.reloc.type = BFD_RELOC_THUMB_PCREL_BRANCH25;
       else
 	{
 	  gas_assert (cond != 0xF);
 	  inst.instruction |= cond << 22;
-	  reloc = BFD_RELOC_THUMB_PCREL_BRANCH20;
+	  inst.reloc.type = BFD_RELOC_THUMB_PCREL_BRANCH20;
 	}
     }
   else
     {
       inst.instruction = THUMB_OP16(opcode);
       if (cond == COND_ALWAYS)
-	reloc = BFD_RELOC_THUMB_PCREL_BRANCH12;
+	inst.reloc.type = BFD_RELOC_THUMB_PCREL_BRANCH12;
       else
 	{
 	  inst.instruction |= cond << 8;
-	  reloc = BFD_RELOC_THUMB_PCREL_BRANCH9;
+	  inst.reloc.type = BFD_RELOC_THUMB_PCREL_BRANCH9;
 	}
       /* Allow section relaxation.  */
       if (unified_syntax && inst.size_req != 2)
 	inst.relax = opcode;
     }
-  inst.reloc.type = reloc;
+
   inst.reloc.pc_rel = 1;
 }
 
@@ -9765,15 +9732,8 @@ static void
 do_t_branch23 (void)
 {
   set_it_insn_type_last ();
-  encode_branch (BFD_RELOC_THUMB_PCREL_BRANCH23);
-  
-  /* md_apply_fix blows up with 'bl foo(PLT)' where foo is defined in
-     this file.  We used to simply ignore the PLT reloc type here --
-     the branch encoding is now needed to deal with TLSCALL relocs.
-     So if we see a PLT reloc now, put it back to how it used to be to
-     keep the preexisting behaviour.  */
-  if (inst.reloc.type == BFD_RELOC_ARM_PLT32)
-    inst.reloc.type = BFD_RELOC_THUMB_PCREL_BRANCH23;
+  inst.reloc.type   = BFD_RELOC_THUMB_PCREL_BRANCH23;
+  inst.reloc.pc_rel = 1;
 
 #if defined(OBJ_COFF)
   /* If the destination of the branch is a defined symbol which does not have
@@ -16555,13 +16515,7 @@ static struct reloc_entry reloc_names[] =
   { "tlsldo",  BFD_RELOC_ARM_TLS_LDO32}, { "TLSLDO",  BFD_RELOC_ARM_TLS_LDO32},
   { "gottpoff",BFD_RELOC_ARM_TLS_IE32},  { "GOTTPOFF",BFD_RELOC_ARM_TLS_IE32},
   { "tpoff",   BFD_RELOC_ARM_TLS_LE32},  { "TPOFF",   BFD_RELOC_ARM_TLS_LE32},
-  { "got_prel", BFD_RELOC_ARM_GOT_PREL}, { "GOT_PREL", BFD_RELOC_ARM_GOT_PREL},
-  { "tlsdesc", BFD_RELOC_ARM_TLS_GOTDESC},
-  	{ "TLSDESC", BFD_RELOC_ARM_TLS_GOTDESC},
-  { "tlscall", BFD_RELOC_ARM_TLS_CALL},
-  	{ "TLSCALL", BFD_RELOC_ARM_TLS_CALL},
-  { "tlsdescseq", BFD_RELOC_ARM_TLS_DESCSEQ},
-  	{ "TLSDESCSEQ", BFD_RELOC_ARM_TLS_DESCSEQ}
+  { "got_prel", BFD_RELOC_ARM_GOT_PREL}, { "GOT_PREL", BFD_RELOC_ARM_GOT_PREL}
 };
 #endif
 
@@ -20879,14 +20833,6 @@ md_apply_fix (fixS *	fixP,
       break;
 
 #ifdef OBJ_ELF
-    case BFD_RELOC_ARM_TLS_CALL:
-    case BFD_RELOC_ARM_THM_TLS_CALL:
-    case BFD_RELOC_ARM_TLS_DESCSEQ:
-    case BFD_RELOC_ARM_THM_TLS_DESCSEQ:
-      S_SET_THREAD_LOCAL (fixP->fx_addsy);
-      break;
-
-    case BFD_RELOC_ARM_TLS_GOTDESC:
     case BFD_RELOC_ARM_TLS_GD32:
     case BFD_RELOC_ARM_TLS_LE32:
     case BFD_RELOC_ARM_TLS_IE32:
@@ -21488,10 +21434,6 @@ tc_gen_reloc (asection *section, fixS *fixp)
       return NULL;
 
 #ifdef OBJ_ELF
-    case BFD_RELOC_ARM_TLS_CALL:
-    case BFD_RELOC_ARM_THM_TLS_CALL:
-    case BFD_RELOC_ARM_TLS_DESCSEQ:
-    case BFD_RELOC_ARM_THM_TLS_DESCSEQ:
     case BFD_RELOC_ARM_GOT32:
     case BFD_RELOC_ARM_GOTOFF:
     case BFD_RELOC_ARM_GOT_PREL:
@@ -21537,7 +21479,6 @@ tc_gen_reloc (asection *section, fixS *fixp)
       code = fixp->fx_r_type;
       break;
 
-    case BFD_RELOC_ARM_TLS_GOTDESC:
     case BFD_RELOC_ARM_TLS_GD32:
     case BFD_RELOC_ARM_TLS_IE32:
     case BFD_RELOC_ARM_TLS_LDM32:
@@ -21799,11 +21740,6 @@ arm_fix_adjustable (fixS * fixP)
       || fixP->fx_r_type == BFD_RELOC_ARM_TLS_IE32
       || fixP->fx_r_type == BFD_RELOC_ARM_TLS_LDM32
       || fixP->fx_r_type == BFD_RELOC_ARM_TLS_LDO32
-      || fixP->fx_r_type == BFD_RELOC_ARM_TLS_GOTDESC
-      || fixP->fx_r_type == BFD_RELOC_ARM_TLS_CALL
-      || fixP->fx_r_type == BFD_RELOC_ARM_THM_TLS_CALL
-      || fixP->fx_r_type == BFD_RELOC_ARM_TLS_DESCSEQ
-      || fixP->fx_r_type == BFD_RELOC_ARM_THM_TLS_DESCSEQ
       || fixP->fx_r_type == BFD_RELOC_ARM_TARGET2)
     return FALSE;
 
@@ -22022,8 +21958,6 @@ arm_adjust_symtab (void)
 
   /* Remove any overlapping mapping symbols generated by alignment frags.  */
   bfd_map_over_sections (stdoutput, check_mapping_symbols, (char *) 0);
-  /* Now do generic ELF adjustments.  */
-  elf_adjust_symtab ();
 #endif
 }
 
@@ -22600,10 +22534,7 @@ static const struct arm_cpu_option_table arm_cpus[] =
   {"arm1022e",		ARM_ARCH_V5TE,	 FPU_ARCH_VFP_V2, NULL},
   {"arm1026ejs",	ARM_ARCH_V5TEJ,	 FPU_ARCH_VFP_V2, "ARM1026EJ-S"},
   {"arm1026ej-s",	ARM_ARCH_V5TEJ,	 FPU_ARCH_VFP_V2, NULL},
-  {"fa606te",		ARM_ARCH_V5TE,	 FPU_ARCH_VFP_V2, NULL},
-  {"fa616te",		ARM_ARCH_V5TE,   FPU_ARCH_VFP_V2, NULL},
-  {"fa626te",		ARM_ARCH_V5TE,   FPU_ARCH_VFP_V2, NULL},
-  {"fmp626",		ARM_ARCH_V5TE,   FPU_ARCH_VFP_V2, NULL},
+  {"fa626te",		ARM_ARCH_V5TE,	 FPU_NONE,	  NULL},
   {"fa726te",		ARM_ARCH_V5TE,	 FPU_ARCH_VFP_V2, NULL},
   {"arm1136js",		ARM_ARCH_V6,	 FPU_NONE,	  "ARM1136J-S"},
   {"arm1136j-s",	ARM_ARCH_V6,	 FPU_NONE,	  NULL},
@@ -23297,12 +23228,6 @@ aeabi_set_public_attributes (void)
       ARM_CLEAR_FEATURE (flags, flags, arm_arch_any);
       ARM_MERGE_FEATURE_SETS (flags, flags, *object_arch);
     }
-
-  /* We need to make sure that the attributes do not identify us as v6S-M
-     when the only v6S-M feature in use is the Operating System Extensions.  */
-  if (ARM_CPU_HAS_FEATURE (flags, arm_ext_os))
-      if (!ARM_CPU_HAS_FEATURE (flags, arm_arch_v6m_only))
-        ARM_CLEAR_FEATURE (flags, flags, arm_ext_os);
 
   tmp = flags;
   arch = 0;

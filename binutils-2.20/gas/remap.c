@@ -19,7 +19,6 @@
    02110-1301, USA.  */
 
 #include "as.h"
-#include "filenames.h"
 
 /* Structure recording the mapping from source file and directory
    names at compile time to those to be embedded in debug
@@ -77,7 +76,7 @@ remap_debug_filename (const char *filename)
   size_t name_len;
 
   for (map = debug_prefix_maps; map; map = map->next)
-    if (filename_ncmp (filename, map->old_prefix, map->old_len) == 0)
+    if (strncmp (filename, map->old_prefix, map->old_len) == 0)
       break;
   if (!map)
     return filename;

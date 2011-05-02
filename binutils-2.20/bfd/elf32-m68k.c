@@ -1,6 +1,6 @@
 /* Motorola 68k series support for 32-bit ELF
    Copyright 1993, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-   2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+   2004, 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -3716,8 +3716,15 @@ elf_m68k_relocate_section (output_bfd, info, input_bfd, input_section,
 	}
 
       if (sec != NULL && elf_discarded_section (sec))
-	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
-					 rel, relend, howto, contents);
+	{
+	  /* For relocs against symbols from removed linkonce sections,
+	     or sections discarded by a linker script, we just want the
+	     section contents zeroed.  Avoid any special processing.  */
+	  _bfd_clear_contents (howto, input_bfd, contents + rel->r_offset);
+	  rel->r_info = 0;
+	  rel->r_addend = 0;
+	  continue;
+	}
 
       if (info->relocatable)
 	continue;
@@ -4390,11 +4397,6 @@ elf_m68k_finish_dynamic_symbol (output_bfd, info, h, sym)
 		  break;
 
 		case R_68K_TLS_GD32:
-		  /* The value for this relocation is actually put in
-		     the second GOT slot.  */
-		  relocation = bfd_get_signed_32 (output_bfd,
-						  (sgot->contents
-						   + got_entry_offset + 4));
 		  relocation += dtpoff_base (info);
 		  break;
 

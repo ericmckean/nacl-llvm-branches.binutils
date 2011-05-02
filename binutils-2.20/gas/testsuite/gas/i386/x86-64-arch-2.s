@@ -58,7 +58,3 @@ vmload
 lzcnt %ecx,%ebx
 # PadLock
 xstorerng
-# BMI
-blsr %ecx,%ebx
-# TBM
-blcfill %ecx,%ebx

@@ -4067,7 +4067,7 @@ sort_bfds (const void *a, const void *b)
   bfd *const *abfd1 = a;
   bfd *const *abfd2 = b;
 
-  return filename_cmp ((*abfd1)->filename, (*abfd2)->filename);
+  return strcmp ((*abfd1)->filename, (*abfd2)->filename);
 }
 
 static unsigned int
@@ -4299,7 +4299,7 @@ spu_elf_auto_overlay (struct bfd_link_info *info)
 
       qsort (bfd_arr, bfd_count, sizeof (*bfd_arr), sort_bfds);
       for (i = 1; i < bfd_count; ++i)
-	if (filename_cmp (bfd_arr[i - 1]->filename, bfd_arr[i]->filename) == 0)
+	if (strcmp (bfd_arr[i - 1]->filename, bfd_arr[i]->filename) == 0)
 	  {
 	    if (bfd_arr[i - 1]->my_archive == bfd_arr[i]->my_archive)
 	      {
@@ -4896,8 +4896,15 @@ spu_elf_relocate_section (bfd *output_bfd,
 	}
 
       if (sec != NULL && elf_discarded_section (sec))
-	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
-					 rel, relend, howto, contents);
+	{
+	  /* For relocs against symbols from removed linkonce sections,
+	     or sections discarded by a linker script, we just want the
+	     section contents zeroed.  Avoid any special processing.  */
+	  _bfd_clear_contents (howto, input_bfd, contents + rel->r_offset);
+	  rel->r_info = 0;
+	  rel->r_addend = 0;
+	  continue;
+	}
 
       if (info->relocatable)
 	continue;
@@ -5084,7 +5091,7 @@ spu_elf_relocate_section (bfd *output_bfd,
 	}
       input_section->reloc_count = wrel - relocs;
       /* Backflips for _bfd_elf_link_output_relocs.  */
-      rel_hdr = _bfd_elf_single_rel_hdr (input_section);
+      rel_hdr = &elf_section_data (input_section)->rel_hdr;
       rel_hdr->sh_size = input_section->reloc_count * rel_hdr->sh_entsize;
       ret = 2;
     }

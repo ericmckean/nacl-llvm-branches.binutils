@@ -1,6 +1,6 @@
 /* ldmisc.c
    Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010, 2011
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
    Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support.
 
@@ -25,7 +25,6 @@
 #include "bfd.h"
 #include "bfdlink.h"
 #include "libiberty.h"
-#include "filenames.h"
 #include "demangle.h"
 #include <stdarg.h>
 #include "ld.h"
@@ -58,13 +57,12 @@
  %d integer, like printf
  %ld long, like printf
  %lu unsigned long, like printf
- %p native (host) void* pointer, like printf
  %s arbitrary string, like printf
  %u integer, like printf
  %v hex bfd_vma, no leading zeros
 */
 
-void
+static void
 vfinfo (FILE *fp, const char *fmt, va_list arg, bfd_boolean is_warning)
 {
   bfd_boolean fatal = FALSE;
@@ -232,7 +230,7 @@ vfinfo (FILE *fp, const char *fmt, va_list arg, bfd_boolean is_warning)
 			   bfd_get_filename (bfd_my_archive (i->the_bfd)));
 		fprintf (fp, "%s", i->local_sym_name);
 		if (bfd_my_archive (i->the_bfd) == NULL
-		    && filename_cmp (i->local_sym_name, i->filename) != 0)
+		    && strcmp (i->local_sym_name, i->filename) != 0)
 		  fprintf (fp, " (%s)", i->filename);
 	      }
 	      break;
@@ -319,7 +317,7 @@ vfinfo (FILE *fp, const char *fmt, va_list arg, bfd_boolean is_warning)
 			    || last_function == NULL
 			    || last_bfd != abfd
 			    || (filename != NULL
-				&& filename_cmp (last_file, filename) != 0)
+				&& strcmp (last_file, filename) != 0)
 			    || strcmp (last_function, functionname) != 0)
 			  {
 			    lfinfo (fp, _("%B: In function `%T':\n"),
@@ -368,11 +366,6 @@ vfinfo (FILE *fp, const char *fmt, va_list arg, bfd_boolean is_warning)
 		      }
 		  }
 	      }
-	      break;
-
-	    case 'p':
-	      /* native (host) void* pointer, like printf */
-	      fprintf (fp, "%p", va_arg (arg, void *));
 	      break;
 
 	    case 's':
@@ -441,11 +434,9 @@ einfo (const char *fmt, ...)
 {
   va_list arg;
 
-  fflush (stdout);
   va_start (arg, fmt);
   vfinfo (stderr, fmt, arg, TRUE);
   va_end (arg);
-  fflush (stderr);
 }
 
 void

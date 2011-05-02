@@ -1,6 +1,6 @@
 /* MeP-specific support for 32-bit ELF.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-   2010, 2011  Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -154,14 +154,13 @@ mep_reloc_type_lookup
 
     default:
       /* Pacify gcc -Wall.  */
-      (*_bfd_error_handler) (_("mep: no reloc for code %d"), code);
+      fprintf (stderr, "mep: no reloc for code %d\n", code);
       return NULL;
     }
 
   if (mep_elf_howto_table[type].type != type)
     {
-      (*_bfd_error_handler) (_("MeP: howto %d has type %d"),
-			     type, mep_elf_howto_table[type].type);
+      fprintf (stderr, "MeP: howto %d has type %d\n", type, mep_elf_howto_table[type].type);
       abort ();
     }
 
@@ -501,8 +500,15 @@ mep_elf_relocate_section
 	}
 
       if (sec != NULL && elf_discarded_section (sec))
-	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
-					 rel, relend, howto, contents);
+	{
+	  /* For relocs against symbols from removed linkonce sections,
+	     or sections discarded by a linker script, we just want the
+	     section contents zeroed.  Avoid any special processing.  */
+	  _bfd_clear_contents (howto, input_bfd, contents + rel->r_offset);
+	  rel->r_info = 0;
+	  rel->r_addend = 0;
+	  continue;
+	}
 
       if (info->relocatable)
 	continue;

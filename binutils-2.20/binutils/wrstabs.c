@@ -27,7 +27,6 @@
 #include <assert.h>
 #include "bfd.h"
 #include "libiberty.h"
-#include "filenames.h"
 #include "safe-ctype.h"
 #include "bucomm.h"
 #include "debug.h"
@@ -2262,7 +2261,7 @@ stab_lineno (void *p, const char *file, unsigned long lineno, bfd_vma addr)
   if (addr > info->last_text_address)
     info->last_text_address = addr;
 
-  if (filename_cmp (file, info->lineno_filename) != 0)
+  if (strcmp (file, info->lineno_filename) != 0)
     {
       if (! stab_write_symbol (info, N_SOL, 0, addr, file))
 	return FALSE;

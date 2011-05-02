@@ -614,20 +614,15 @@ class Symbol
 
   // When determining whether a reference to a symbol needs a dynamic
   // relocation, we need to know several things about the reference.
-  // These flags may be or'ed together.  0 means that the symbol
-  // isn't referenced at all.
+  // These flags may be or'ed together.
   enum Reference_flags
   {
-    // A reference to the symbol's absolute address.  This includes
-    // references that cause an absolute address to be stored in the GOT.
+    // Reference to the symbol's absolute address.
     ABSOLUTE_REF = 1,
-    // A reference that calculates the offset of the symbol from some
-    // anchor point, such as the PC or GOT.
-    RELATIVE_REF = 2,
-    // A TLS-related reference.
-    TLS_REF = 4,
-    // A reference that can always be treated as a function call.
-    FUNCTION_CALL = 8
+    // A non-PIC reference.
+    NON_PIC_REF = 2,
+    // A function call.
+    FUNCTION_CALL = 4
   };
 
   // Given a direct absolute or pc-relative static relocation against
@@ -658,8 +653,12 @@ class Symbol
       return true;
 
     // A function call that can branch to a local PLT entry does not need
-    // a dynamic relocation.
-    if ((flags & FUNCTION_CALL) && this->has_plt_offset())
+    // a dynamic relocation.  A non-pic pc-relative function call in a
+    // shared library cannot use a PLT entry.
+    if ((flags & FUNCTION_CALL)
+        && this->has_plt_offset()
+        && !((flags & NON_PIC_REF)
+             && parameters->options().output_is_position_independent()))
       return false;
 
     // A reference to any PLT entry in a non-position-independent executable
@@ -680,10 +679,12 @@ class Symbol
   }
 
   // Whether we should use the PLT offset associated with a symbol for
-  // a relocation.  FLAGS is a set of Reference_flags.
+  // a relocation.  IS_NON_PIC_REFERENCE is true if this is a non-PIC
+  // reloc--the same set of relocs for which we would pass NON_PIC_REF
+  // to the needs_dynamic_reloc function.
 
   bool
-  use_plt_offset(int flags) const
+  use_plt_offset(bool is_non_pic_reference) const
   {
     // If the symbol doesn't have a PLT offset, then naturally we
     // don't want to use it.
@@ -696,7 +697,10 @@ class Symbol
 
     // If we are going to generate a dynamic relocation, then we will
     // wind up using that, so no need to use the PLT entry.
-    if (this->needs_dynamic_reloc(flags))
+    if (this->needs_dynamic_reloc(FUNCTION_CALL
+				  | (is_non_pic_reference
+				     ? NON_PIC_REF
+				     : 0)))
       return false;
 
     // If the symbol is from a dynamic object, we need to use the PLT
@@ -710,10 +714,10 @@ class Symbol
 	&& (this->is_undefined() || this->is_preemptible()))
       return true;
 
-    // If this is a call to a weak undefined symbol, we need to use
-    // the PLT entry; the symbol may be defined by a library loaded
-    // at runtime.
-    if ((flags & FUNCTION_CALL) && this->is_weak_undefined())
+    // If this is a weak undefined symbol, we need to use the PLT
+    // entry; the symbol may be defined by a library loaded at
+    // runtime.
+    if (this->is_weak_undefined())
       return true;
 
     // Otherwise we can use the regular definition.
@@ -735,7 +739,7 @@ class Symbol
       return true;
 
     // A reference to a symbol defined in a dynamic object or to a
-    // symbol that is preemptible can not use a RELATIVE relocation.
+    // symbol that is preemptible can not use a RELATIVE relocaiton.
     if (this->is_from_dynobj()
         || this->is_undefined()
         || this->is_preemptible())
@@ -1258,7 +1262,7 @@ class Symbol_table
     SORT_COMMONS_BY_ALIGNMENT_ASCENDING
   };
 
-  // COUNT is an estimate of how many symbols will be inserted in the
+  // COUNT is an estimate of how many symbosl will be inserted in the
   // symbol table.  It's ok to put 0 if you don't know; a correct
   // guess will just save some CPU by reducing hashtable resizes.
   Symbol_table(unsigned int count, const Version_script_info& version_script);
@@ -1471,7 +1475,7 @@ class Symbol_table
   {
     // No error.
     CFVS_OK,
-    // Unsupported symbol section.
+    // Unspported symbol section.
     CFVS_UNSUPPORTED_SYMBOL_SECTION,
     // No output section.
     CFVS_NO_OUTPUT_SECTION
@@ -1541,14 +1545,10 @@ class Symbol_table
 
   typedef std::pair<Stringpool::Key, Stringpool::Key> Symbol_table_key;
 
-  // The hash function.  The key values are Stringpool keys.
   struct Symbol_table_hash
   {
-    inline size_t
-    operator()(const Symbol_table_key& key) const
-    {
-      return key.first ^ key.second;
-    }
+    size_t
+    operator()(const Symbol_table_key&) const;
   };
 
   struct Symbol_table_eq
@@ -1559,33 +1559,6 @@ class Symbol_table
 
   typedef Unordered_map<Symbol_table_key, Symbol*, Symbol_table_hash,
 			Symbol_table_eq> Symbol_table_type;
-
-  // A map from symbol name (as a pointer into the namepool) to all
-  // the locations the symbols is (weakly) defined (and certain other
-  // conditions are met).  This map will be used later to detect
-  // possible One Definition Rule (ODR) violations.
-  struct Symbol_location
-  {
-    Object* object;         // Object where the symbol is defined.
-    unsigned int shndx;     // Section-in-object where the symbol is defined.
-    off_t offset;           // Offset-in-section where the symbol is defined.
-    bool operator==(const Symbol_location& that) const
-    {
-      return (this->object == that.object
-              && this->shndx == that.shndx
-              && this->offset == that.offset);
-    }
-  };
-
-  struct Symbol_location_hash
-  {
-    size_t operator()(const Symbol_location& loc) const
-    { return reinterpret_cast<uintptr_t>(loc.object) ^ loc.offset ^ loc.shndx; }
-  };
-
-  typedef Unordered_map<const char*,
-                        Unordered_set<Symbol_location, Symbol_location_hash> >
-  Odr_map;
 
   // Make FROM a forwarder symbol to TO.
   void
@@ -1734,12 +1707,6 @@ class Symbol_table
   do_allocate_commons_list(Layout*, Commons_section_type, Commons_type*,
 			   Mapfile*, Sort_commons_order);
 
-  // Returns all of the lines attached to LOC, not just the one the
-  // instruction actually came from.  This helps the ODR checker avoid
-  // false positives.
-  static std::vector<std::string>
-  linenos_from_loc(const Task* task, const Symbol_location& loc);
-
   // Implement detect_odr_violations.
   template<int size, bool big_endian>
   void
@@ -1792,6 +1759,33 @@ class Symbol_table
   // A map from symbols with COPY relocs to the dynamic objects where
   // they are defined.
   typedef Unordered_map<const Symbol*, Dynobj*> Copied_symbol_dynobjs;
+
+  // A map from symbol name (as a pointer into the namepool) to all
+  // the locations the symbols is (weakly) defined (and certain other
+  // conditions are met).  This map will be used later to detect
+  // possible One Definition Rule (ODR) violations.
+  struct Symbol_location
+  {
+    Object* object;         // Object where the symbol is defined.
+    unsigned int shndx;     // Section-in-object where the symbol is defined.
+    off_t offset;           // Offset-in-section where the symbol is defined.
+    bool operator==(const Symbol_location& that) const
+    {
+      return (this->object == that.object
+              && this->shndx == that.shndx
+              && this->offset == that.offset);
+    }
+  };
+
+  struct Symbol_location_hash
+  {
+    size_t operator()(const Symbol_location& loc) const
+    { return reinterpret_cast<uintptr_t>(loc.object) ^ loc.offset ^ loc.shndx; }
+  };
+
+  typedef Unordered_map<const char*,
+                        Unordered_set<Symbol_location, Symbol_location_hash> >
+  Odr_map;
 
   // We increment this every time we see a new undefined symbol, for
   // use in archive groups.

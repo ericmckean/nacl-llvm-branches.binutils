@@ -385,11 +385,13 @@ elf32_xc16x_relocate_section (bfd *output_bfd,
 	{
 	  /* For relocs against symbols from removed linkonce sections,
 	     or sections discarded by a linker script, we just want the
-	     section contents cleared.  Avoid any special processing.  */
+	     section contents zeroed.  Avoid any special processing.  */
 	  reloc_howto_type *howto;
 	  howto = xc16x_reloc_type_lookup (input_bfd, r_type);
-	  RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
-					   rel, relend, howto, contents);
+	  _bfd_clear_contents (howto, input_bfd, contents + rel->r_offset);
+	  rel->r_info = 0;
+	  rel->r_addend = 0;
+	  continue;
 	}
 
       if (info->relocatable)

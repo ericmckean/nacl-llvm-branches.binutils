@@ -1095,8 +1095,15 @@ weak_name2altname (const char * name)
 static const char *
 weak_altname2name (const char * name)
 {
+  char * weak_name;
+  char * dot;
+
   gas_assert (weak_is_altname (name));
-  return xstrdup (name + 6);
+
+  weak_name = xstrdup (name + 6);
+  if ((dot = strchr (weak_name, '.')))
+    *dot = 0;
+  return weak_name;
 }
 
 /* Make a weak symbol name unique by
@@ -1113,6 +1120,9 @@ weak_uniquify (const char * name)
     unique = an_external_name;
 #endif
   gas_assert (weak_is_altname (name));
+
+  if (strchr (name + sizeof (weak_altprefix), '.'))
+    return name;
 
   ret = xmalloc (strlen (name) + strlen (unique) + 2);
   strcpy (ret, name);
@@ -1819,15 +1829,11 @@ obj_coff_init_stab_section (segT seg)
 }
 
 #ifdef DEBUG
-const char * s_get_name (symbolS *);
-
 const char *
 s_get_name (symbolS *s)
 {
   return ((s == NULL) ? "(NULL)" : S_GET_NAME (s));
 }
-
-void symbol_dump (void);
 
 void
 symbol_dump (void)
@@ -1933,6 +1939,5 @@ const struct format_ops coff_format_ops =
   0,	/* ecoff_set_ext */
   coff_obj_read_begin_hook,
   coff_obj_symbol_new_hook,
-  coff_obj_symbol_clone_hook,
-  coff_adjust_symtab
+  coff_obj_symbol_clone_hook
 };

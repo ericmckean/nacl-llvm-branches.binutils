@@ -164,11 +164,7 @@ static char value_format_32bit[] = "%08lx";
 #if BFD_HOST_64BIT_LONG
 static char value_format_64bit[] = "%016lx";
 #elif BFD_HOST_64BIT_LONG_LONG
-#ifndef __MSVCRT__
 static char value_format_64bit[] = "%016llx";
-#else
-static char value_format_64bit[] = "%016I64x";
-#endif
 #endif
 static int print_width = 0;
 static int print_radix = 16;
@@ -177,7 +173,6 @@ static char other_format[] = "%02x";
 static char desc_format[] = "%04x";
 
 static char *target = NULL;
-static char *plugin_target = NULL;
 
 /* Used to cache the line numbers for a BFD.  */
 static bfd *lineno_cache_bfd;
@@ -289,11 +284,7 @@ set_print_radix (char *radix)
 #if BFD_HOST_64BIT_LONG
       value_format_64bit[5] = *radix;
 #elif BFD_HOST_64BIT_LONG_LONG
-#ifndef __MSVCRT__
       value_format_64bit[6] = *radix;
-#else
-      value_format_64bit[7] = *radix;
-#endif
 #endif
       other_format[3] = desc_format[3] = *radix;
       break;
@@ -1192,7 +1183,7 @@ display_file (char *filename)
   if (get_file_size (filename) < 1)
     return FALSE;
 
-  file = bfd_openr (filename, target ? target : plugin_target);
+  file = bfd_openr (filename, target);
   if (file == NULL)
     {
       bfd_nonfatal (filename);
@@ -1630,7 +1621,6 @@ main (int argc, char **argv)
 
 	case OPTION_PLUGIN:	/* --plugin */
 #if BFD_SUPPORTS_PLUGINS
-	  plugin_target = "plugin";
 	  bfd_plugin_set_plugin (optarg);
 #else
 	  fatal (_("sorry - this program has been built without plugin support\n"));

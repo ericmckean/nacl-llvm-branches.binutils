@@ -623,10 +623,6 @@ class General_options
   DEFINE_bool_alias(Bstatic, Bdynamic, options::ONE_DASH, '\0',
 		    N_("-l does not search for shared libraries"), NULL,
 		    true);
-  DEFINE_bool_alias(dy, Bdynamic, options::ONE_DASH, '\0',
-		    N_("alias for -Bdynamic"), NULL, false);
-  DEFINE_bool_alias(dn, Bdynamic, options::ONE_DASH, '\0',
-		    N_("alias for -Bstatic"), NULL, true);
 
   DEFINE_bool(Bsymbolic, options::ONE_DASH, '\0', false,
               N_("Bind defined symbols locally"), NULL);
@@ -686,8 +682,8 @@ class General_options
 	      NULL);
 
   DEFINE_bool(detect_odr_violations, options::TWO_DASHES, '\0', false,
-              N_("Look for violations of the C++ One Definition Rule"),
-	      N_("Do not look for violations of the C++ One Definition Rule"));
+              N_("Try to detect violations of the One Definition Rule"),
+              NULL);
 
   DEFINE_bool(discard_all, options::TWO_DASHES, 'x', false,
 	      N_("Delete all local symbols"), NULL);
@@ -774,20 +770,9 @@ class General_options
   DEFINE_string(dynamic_linker, options::TWO_DASHES, 'I', NULL,
                 N_("Set dynamic linker path"), N_("PROGRAM"));
 
-  DEFINE_special(incremental, options::TWO_DASHES, '\0',
-		 N_("Do an incremental link if possible; "
-		    "otherwise, do a full link and prepare output "
-		    "for incremental linking"), NULL);
-
-  DEFINE_special(no_incremental, options::TWO_DASHES, '\0',
-		 N_("Do a full link (default)"), NULL);
-
-  DEFINE_special(incremental_full, options::TWO_DASHES, '\0',
-		 N_("Do a full link and "
-		    "prepare output for incremental linking"), NULL);
-
-  DEFINE_special(incremental_update, options::TWO_DASHES, '\0',
-		 N_("Do an incremental link; exit if not possible"), NULL);
+  DEFINE_bool(incremental, options::TWO_DASHES, '\0', false,
+              N_("Work in progress; do not use"),
+              N_("Do a full build"));
 
   DEFINE_special(incremental_changed, options::TWO_DASHES, '\0',
                  N_("Assume files changed"), NULL);
@@ -1039,10 +1024,6 @@ class General_options
   DEFINE_bool(warn_constructors, options::TWO_DASHES, '\0', false,
 	      N_("Ignored"), N_("Ignored"));
 
-  DEFINE_bool(warn_execstack, options::TWO_DASHES, '\0', false,
-	      N_("Warn if the stack is executable"),
-	      N_("Do not warn if the stack is executable (default)"));
-
   DEFINE_bool(warn_mismatch, options::TWO_DASHES, '\0', true,
 	      NULL, N_("Don't warn about mismatched input files"));
 
@@ -1116,9 +1097,9 @@ class General_options
   DEFINE_bool(interpose, options::DASH_Z, '\0', false,
 	      N_("Mark object to interpose all DSOs but executable"),
 	      NULL);
-  DEFINE_bool_alias(lazy, now, options::DASH_Z, '\0',
-		    N_("Mark object for lazy runtime binding (default)"),
-		    NULL, true);
+  DEFINE_bool(lazy, options::DASH_Z, '\0', false,
+	      N_("Mark object for lazy runtime binding (default)"),
+	      NULL);
   DEFINE_bool(loadfltr, options::DASH_Z, '\0', false,
 	      N_("Mark object requiring immediate process"),
 	      NULL);
@@ -1282,25 +1263,6 @@ class General_options
   finalize_dynamic_list()
   { this->dynamic_list_.version_script_info()->finalize(); }
 
-  // The mode selected by the --incremental options.
-  enum Incremental_mode
-  {
-    // No incremental linking (--no-incremental).
-    INCREMENTAL_OFF,
-    // Incremental update only (--incremental-update).
-    INCREMENTAL_UPDATE,
-    // Force a full link, but prepare for subsequent incremental link
-    // (--incremental-full).
-    INCREMENTAL_FULL,
-    // Incremental update if possible, fallback to full link  (--incremental).
-    INCREMENTAL_AUTO
-  };
-
-  // The incremental linking mode.
-  Incremental_mode
-  incremental_mode() const
-  { return this->incremental_mode_; }
-
   // The disposition given by the --incremental-changed,
   // --incremental-unchanged or --incremental-unknown option.  The
   // value may change as we proceed parsing the command line flags.
@@ -1419,8 +1381,6 @@ class General_options
   // script.cc, we store this as a Script_options object, even though
   // we only use a single Version_tree from it.
   Script_options dynamic_list_;
-  // The incremental linking mode.
-  Incremental_mode incremental_mode_;
   // The disposition given by the --incremental-changed,
   // --incremental-unchanged or --incremental-unknown option.  The
   // value may change as we proceed parsing the command line flags.

@@ -1,14 +1,14 @@
 	.section .sec0, "a"
-	.long 0
+	.word 0
 
 	.section .sec1, "a"
-	.long 0x11
+	.word 0x11
 
 	.section .sec2, "a"
-	.long 0x22
+	.word 0x22
 
 	.section .sec3, "a"
-	.long 0x33
+	.word 0x33
 
 	.section .sec4, "a"
-	.long 0x44
+	.word 0x44

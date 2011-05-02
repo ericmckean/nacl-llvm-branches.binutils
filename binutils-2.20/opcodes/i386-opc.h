@@ -110,10 +110,6 @@ enum
   CpuXOP,
   /* LWP support required */
   CpuLWP,
-  /* BMI support required */
-  CpuBMI,
-  /* TBM support required */
-  CpuTBM,
   /* MOVBE Instruction support required */
   CpuMovbe,
   /* EPT Instructions required */
@@ -190,8 +186,6 @@ typedef union i386_cpu_flags
       unsigned int cpufma4:1;
       unsigned int cpuxop:1;
       unsigned int cpulwp:1;
-      unsigned int cpubmi:1;
-      unsigned int cputbm:1;
       unsigned int cpumovbe:1;
       unsigned int cpuept:1;
       unsigned int cpurdtscp:1;
@@ -243,8 +237,6 @@ enum
   Size32,
   /* needs size prefix if in 64-bit mode */
   Size64,
-  /* check register size.  */
-  CheckRegSize,
   /* instruction ignores operand size prefix and in Intel mode ignores
      mnemonic size suffix check.  */
   IgnoreSize,
@@ -383,7 +375,6 @@ typedef struct i386_opcode_modifier
   unsigned int size16:1;
   unsigned int size32:1;
   unsigned int size64:1;
-  unsigned int checkregsize:1;
   unsigned int ignoresize:1;
   unsigned int defaultsize:1;
   unsigned int no_bsuf:1;

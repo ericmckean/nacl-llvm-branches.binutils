@@ -151,7 +151,6 @@ mmo_after_open (void)
 		   is->the_bfd);
 	}
     }
-  after_open_default ();
 }
 EOF
 

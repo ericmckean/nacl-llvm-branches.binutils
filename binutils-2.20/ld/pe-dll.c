@@ -24,7 +24,6 @@
 #include "bfd.h"
 #include "bfdlink.h"
 #include "libiberty.h"
-#include "filenames.h"
 #include "safe-ctype.h"
 
 #include <time.h>
@@ -344,7 +343,7 @@ static const autofilter_entry_type autofilter_liblist[] =
   returning zero if so or -1 if not.  */
 static int libnamencmp (const char *libname, const autofilter_entry_type *afptr)
 {
-  if (filename_ncmp (libname, afptr->name, afptr->len))
+  if (strncmp (libname, afptr->name, afptr->len))
     return -1;
 
   libname += afptr->len;
@@ -620,13 +619,13 @@ auto_export (bfd *abfd, def_file *d, const char *n)
       if (ex->type == EXCLUDELIBS)
 	{
 	  if (libname
-	      && ((filename_cmp (libname, ex->string) == 0)
+	      && ((strcmp (libname, ex->string) == 0)
 		   || (strcasecmp ("ALL", ex->string) == 0)))
 	    return 0;
 	}
       else if (ex->type == EXCLUDEFORIMPLIB)
 	{
-	  if (filename_cmp (abfd->filename, ex->string) == 0)
+	  if (strcmp (abfd->filename, ex->string) == 0)
 	    return 0;
 	}
       else if (strcmp (n, ex->string) == 0)
@@ -721,8 +720,9 @@ process_def_file_and_drectve (bfd *abfd ATTRIBUTE_UNUSED, struct bfd_link_info *
 	      if (lang_elf_version_info && would_export)
 		{
 		  bfd_boolean hide = 0;
+		  char ofs = pe_details->underscored && symbols[j]->name[0] == '_';
 		  (void) bfd_find_version_for_sym (lang_elf_version_info,
-				symbols[j]->name, &hide);
+				symbols[j]->name + ofs, &hide);
 		  would_export = !hide;
 		}
 	      if (would_export)
@@ -2702,7 +2702,7 @@ pe_dll_generate_implib (def_file *def, const char *impfilename, struct bfd_link_
 	{
 	  if (ex->type != EXCLUDEFORIMPLIB)
 	    continue;
-	  found = (filename_cmp (ex->string, ibfd->filename) == 0);
+	  found = (strcmp (ex->string, ibfd->filename) == 0);
 	}
       /* If it matched, we must open a fresh BFD for it (the original
         input BFD is still needed for the DLL's final link) and add
@@ -2732,7 +2732,7 @@ pe_dll_generate_implib (def_file *def, const char *impfilename, struct bfd_link_
 	      newbfd = NULL;
 	      while ((newbfd = bfd_openr_next_archived_file (arbfd, newbfd)) != 0)
 		{
-		  if (filename_cmp (newbfd->filename, ibfd->filename) == 0)
+		  if (strcmp (newbfd->filename, ibfd->filename) == 0)
 		    break;
 		}
 	      if (!newbfd)

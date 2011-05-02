@@ -1,5 +1,5 @@
 
-.*:     file format .*
+.*:     file format elf.*mips
 
 Disassembly of section .text:
 

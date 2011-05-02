@@ -180,10 +180,6 @@ const char ppc_symbol_chars[] = "%[";
 /* The dwarf2 data alignment, adjusted for 32 or 64 bit.  */
 int ppc_cie_data_alignment;
 
-/* More than this number of nops in an alignment op gets a branch
-   instead.  */
-unsigned long nop_limit = 4;
-
 /* The type of processor we are assembling for.  This is one or more
    of the PPC_OPCODE flags defined in opcode/ppc.h.  */
 ppc_cpu_t ppc_cpu = 0;
@@ -1022,9 +1018,7 @@ const char *const md_shortopts = "b:l:usm:K:VQ:";
 #else
 const char *const md_shortopts = "um:";
 #endif
-#define OPTION_NOPS (OPTION_MD_BASE + 0)
 const struct option md_longopts[] = {
-  {"nops", required_argument, NULL, OPTION_NOPS},
   {NULL, no_argument, NULL, 0}
 };
 const size_t md_longopts_size = sizeof (md_longopts);
@@ -1178,15 +1172,6 @@ md_parse_option (int c, char *arg)
       break;
 #endif
 
-    case OPTION_NOPS:
-      {
-	char *end;
-	nop_limit = strtoul (optarg, &end, 0);
-	if (*end)
-	  as_bad (_("--nops needs a numeric argument"));
-      }
-      break;
-      
     default:
       return 0;
     }
@@ -1244,18 +1229,15 @@ PowerPC options:\n\
 -mrelocatable           support for GCC's -mrelocatble option\n\
 -mrelocatable-lib       support for GCC's -mrelocatble-lib option\n\
 -memb                   set PPC_EMB bit in ELF flags\n\
--mlittle, -mlittle-endian, -le\n\
+-mlittle, -mlittle-endian, -l, -le\n\
                         generate code for a little endian machine\n\
--mbig, -mbig-endian, -be\n\
+-mbig, -mbig-endian, -b, -be\n\
                         generate code for a big endian machine\n\
 -msolaris               generate code for Solaris\n\
 -mno-solaris            do not generate code for Solaris\n\
--K PIC                  set EF_PPC_RELOCATABLE_LIB in ELF flags\n\
 -V                      print assembler version number\n\
 -Qy, -Qn                ignored\n"));
 #endif
-  fprintf (stream, _("\
--nops=count             when aligning, more than COUNT nops uses a branch\n"));
 }
 
 /* Set ppc_cpu if it is not already set.  */
@@ -5766,31 +5748,6 @@ ppc_handle_align (struct frag *fragP)
       char *dest = fragP->fr_literal + fragP->fr_fix;
 
       fragP->fr_var = 4;
-
-      if (count > 4 * nop_limit && count < 0x2000000)
-	{
-	  struct frag *rest;
-
-	  /* Make a branch, then follow with nops.  Insert another
-	     frag to handle the nops.  */
-	  md_number_to_chars (dest, 0x48000000 + count, 4);
-	  count -= 4;
-	  if (count == 0)
-	    return;
-
-	  rest = xmalloc (SIZEOF_STRUCT_FRAG + 4);
-	  memcpy (rest, fragP, SIZEOF_STRUCT_FRAG);
-	  fragP->fr_next = rest;
-	  fragP = rest;
-	  rest->fr_address += rest->fr_fix + 4;
-	  rest->fr_fix = 0;
-	  /* If we leave the next frag as rs_align_code we'll come here
-	     again, resulting in a bunch of branches rather than a
-	     branch followed by nops.  */
-	  rest->fr_type = rs_align;
-	  dest = rest->fr_literal;
-	}
-
       md_number_to_chars (dest, 0x60000000, 4);
 
       if ((ppc_cpu & PPC_OPCODE_POWER6) != 0

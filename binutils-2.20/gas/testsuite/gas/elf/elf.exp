@@ -9,7 +9,7 @@ proc run_elf_list_test { name suffix opts readelf_opts readelf_pipe } {
     set file $srcdir/$subdir/$name
     gas_run ${name}.s "$opts -o dump.o" ">&dump.out"
     if { ![string match "" $opts]
-	  && [regexp_diff "dump.out" "${file}.l"] } then {
+	  && [regexp_diff "dump.out" "${file}.l" ""] } then {
 	fail $testname
 	verbose "output is [file_contents "dump.out"]" 2
 	return
@@ -28,7 +28,7 @@ proc run_elf_list_test { name suffix opts readelf_opts readelf_pipe } {
 	return
     }
     verbose_eval {[file_contents "dump.out"]} 3
-    if { [regexp_diff "dump.out" "${file}.e${suffix}"] } then {
+    if { [regexp_diff "dump.out" "${file}.e${suffix}" ""] } then {
 	fail $testname
 	verbose "output is [file_contents "dump.out"]" 2
 	return
@@ -39,7 +39,6 @@ proc run_elf_list_test { name suffix opts readelf_opts readelf_pipe } {
 # We're testing bits in obj-elf -- don't run on anything else.
 if { ([istarget "*-*-*elf*"]
       || [istarget "*-*-linux*"]
-      || [istarget "*-*-gnu*"]
       || [istarget "m6811-*"]
       || [istarget "m6812-*"]
       || [istarget "sparc*-*-solaris*"]
@@ -105,16 +104,10 @@ if { ([istarget "*-*-*elf*"]
     }
     run_dump_test "group0a"
     run_dump_test "group0b"
-    run_dump_test "group0c"
     run_dump_test "group1a"
     run_dump_test "group1b"
     run_dump_test "groupautoa"
-    case $target_triplet in {
-	{ xtensa*-*-* } { }
-	default {
-	    run_dump_test "groupautob"
-	}
-    }
+    run_dump_test "groupautob"
     case $target_triplet in {
 	{ alpha*-*-* } { }
 	{ cr16*-*-* } { }
@@ -146,11 +139,9 @@ if { ([istarget "*-*-*elf*"]
     }
     run_dump_test "section3"
     run_dump_test "section4"
-    if {! [istarget "h8300-*-*"] && ! [istarget "rx-*-*"]} then {
+    if {! [istarget "h8300-*-*"]} then {
 	# The h8300 port issues a warning message for
 	# new sections created without atrributes.
-	# The RX port does not complain about changing the attributes of the
-	# .data and .bss sections since it does not use those names.
 	run_elf_list_test "section5" "" "-al" "-SW" "| grep \" \\\\.test\\\[0-9\\\]\""
     }
     run_dump_test "struct"
@@ -176,11 +167,8 @@ if { ([istarget "*-*-*elf*"]
     run_dump_test "section6"
     run_dump_test "section7"
     run_dump_test "section8"
-    run_dump_test "section9"
     run_dump_test "dwarf2-1"
     run_dump_test "dwarf2-2"
     run_dump_test "dwarf2-3"
-    run_dump_test "dwarf2-4"
     run_dump_test "bad-section-flag"
-    run_dump_test "bad-size"
 }

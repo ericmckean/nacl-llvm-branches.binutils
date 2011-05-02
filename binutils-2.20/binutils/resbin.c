@@ -1867,7 +1867,6 @@ res_to_bin_stringtable (windres_bfd *wrbfd, rc_uint_type off,
       unichar *s;
 
       slen = (rc_uint_type) st->strings[i].length;
-      if (slen == 0xffffffff) slen = 0;
       s = st->strings[i].string;
 
       length = 2 + slen * 2;

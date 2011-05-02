@@ -1,11 +1,9 @@
 #readelf: -SW
-#name: automatic section group a
+#name: automatic section group
 #source: groupauto.s
-# The RX port uses non-standard section names.
-#not-target: rx-*
 
 #...
-[ 	]*\[.*\][ 	]+\.group[ 	]+GROUP.*
+[ 	]*\[.*\][ 	]+some_group[ 	]+GROUP.*
 #...
 [ 	]*\[.*\][ 	]+\.text[ 	]+PROGBITS.*[ 	]+AX[ 	]+.*
 #...

@@ -758,9 +758,9 @@ xcoff_set_import_path (struct bfd_link_info *info,
 	   *pp != NULL;
 	   pp = &(*pp)->next, ++c)
 	{
-	  if (filename_cmp ((*pp)->path, imppath) == 0
-	      && filename_cmp ((*pp)->file, impfile) == 0
-	      && filename_cmp ((*pp)->member, impmember) == 0)
+	  if (strcmp ((*pp)->path, imppath) == 0
+	      && strcmp ((*pp)->file, impfile) == 0
+	      && strcmp ((*pp)->member, impmember) == 0)
 	    break;
 	}
 
@@ -2233,8 +2233,7 @@ xcoff_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
 static bfd_boolean
 xcoff_link_check_dynamic_ar_symbols (bfd *abfd,
 				     struct bfd_link_info *info,
-				     bfd_boolean *pneeded,
-				     bfd **subsbfd)
+				     bfd_boolean *pneeded)
 {
   asection *lsec;
   bfd_byte *contents;
@@ -2292,8 +2291,7 @@ xcoff_link_check_dynamic_ar_symbols (bfd *abfd,
 	  && (((struct xcoff_link_hash_entry *) h)->flags
 	      & XCOFF_DEF_DYNAMIC) == 0)
 	{
-	  if (!(*info->callbacks
-		->add_archive_element) (info, abfd, name, subsbfd))
+	  if (! (*info->callbacks->add_archive_element) (info, abfd, name))
 	    return FALSE;
 	  *pneeded = TRUE;
 	  return TRUE;
@@ -2316,8 +2314,7 @@ xcoff_link_check_dynamic_ar_symbols (bfd *abfd,
 static bfd_boolean
 xcoff_link_check_ar_symbols (bfd *abfd,
 			     struct bfd_link_info *info,
-			     bfd_boolean *pneeded,
-			     bfd **subsbfd)
+			     bfd_boolean *pneeded)
 {
   bfd_size_type symesz;
   bfd_byte *esym;
@@ -2328,7 +2325,7 @@ xcoff_link_check_ar_symbols (bfd *abfd,
   if ((abfd->flags & DYNAMIC) != 0
       && ! info->static_link
       && info->output_bfd->xvec == abfd->xvec)
-    return xcoff_link_check_dynamic_ar_symbols (abfd, info, pneeded, subsbfd);
+    return xcoff_link_check_dynamic_ar_symbols (abfd, info, pneeded);
 
   symesz = bfd_coff_symesz (abfd);
   esym = (bfd_byte *) obj_coff_external_syms (abfd);
@@ -2364,8 +2361,7 @@ xcoff_link_check_ar_symbols (bfd *abfd,
 		  || (((struct xcoff_link_hash_entry *) h)->flags
 		      & XCOFF_DEF_DYNAMIC) == 0))
 	    {
-	      if (!(*info->callbacks
-		    ->add_archive_element) (info, abfd, name, subsbfd))
+	      if (! (*info->callbacks->add_archive_element) (info, abfd, name))
 		return FALSE;
 	      *pneeded = TRUE;
 	      return TRUE;
@@ -2390,30 +2386,17 @@ xcoff_link_check_archive_element (bfd *abfd,
 				  bfd_boolean *pneeded)
 {
   bfd_boolean keep_syms_p;
-  bfd *oldbfd;
 
   keep_syms_p = (obj_coff_external_syms (abfd) != NULL);
-  if (!_bfd_coff_get_external_symbols (abfd))
+  if (! _bfd_coff_get_external_symbols (abfd))
     return FALSE;
 
-  oldbfd = abfd;
-  if (!xcoff_link_check_ar_symbols (abfd, info, pneeded, &abfd))
+  if (! xcoff_link_check_ar_symbols (abfd, info, pneeded))
     return FALSE;
 
   if (*pneeded)
     {
-      /* Potentially, the add_archive_element hook may have set a
-	 substitute BFD for us.  */
-      if (abfd != oldbfd)
-	{
-	  if (!keep_syms_p
-	      && !_bfd_coff_free_symbols (oldbfd))
-	    return FALSE;
-	  keep_syms_p = (obj_coff_external_syms (abfd) != NULL);
-	  if (!_bfd_coff_get_external_symbols (abfd))
-	    return FALSE;
-	}
-      if (!xcoff_link_add_symbols (abfd, info))
+      if (! xcoff_link_add_symbols (abfd, info))
 	return FALSE;
       if (info->keep_memory)
 	keep_syms_p = TRUE;
@@ -2421,7 +2404,7 @@ xcoff_link_check_archive_element (bfd *abfd,
 
   if (!keep_syms_p)
     {
-      if (!_bfd_coff_free_symbols (abfd))
+      if (! _bfd_coff_free_symbols (abfd))
 	return FALSE;
     }
 

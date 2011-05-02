@@ -7,8 +7,6 @@ bignum.h
 bit_fix.h
 cgen.c
 cgen.h
-compress-debug.c
-compress-debug.h
 cond.c
 config/atof-ieee.c
 config/atof-vax.c

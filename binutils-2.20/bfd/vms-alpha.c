@@ -1709,7 +1709,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 #if VMS_DEBUG
       _bfd_vms_debug (4, "etir: %s(%d)\n",
                       _bfd_vms_etir_name (cmd), cmd);
-      _bfd_hexdump (8, ptr, cmd_length - 4, (intptr_t) ptr);
+      _bfd_hexdump (8, ptr, cmd_length - 4, (long) ptr);
 #endif
 
       switch (cmd)
@@ -8255,10 +8255,7 @@ alpha_vms_link_add_archive_symbols (bfd *abfd, struct bfd_link_info *info)
 	return FALSE;
 
       if (element->archive_pass == -1 || element->archive_pass == pass)
-        {
-          /* Next symbol if this archive is wrong or already handled.  */
-          continue;
-        }
+        continue;
 
       if (! bfd_check_format (element, bfd_object))
         {
@@ -8280,10 +8277,10 @@ alpha_vms_link_add_archive_symbols (bfd *abfd, struct bfd_link_info *info)
       /* Unlike the generic linker, we know that this element provides
 	 a definition for an undefined symbol and we know that we want
 	 to include it.  We don't need to check anything.  */
-      if (!(*info->callbacks
-	    ->add_archive_element) (info, element, h->root.string, &element))
+      if (! (*info->callbacks->add_archive_element) (info, element,
+                                                     h->root.string))
 	return FALSE;
-      if (!alpha_vms_link_add_object_symbols (element, info))
+      if (! alpha_vms_link_add_object_symbols (element, info))
 	return FALSE;
 
       orig_element->archive_pass = pass;

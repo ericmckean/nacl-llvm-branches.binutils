@@ -90,7 +90,6 @@
                         on a line.  */
 
 #include "as.h"
-#include "filenames.h"
 #include "obstack.h"
 #include "safe-ctype.h"
 #include "input-file.h"
@@ -258,7 +257,7 @@ file_info (const char *file_name)
 
   while (p != (file_info_type *) NULL)
     {
-      if (filename_cmp (p->filename, file_name) == 0)
+      if (strcmp (p->filename, file_name) == 0)
 	return p;
       p = p->next;
     }
@@ -319,7 +318,7 @@ listing_newline (char *ps)
   if (ps == NULL)
     {
       if (line == last_line
-	  && !(last_file && file && filename_cmp (file, last_file)))
+	  && !(last_file && file && strcmp (file, last_file)))
 	return;
 
       new_i = (list_info_type *) xmalloc (sizeof (list_info_type));

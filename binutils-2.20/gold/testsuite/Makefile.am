@@ -70,25 +70,12 @@ LDADD = libgoldtest.a ../libgold.a ../../libiberty/libiberty.a $(LIBINTL) \
 
 
 # The unittests themselves
-if NATIVE_OR_CROSS_LINKER
-if GCC
-
-# Infrastucture needed for the unittests: a directory where the linker
-# is named 'ld'.  This is because the -B flag appends 'ld' to its arg.
-gcctestdir/ld: ../ld-new
-	test -d gcctestdir || mkdir -p gcctestdir
-	rm -f gcctestdir/ld
-	(cd gcctestdir && $(LN_S) ../../ld-new ld)
-
-endif GCC
-
 check_PROGRAMS += object_unittest
 object_unittest_SOURCES = object_unittest.cc
 
 check_PROGRAMS += binary_unittest
 binary_unittest_SOURCES = binary_unittest.cc
 
-endif NATIVE_OR_CROSS_LINKER
 
 # ---------------------------------------------------------------------
 # These tests test the output of gold (end-to-end tests).  In
@@ -101,6 +88,13 @@ endif NATIVE_OR_CROSS_LINKER
 
 if NATIVE_LINKER
 if GCC
+
+# Infrastucture needed for the unittests: a directory where the linker
+# is named 'ld'.  This is because the -B flag appends 'ld' to its arg.
+gcctestdir/ld: ../ld-new
+	test -d gcctestdir || mkdir -p gcctestdir
+	rm -f gcctestdir/ld
+	(cd gcctestdir && $(LN_S) ../../ld-new ld)
 
 # Each of these .o's is a useful, small complete program.  They're
 # particularly useful for making sure ld-new's flags do what they're
@@ -119,7 +113,7 @@ incremental_test_1.o: incremental_test_1.c
 incremental_test_2.o: incremental_test_2.c
 	$(COMPILE) -O0 -c -ffunction-sections -g -o $@ $<
 incremental_test: incremental_test_1.o incremental_test_2.o gcctestdir/ld
-	$(LINK) -Bgcctestdir/ -Wl,--incremental-full incremental_test_1.o incremental_test_2.o -Wl,-debug 2> incremental_test.cmdline
+	$(LINK) -Bgcctestdir/ -Wl,-incremental incremental_test_1.o incremental_test_2.o -Wl,-debug 2> incremental_test.cmdline
 incremental_test.stdout: incremental_test ../incremental-dump
 	../incremental-dump incremental_test > $@
 
@@ -849,10 +843,8 @@ debug_msg.o: debug_msg.cc
 	$(CXXCOMPILE) -O0 -g -c -w -o $@ $(srcdir)/debug_msg.cc
 odr_violation1.o: odr_violation1.cc
 	$(CXXCOMPILE) -O0 -g -c -w -o $@ $(srcdir)/odr_violation1.cc
-# Compile with different optimization flags to check that rearranged
-# instructions don't cause a false positive.
 odr_violation2.o: odr_violation2.cc
-	$(CXXCOMPILE) -O2 -g -c -w -o $@ $(srcdir)/odr_violation2.cc
+	$(CXXCOMPILE) -O0 -g -c -w -o $@ $(srcdir)/odr_violation2.cc
 debug_msg.err: debug_msg.o odr_violation1.o odr_violation2.o gcctestdir/ld
 	@echo $(CXXLINK) -Bgcctestdir/ -Wl,--detect-odr-violations -o debug_msg debug_msg.o odr_violation1.o odr_violation2.o "2>$@"
 	@if $(CXXLINK) -Bgcctestdir/ -Wl,--detect-odr-violations -o debug_msg debug_msg.o odr_violation1.o odr_violation2.o 2>$@; \
@@ -870,7 +862,7 @@ debug_msg.so: debug_msg.cc gcctestdir/ld
 odr_violation1.so: odr_violation1.cc gcctestdir/ld
 	$(CXXCOMPILE) -Bgcctestdir/ -O0 -g -shared -fPIC -w -o $@ $(srcdir)/odr_violation1.cc
 odr_violation2.so: odr_violation2.cc gcctestdir/ld
-	$(CXXCOMPILE) -Bgcctestdir/ -O2 -g -shared -fPIC -w -o $@ $(srcdir)/odr_violation2.cc
+	$(CXXCOMPILE) -Bgcctestdir/ -O0 -g -shared -fPIC -w -o $@ $(srcdir)/odr_violation2.cc
 debug_msg_so.err: debug_msg.so odr_violation1.so odr_violation2.so gcctestdir/ld
 	@echo $(CXXLINK) -Bgcctestdir/ -Wl,--detect-odr-violations -o debug_msg_so debug_msg.so odr_violation1.so odr_violation2.so "2>$@"
 	@if $(CXXLINK) -Bgcctestdir/ -Wl,--detect-odr-violations -o debug_msg_so debug_msg.so odr_violation1.so odr_violation2.so 2>$@; \
@@ -889,7 +881,7 @@ debug_msg_ndebug.so: debug_msg.cc gcctestdir/ld
 odr_violation1_ndebug.so: odr_violation1.cc gcctestdir/ld
 	$(CXXCOMPILE) -Bgcctestdir/ -O0 -g0 -shared -fPIC -w -o $@ $(srcdir)/odr_violation1.cc
 odr_violation2_ndebug.so: odr_violation2.cc gcctestdir/ld
-	$(CXXCOMPILE) -Bgcctestdir/ -O2 -g0 -shared -fPIC -w -o $@ $(srcdir)/odr_violation2.cc
+	$(CXXCOMPILE) -Bgcctestdir/ -O0 -g0 -shared -fPIC -w -o $@ $(srcdir)/odr_violation2.cc
 debug_msg_ndebug.err: debug_msg_ndebug.so odr_violation1_ndebug.so odr_violation2_ndebug.so gcctestdir/ld
 	@echo $(CXXLINK) -Bgcctestdir/ -Wl,--detect-odr-violations -o debug_msg_ndebug debug_msg_ndebug.so odr_violation1_ndebug.so odr_violation2_ndebug.so "2>$@"
 	@if $(CXXLINK) -Bgcctestdir/ -Wl,--detect-odr-violations -o debug_msg_ndebug debug_msg_ndebug.so odr_violation1_ndebug.so odr_violation2_ndebug.so 2>$@; \
@@ -1082,8 +1074,6 @@ protected_3.err: protected_4_pic.o gcctestdir/ld
 	fi
 
 check_PROGRAMS += relro_test
-check_SCRIPTS += relro_test.sh
-check_DATA += relro_test.stdout
 relro_test_SOURCES = relro_test_main.cc
 relro_test_DEPENDENCIES = gcctestdir/ld relro_test.so
 relro_test_LDFLAGS = -Bgcctestdir/ -Wl,-R,.
@@ -1092,8 +1082,6 @@ relro_test.so: gcctestdir/ld relro_test_pic.o
 	$(CXXLINK) -Bgcctestdir/ -shared -Wl,-z,relro relro_test_pic.o
 relro_test_pic.o: relro_test.cc
 	$(CXXCOMPILE) -c -fpic -o $@ $<
-relro_test.stdout: relro_test.so
-	$(TEST_READELF) -SlW relro_test.so > relro_test.stdout
 
 check_PROGRAMS += relro_strip_test
 relro_strip_test_SOURCES = relro_test_main.cc
@@ -1148,10 +1136,8 @@ binary.txt: $(srcdir)/binary.in
 check_SCRIPTS += ver_matching_test.sh
 check_DATA += ver_matching_test.stdout
 MOSTLYCLEANFILES += ver_matching_test.stdout
-ver_matching_def.so: ver_matching_def_pic.o $(srcdir)/version_script.map gcctestdir/ld
-	$(CXXLINK) -O0 -Bgcctestdir/ -shared ver_matching_def_pic.o -Wl,--version-script=$(srcdir)/version_script.map
-ver_matching_def_pic.o: ver_matching_def.cc
-	$(CXXCOMPILE) -O0 -c -fpic -o $@ $<
+ver_matching_def.so: ver_matching_def.cc $(srcdir)/version_script.map gcctestdir/ld
+	$(CXXLINK) -O0 -Bgcctestdir/ -shared $(srcdir)/ver_matching_def.cc -Wl,--version-script=$(srcdir)/version_script.map
 ver_matching_test.stdout: ver_matching_def.so
 	$(TEST_OBJDUMP) -T ver_matching_def.so | $(TEST_CXXFILT) > ver_matching_test.stdout
 
@@ -1625,7 +1611,6 @@ check_PROGRAMS += ifuncmain2static
 ifuncmain2static_SOURCES = ifuncmain2.c ifuncdep2.c
 ifuncmain2static_DEPENDENCIES = gcctestdir/ld
 ifuncmain2static_LDFLAGS = -Bgcctestdir/ -static
-ifuncmain2static_LDADD =
 
 check_PROGRAMS += ifuncmain2picstatic
 ifuncmain2picstatic: ifuncmain2pic.o ifuncdep2pic.o gcctestdir/ld
@@ -1635,7 +1620,6 @@ check_PROGRAMS += ifuncmain2
 ifuncmain2_SOURCES = ifuncmain2.c ifuncdep2.c
 ifuncmain2_DEPENDENCIES = gcctestdir/ld
 ifuncmain2_LDFLAGS = -Bgcctestdir/
-ifuncmain2_LDADD =
 
 check_PROGRAMS += ifuncmain2pic
 ifuncmain2pic: ifuncmain2pic.o ifuncdep2pic.o gcctestdir/ld
@@ -1659,7 +1643,6 @@ check_PROGRAMS += ifuncmain4static
 ifuncmain4static_SOURCES = ifuncmain4.c
 ifuncmain4static_DEPENDENCIES = gcctestdir/ld
 ifuncmain4static_LDFLAGS = -Bgcctestdir/ -static
-ifuncmain4static_LDADD =
 
 check_PROGRAMS += ifuncmain4picstatic
 ifuncmain4picstatic: ifuncmain4pic.o gcctestdir/ld
@@ -1669,7 +1652,6 @@ check_PROGRAMS += ifuncmain4
 ifuncmain4_SOURCES = ifuncmain4.c
 ifuncmain4_DEPENDENCIES = gcctestdir/ld
 ifuncmain4_LDFLAGS = -Bgcctestdir/
-ifuncmain4_LDADD =
 
 ifuncmain5pic.o: ifuncmain5.c
 	$(COMPILE) -c -fpic -o $@ $<
@@ -1735,7 +1717,6 @@ check_PROGRAMS += ifuncmain7static
 ifuncmain7static_SOURCES = ifuncmain7.c
 ifuncmain7static_DEPENDENCIES = gcctestdir/ld
 ifuncmain7static_LDFLAGS = -Bgcctestdir/ -static
-ifuncmain7static_LDADD =
 
 check_PROGRAMS += ifuncmain7picstatic
 ifuncmain7picstatic: ifuncmain7pic.o gcctestdir/ld
@@ -1745,7 +1726,6 @@ check_PROGRAMS += ifuncmain7
 ifuncmain7_SOURCES = ifuncmain7.c
 ifuncmain7_DEPENDENCIES = gcctestdir/ld
 ifuncmain7_LDFLAGS = -Bgcctestdir/
-ifuncmain7_LDADD =
 
 check_PROGRAMS += ifuncmain7pic
 ifuncmain7pic: ifuncmain7pic.o gcctestdir/ld
@@ -1818,21 +1798,7 @@ memory_test.stdout: memory_test
 endif GCC
 endif NATIVE_LINKER
 
-# These tests work with native and cross linkers.
-
-if NATIVE_OR_CROSS_LINKER
-
-# Test script section order.
-check_SCRIPTS += script_test_10.sh
-check_DATA += script_test_10.stdout
-script_test_10.o: script_test_10.s
-	$(TEST_AS) -o $@ $<
-script_test_10: $(srcdir)/script_test_10.t script_test_10.o gcctestdir/ld
-	gcctestdir/ld -o $@ script_test_10.o -T $(srcdir)/script_test_10.t
-script_test_10.stdout: script_test_10
-	$(TEST_READELF) -SW script_test_10 > $@
-
-# These tests work with cross linkers only.
+# These tests work with cross linkers.
 
 if DEFAULT_TARGET_I386
 
@@ -2165,6 +2131,3 @@ MOSTLYCLEANFILES += arm_cortex_a8_b_cond arm_cortex_a8_b arm_cortex_a8_bl \
 	arm_cortex_a8_blx arm_cortex_a8_local arm_cortex_a8_local_reloc
 
 endif DEFAULT_TARGET_ARM
-
-endif NATIVE_OR_CROSS_LINKER
-

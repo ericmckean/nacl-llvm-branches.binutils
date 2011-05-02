@@ -62,7 +62,7 @@ gld${EMULATION_NAME}_open_dynamic_archive
 {
   char *string;
 
-  if (! entry->maybe_archive)
+  if (! entry->is_archive)
     return FALSE;
 
   string = (char *) xmalloc (strlen (search->name)

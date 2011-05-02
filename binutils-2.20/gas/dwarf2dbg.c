@@ -431,14 +431,14 @@ get_filenum (const char *filename, unsigned int num)
   if (num == 0 && last_used)
     {
       if (! files[last_used].dir
-	  && filename_cmp (filename, files[last_used].filename) == 0)
+	  && strcmp (filename, files[last_used].filename) == 0)
 	return last_used;
       if (files[last_used].dir
-	  && filename_ncmp (filename, dirs[files[last_used].dir],
-			    last_used_dir_len) == 0
+	  && strncmp (filename, dirs[files[last_used].dir],
+		      last_used_dir_len) == 0
 	  && IS_DIR_SEPARATOR (filename [last_used_dir_len])
-	  && filename_cmp (filename + last_used_dir_len + 1,
-			   files[last_used].filename) == 0)
+	  && strcmp (filename + last_used_dir_len + 1,
+		     files[last_used].filename) == 0)
 	return last_used;
     }
 
@@ -460,7 +460,7 @@ get_filenum (const char *filename, unsigned int num)
       --dir_len;
 #endif
       for (dir = 1; dir < dirs_in_use; ++dir)
-	if (filename_ncmp (filename, dirs[dir], dir_len) == 0
+	if (strncmp (filename, dirs[dir], dir_len) == 0
 	    && dirs[dir][dir_len] == '\0')
 	  break;
 
@@ -485,7 +485,7 @@ get_filenum (const char *filename, unsigned int num)
       for (i = 1; i < files_in_use; ++i)
 	if (files[i].dir == dir
 	    && files[i].filename
-	    && filename_cmp (file, files[i].filename) == 0)
+	    && strcmp (file, files[i].filename) == 0)
 	  {
 	    last_used = i;
 	    last_used_dir_len = dir_len;
@@ -1080,7 +1080,7 @@ emit_fixed_inc_line_addr (int line_delta, addressT addr_delta, fragS *frag,
       symbolS *to_sym;
       expressionS exp;
 
-      gas_assert (pexp->X_op == O_subtract);
+      gas_assert (pexp->X_op = O_subtract);
       to_sym = pexp->X_add_symbol;
 
       *p++ = DW_LNS_extended_op;

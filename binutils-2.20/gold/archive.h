@@ -1,6 +1,6 @@
 // archive.h -- archive support for gold      -*- C++ -*-
 
-// Copyright 2006, 2007, 2008, 2010, 2011 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -151,10 +151,6 @@ class Archive
   // link.
   bool
   add_symbols(Symbol_table*, Layout*, Input_objects*, Mapfile*);
-
-  // Return whether the archive defines the symbol.
-  bool
-  defines_symbol(Symbol*) const;
 
   // Dump statistical information to stderr.
   static void
@@ -449,7 +445,7 @@ class Add_archive_symbols : public Task
   Task_token* next_blocker_;
 };
 
-// This class represents the files surrounded by a --start-lib ... --end-lib.
+// This class represents the files surrunded by a --start-lib ... --end-lib.
 
 class Lib_group
 {

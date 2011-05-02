@@ -1,6 +1,6 @@
 // layout.cc -- lay out output file sections for gold
 
-// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -218,7 +218,7 @@ Layout::Layout(int number_of_input_files, Script_options* script_options)
   this->special_output_list_.reserve(2);
 
   // Initialize structure needed for an incremental build.
-  if (parameters->incremental())
+  if (parameters->options().incremental())
     this->incremental_inputs_ = new Incremental_inputs;
 
   // The section name pool is worth optimizing in all cases, because
@@ -286,30 +286,6 @@ is_lines_only_debug_section(const char* str)
     if (strcmp(str, lines_only_debug_sections[i]) == 0)
       return true;
   return false;
-}
-
-// Sometimes we compress sections.  This is typically done for
-// sections that are not part of normal program execution (such as
-// .debug_* sections), and where the readers of these sections know
-// how to deal with compressed sections.  This routine doesn't say for
-// certain whether we'll compress -- it depends on commandline options
-// as well -- just whether this section is a candidate for compression.
-// (The Output_compressed_section class decides whether to compress
-// a given section, and picks the name of the compressed section.)
-
-static bool
-is_compressible_debug_section(const char* secname)
-{
-  return (is_prefix_of(".debug", secname));
-}
-
-// We may see compressed debug sections in input files.  Return TRUE
-// if this is the name of a compressed debug section.
-
-bool
-is_compressed_debug_section(const char* secname)
-{
-  return (is_prefix_of(".zdebug", secname));
 }
 
 // Whether to include this section in the link.
@@ -513,14 +489,10 @@ Layout::choose_output_section(const Relobj* relobj, const char* name,
   // Some flags in the input section should not be automatically
   // copied to the output section.
   flags &= ~ (elfcpp::SHF_INFO_LINK
+	      | elfcpp::SHF_LINK_ORDER
 	      | elfcpp::SHF_GROUP
 	      | elfcpp::SHF_MERGE
 	      | elfcpp::SHF_STRINGS);
-
-  // We only clear the SHF_LINK_ORDER flag in for
-  // a non-relocatable link.
-  if (!parameters->options().relocatable())
-    flags &= ~elfcpp::SHF_LINK_ORDER;
 
   if (this->script_options_->saw_sections_clause())
     {
@@ -605,24 +577,10 @@ Layout::choose_output_section(const Relobj* relobj, const char* name,
 
   // FIXME: Handle SHF_OS_NONCONFORMING somewhere.
 
-  size_t len = strlen(name);
-  char* uncompressed_name = NULL;
-
-  // Compressed debug sections should be mapped to the corresponding
-  // uncompressed section.
-  if (is_compressed_debug_section(name))
-    {
-      uncompressed_name = new char[len];
-      uncompressed_name[0] = '.';
-      gold_assert(name[0] == '.' && name[1] == 'z');
-      strncpy(&uncompressed_name[1], &name[2], len - 2);
-      uncompressed_name[len - 1] = '\0';
-      len -= 1;
-      name = uncompressed_name;
-    }
-
   // Turn NAME from the name of the input section into the name of the
   // output section.
+
+  size_t len = strlen(name);
   if (is_input_section
       && !this->script_options_->saw_sections_clause()
       && !parameters->options().relocatable())
@@ -630,9 +588,6 @@ Layout::choose_output_section(const Relobj* relobj, const char* name,
 
   Stringpool::Key name_key;
   name = this->namepool_.add_with_length(name, len, true, &name_key);
-
-  if (uncompressed_name != NULL)
-    delete[] uncompressed_name;
 
   // Find or make the output section.  The output section is selected
   // based on the section name, type, and flags.
@@ -912,10 +867,6 @@ Layout::layout_eh_frame(Sized_relobj<size, big_endian>* object,
     {
       os->update_flags_for_input_section(shdr.get_sh_flags());
 
-      // A writable .eh_frame section is a RELRO section.
-      if ((shdr.get_sh_flags() & elfcpp::SHF_WRITE) != 0)
-	os->set_is_relro();
-
       // We found a .eh_frame section we are going to optimize, so now
       // we can add the set of optimized sections to the output
       // section.  We need to postpone adding this until we've found a
@@ -968,6 +919,30 @@ Layout::section_flags_to_segment(elfcpp::Elf_Xword flags)
   if ((flags & elfcpp::SHF_EXECINSTR) != 0)
     ret |= elfcpp::PF_X;
   return ret;
+}
+
+// Sometimes we compress sections.  This is typically done for
+// sections that are not part of normal program execution (such as
+// .debug_* sections), and where the readers of these sections know
+// how to deal with compressed sections.  This routine doesn't say for
+// certain whether we'll compress -- it depends on commandline options
+// as well -- just whether this section is a candidate for compression.
+// (The Output_compressed_section class decides whether to compress
+// a given section, and picks the name of the compressed section.)
+
+static bool
+is_compressible_debug_section(const char* secname)
+{
+  return (is_prefix_of(".debug", secname));
+}
+
+// We may see compressed debug sections in input files.  Return TRUE
+// if this is the name of a compressed debug section.
+
+bool
+is_compressed_debug_section(const char* secname)
+{
+  return (is_prefix_of(".zdebug", secname));
 }
 
 // Make a new Output_section, and attach it to segments as
@@ -1348,29 +1323,15 @@ Layout::expected_segment_count() const
 // object.  On some targets that will force an executable stack.
 
 void
-Layout::layout_gnu_stack(bool seen_gnu_stack, uint64_t gnu_stack_flags,
-			 const Object* obj)
+Layout::layout_gnu_stack(bool seen_gnu_stack, uint64_t gnu_stack_flags)
 {
   if (!seen_gnu_stack)
-    {
-      this->input_without_gnu_stack_note_ = true;
-      if (parameters->options().warn_execstack()
-	  && parameters->target().is_default_stack_executable())
-	gold_warning(_("%s: missing .note.GNU-stack section"
-		       " implies executable stack"),
-		     obj->name().c_str());
-    }
+    this->input_without_gnu_stack_note_ = true;
   else
     {
       this->input_with_gnu_stack_note_ = true;
       if ((gnu_stack_flags & elfcpp::SHF_EXECINSTR) != 0)
-	{
-	  this->input_requires_executable_stack_ = true;
-	  if (parameters->options().warn_execstack()
-	      || parameters->options().is_stack_executable())
-	    gold_warning(_("%s: requires executable stack"),
-			 obj->name().c_str());
-	}
+	this->input_requires_executable_stack_ = true;
     }
 }
 
@@ -1978,7 +1939,7 @@ Layout::finalize(const Input_objects* input_objects, Symbol_table* symtab,
       pass++;
     }
   while (target->may_relax()
-	 && target->relax(pass, input_objects, symtab, this, task));
+	 && target->relax(pass, input_objects, symtab, this));
 
   // Set the file offsets of all the non-data sections we've seen so
   // far which don't have to wait for the input sections.  We need
@@ -2695,21 +2656,17 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
 	    }
 
 	  unsigned int shndx_hold = *pshndx;
-	  bool has_relro = false;
 	  uint64_t new_addr = (*p)->set_section_addresses(this, false, addr,
-							  &increase_relro,
-							  &has_relro,
+							  increase_relro,
                                                           &off, pshndx);
 
 	  // Now that we know the size of this segment, we may be able
 	  // to save a page in memory, at the cost of wasting some
 	  // file space, by instead aligning to the start of a new
 	  // page.  Here we use the real machine page size rather than
-	  // the ABI mandated page size.  If the segment has been
-	  // aligned so that the relro data ends at a page boundary,
-	  // we do not try to realign it.
+	  // the ABI mandated page size.
 
-	  if (!are_addresses_set && !has_relro && aligned_addr != addr)
+	  if (!are_addresses_set && aligned_addr != addr)
 	    {
 	      uint64_t first_off = (common_pagesize
 				    - (aligned_addr
@@ -2726,15 +2683,8 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
 		  addr = align_address(addr, (*p)->maximum_alignment());
 		  off = orig_off + ((addr - orig_addr) & (abi_pagesize - 1));
 		  off = align_file_offset(off, addr, abi_pagesize);
-
-		  increase_relro = this->increase_relro_;
-		  if (this->script_options_->saw_sections_clause())
-		    increase_relro = 0;
-		  has_relro = false;
-
 		  new_addr = (*p)->set_section_addresses(this, true, addr,
-							 &increase_relro,
-							 &has_relro,
+							 increase_relro,
                                                          &off, pshndx);
 		}
 	    }
@@ -3963,6 +3913,20 @@ Layout::output_section_name(const char* name, size_t* plen)
 	  *plen = psnm->tolen;
 	  return psnm->to;
 	}
+    }
+
+  // Compressed debug sections should be mapped to the corresponding
+  // uncompressed section.
+  if (is_compressed_debug_section(name))
+    {
+      size_t len = strlen(name);
+      char* uncompressed_name = new char[len];
+      uncompressed_name[0] = '.';
+      gold_assert(name[0] == '.' && name[1] == 'z');
+      strncpy(&uncompressed_name[1], &name[2], len - 2);
+      uncompressed_name[len - 1] = '\0';
+      *plen = len - 1;
+      return uncompressed_name;
     }
 
   return name;

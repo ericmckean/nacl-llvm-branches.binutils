@@ -1,6 +1,6 @@
 /* hash.c -- hash table routines for BFD
    Copyright 1993, 1994, 1995, 1997, 1999, 2001, 2002, 2003, 2004, 2005,
-   2006, 2007, 2009, 2010 Free Software Foundation, Inc.
+   2006, 2007, 2009 Free Software Foundation, Inc.
    Written by Steve Chamberlain <sac@cygnus.com>
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -412,13 +412,20 @@ bfd_hash_table_free (struct bfd_hash_table *table)
   table->memory = NULL;
 }
 
-static inline unsigned long
-bfd_hash_hash (const char *string, unsigned int *lenp)
+/* Look up a string in a hash table.  */
+
+struct bfd_hash_entry *
+bfd_hash_lookup (struct bfd_hash_table *table,
+		 const char *string,
+		 bfd_boolean create,
+		 bfd_boolean copy)
 {
   const unsigned char *s;
   unsigned long hash;
-  unsigned int len;
   unsigned int c;
+  struct bfd_hash_entry *hashp;
+  unsigned int len;
+  unsigned int _index;
 
   hash = 0;
   len = 0;
@@ -431,25 +438,7 @@ bfd_hash_hash (const char *string, unsigned int *lenp)
   len = (s - (const unsigned char *) string) - 1;
   hash += len + (len << 17);
   hash ^= hash >> 2;
-  if (lenp != NULL)
-    *lenp = len;
-  return hash;
-}
 
-/* Look up a string in a hash table.  */
-
-struct bfd_hash_entry *
-bfd_hash_lookup (struct bfd_hash_table *table,
-		 const char *string,
-		 bfd_boolean create,
-		 bfd_boolean copy)
-{
-  unsigned long hash;
-  struct bfd_hash_entry *hashp;
-  unsigned int len;
-  unsigned int _index;
-
-  hash = bfd_hash_hash (string, &len);
   _index = hash % table->size;
   for (hashp = table->table[_index];
        hashp != NULL;
@@ -544,31 +533,6 @@ bfd_hash_insert (struct bfd_hash_table *table,
     }
 
   return hashp;
-}
-
-/* Rename an entry in a hash table.  */
-
-void
-bfd_hash_rename (struct bfd_hash_table *table,
-		 const char *string,
-		 struct bfd_hash_entry *ent)
-{
-  unsigned int _index;
-  struct bfd_hash_entry **pph;
-
-  _index = ent->hash % table->size;
-  for (pph = &table->table[_index]; *pph != NULL; pph = &(*pph)->next)
-    if (*pph == ent)
-      break;
-  if (*pph == NULL)
-    abort ();
-
-  *pph = ent->next;
-  ent->string = string;
-  ent->hash = bfd_hash_hash (string, NULL);
-  _index = ent->hash % table->size;
-  ent->next = table->table[_index];
-  table->table[_index] = ent;
 }
 
 /* Replace an entry in a hash table.  */

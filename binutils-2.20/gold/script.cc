@@ -1050,20 +1050,6 @@ Script_options::Script_options()
 {
 }
 
-// Returns true if NAME is on the list of symbol assignments waiting
-// to be processed.
-
-bool
-Script_options::is_pending_assignment(const char* name)
-{
-  for (Symbol_assignments::iterator p = this->symbol_assignments_.begin();
-       p != this->symbol_assignments_.end();
-       ++p)
-    if ((*p)->name() == name)
-      return true;
-  return false;
-}
-
 // Add a symbol to be defined.
 
 void
@@ -2576,8 +2562,12 @@ yyerror(void* closurev, const char* message)
 extern "C" void
 script_add_extern(void* closurev, const char* name, size_t length)
 {
-  Parser_closure* closure = static_cast<Parser_closure*>(closurev);
-  closure->script_options()->add_symbol_reference(name, length);
+  // We treat exactly like -u NAME.  FIXME: If it seems useful, we
+  // could handle this after the command line has been read, by adding
+  // entries to the symbol table directly.
+  std::string arg("--undefined=");
+  arg.append(name, length);
+  script_parse_option(closurev, arg.c_str(), arg.size());
 }
 
 // Called by the bison parser to add a file to the link.

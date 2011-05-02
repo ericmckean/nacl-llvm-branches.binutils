@@ -2545,8 +2545,7 @@ aout_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
 static bfd_boolean
 aout_link_check_ar_symbols (bfd *abfd,
 			    struct bfd_link_info *info,
-			    bfd_boolean *pneeded,
-			    bfd **subsbfd)
+			    bfd_boolean *pneeded)
 {
   struct external_nlist *p;
   struct external_nlist *pend;
@@ -2601,8 +2600,7 @@ aout_link_check_ar_symbols (bfd *abfd,
 	     but not if it is defined in the .text section.  That
 	     seems a bit crazy to me, and I haven't implemented it.
 	     However, it might be correct.  */
-	  if (!(*info->callbacks
-		->add_archive_element) (info, abfd, name, subsbfd))
+	  if (! (*info->callbacks->add_archive_element) (info, abfd, name))
 	    return FALSE;
 	  *pneeded = TRUE;
 	  return TRUE;
@@ -2629,8 +2627,8 @@ aout_link_check_ar_symbols (bfd *abfd,
 			 outside BFD.  We assume that we should link
 			 in the object file.  This is done for the -u
 			 option in the linker.  */
-		      if (!(*info->callbacks
-			    ->add_archive_element) (info, abfd, name, subsbfd))
+		      if (! (*info->callbacks->add_archive_element)
+			  (info, abfd, name))
 			return FALSE;
 		      *pneeded = TRUE;
 		      return TRUE;
@@ -2682,36 +2680,21 @@ aout_link_check_archive_element (bfd *abfd,
 				 struct bfd_link_info *info,
 				 bfd_boolean *pneeded)
 {
-  bfd *oldbfd;
-  bfd_boolean needed;
-
-  if (!aout_get_external_symbols (abfd))
+  if (! aout_get_external_symbols (abfd))
     return FALSE;
 
-  oldbfd = abfd;
-  if (!aout_link_check_ar_symbols (abfd, info, pneeded, &abfd))
+  if (! aout_link_check_ar_symbols (abfd, info, pneeded))
     return FALSE;
 
-  needed = *pneeded;
-  if (needed)
+  if (*pneeded)
     {
-      /* Potentially, the add_archive_element hook may have set a
-	 substitute BFD for us.  */
-      if (abfd != oldbfd)
-	{
-	  if (!info->keep_memory
-	      && !aout_link_free_symbols (oldbfd))
-	    return FALSE;
-	  if (!aout_get_external_symbols (abfd))
-	    return FALSE;
-	}
-      if (!aout_link_add_symbols (abfd, info))
+      if (! aout_link_add_symbols (abfd, info))
 	return FALSE;
     }
 
-  if (!info->keep_memory || !needed)
+  if (! info->keep_memory || ! *pneeded)
     {
-      if (!aout_link_free_symbols (abfd))
+      if (! aout_link_free_symbols (abfd))
 	return FALSE;
     }
 
@@ -2786,9 +2769,7 @@ aout_link_add_symbols (bfd *abfd, struct bfd_link_info *info)
       switch (type)
 	{
 	default:
-	  /* Anything else should be a debugging symbol.  */
-	  BFD_ASSERT ((type & N_STAB) != 0);
-	  continue;
+	  abort ();
 
 	case N_UNDF:
 	case N_ABS:

@@ -19,94 +19,15 @@
    Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
    MA 02110-1301, USA.  */
 
-typedef unsigned HOST_WIDEST_INT dwarf_vma;
-typedef unsigned HOST_WIDEST_INT dwarf_size_type;
-
-/* Structure found in the .debug_line section.  */
-typedef struct
-{
-  unsigned char li_length          [4];
-  unsigned char li_version         [2];
-  unsigned char li_prologue_length [4];
-  unsigned char li_min_insn_length [1];
-  unsigned char li_default_is_stmt [1];
-  unsigned char li_line_base       [1];
-  unsigned char li_line_range      [1];
-  unsigned char li_opcode_base     [1];
-}
-DWARF2_External_LineInfo;
-
-typedef struct
-{
-  bfd_vma	 li_length;
-  unsigned short li_version;
-  unsigned int   li_prologue_length;
-  unsigned char  li_min_insn_length;
-  unsigned char  li_max_ops_per_insn;
-  unsigned char  li_default_is_stmt;
-  int            li_line_base;
-  unsigned char  li_line_range;
-  unsigned char  li_opcode_base;
-}
-DWARF2_Internal_LineInfo;
-
-/* Structure found in .debug_pubnames section.  */
-typedef struct
-{
-  unsigned char pn_length  [4];
-  unsigned char pn_version [2];
-  unsigned char pn_offset  [4];
-  unsigned char pn_size    [4];
-}
-DWARF2_External_PubNames;
-
-typedef struct
-{
-  bfd_vma	 pn_length;
-  unsigned short pn_version;
-  bfd_vma	 pn_offset;
-  bfd_vma	 pn_size;
-}
-DWARF2_Internal_PubNames;
-
-/* Structure found in .debug_info section.  */
-typedef struct
-{
-  unsigned char  cu_length        [4];
-  unsigned char  cu_version       [2];
-  unsigned char  cu_abbrev_offset [4];
-  unsigned char  cu_pointer_size  [1];
-}
-DWARF2_External_CompUnit;
-
-typedef struct
-{
-  bfd_vma	 cu_length;
-  unsigned short cu_version;
-  bfd_vma	 cu_abbrev_offset;
-  unsigned char  cu_pointer_size;
-}
-DWARF2_Internal_CompUnit;
-
-typedef struct
-{
-  unsigned char  ar_length       [4];
-  unsigned char  ar_version      [2];
-  unsigned char  ar_info_offset  [4];
-  unsigned char  ar_pointer_size [1];
-  unsigned char  ar_segment_size [1];
-}
-DWARF2_External_ARange;
-
-typedef struct
-{
-  bfd_vma	 ar_length;
-  unsigned short ar_version;
-  bfd_vma	 ar_info_offset;
-  unsigned char  ar_pointer_size;
-  unsigned char  ar_segment_size;
-}
-DWARF2_Internal_ARange;
+#if __STDC_VERSION__ >= 199901L || (defined(__GNUC__) && __GNUC__ >= 2)
+/* We can't use any bfd types here since readelf may define BFD64 and
+   objdump may not.  */
+typedef unsigned long long dwarf_vma;
+typedef unsigned long long dwarf_size_type;
+#else
+typedef unsigned long dwarf_vma;
+typedef unsigned long dwarf_size_type;
+#endif
 
 struct dwarf_section
 {
@@ -165,19 +86,23 @@ typedef struct
   unsigned int   pointer_size;
   unsigned int   offset_size;
   int            dwarf_version;
-  bfd_vma	 cu_offset;
-  bfd_vma	 base_address;
+  unsigned long  cu_offset;
+  unsigned long	 base_address;
   /* This is an array of offsets to the location list table.  */
-  bfd_vma	*loc_offsets;
+  unsigned long *loc_offsets;
   int		*have_frame_base;
   unsigned int   num_loc_offsets;
   unsigned int   max_loc_offsets;
   /* List of .debug_ranges offsets seen in this .debug_info.  */
-  bfd_vma	*range_lists;
+  unsigned long *range_lists;
   unsigned int   num_range_lists;
   unsigned int   max_range_lists;
 }
 debug_info;
+
+extern dwarf_vma (*byte_get) (unsigned char *, int);
+extern dwarf_vma byte_get_little_endian (unsigned char *, int);
+extern dwarf_vma byte_get_big_endian (unsigned char *, int);
 
 extern int eh_addr_size;
 
@@ -193,7 +118,6 @@ extern int do_debug_frames_interp;
 extern int do_debug_macinfo;
 extern int do_debug_str;
 extern int do_debug_loc;
-extern int do_gdb_index;
 extern int do_trace_info;
 extern int do_trace_abbrevs;
 extern int do_trace_aranges;
@@ -217,5 +141,8 @@ void *cmalloc (size_t, size_t);
 void *xcmalloc (size_t, size_t);
 void *xcrealloc (void *, size_t, size_t);
 
-bfd_vma read_leb128 (unsigned char *data,
-		     unsigned int *length_return, int sign);
+void error (const char *, ...) ATTRIBUTE_PRINTF_1;
+void warn (const char *, ...) ATTRIBUTE_PRINTF_1;
+
+unsigned long int read_leb128 (unsigned char *data,
+			       unsigned int *length_return, int sign);
