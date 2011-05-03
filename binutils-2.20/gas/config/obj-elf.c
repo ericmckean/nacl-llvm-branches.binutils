@@ -984,6 +984,7 @@ obj_elf_section (int push)
 	  if (beg == NULL)
 	    {
 	      ignore_rest_of_line ();
+	      xfree (name);
 	      return;
 	    }
 	  attr |= obj_elf_parse_section_letters (beg, strlen (beg), &clone);
@@ -1003,6 +1004,7 @@ obj_elf_section (int push)
 		  if (beg == NULL)
 		    {
 		      ignore_rest_of_line ();
+		      xfree (name);
 		      return;
 		    }
 		  type = obj_elf_section_type (beg, strlen (beg), TRUE);
@@ -1084,6 +1086,7 @@ obj_elf_section (int push)
 		{
 		  as_bad (_("character following name is not '#'"));
 		  ignore_rest_of_line ();
+		  xfree (name);
 		  return;
 		}
 	      beg = ++input_line_pointer;
@@ -1896,41 +1899,12 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 	S_SET_SIZE (symp, size->X_add_number);
       else
 	{
-	  const char *op_name = NULL;
-	  const char *add_name = NULL;
-
-	  if (size->X_op == O_subtract)
-	    {
-	      op_name = S_GET_NAME (size->X_op_symbol);
-	      add_name = S_GET_NAME (size->X_add_symbol);
-	      if (strcmp (op_name, FAKE_LABEL_NAME) == 0)
-		op_name = NULL;
-	      if (strcmp (add_name, FAKE_LABEL_NAME) == 0)
-		add_name = NULL;
-
-	      if (op_name && add_name)
-		as_bad (_(".size expression with symbols `%s' and `%s' "
-			  "does not evaluate to a constant"),
-			op_name, add_name);
-	      else
-		{
-		  const char *name;
-
-		  if (op_name)
-		    name = op_name;
-		  else if (add_name)
-		    name = add_name;
-		  else
-		    name = NULL;
-
-		  if (name)
-		    as_bad (_(".size expression with symbol `%s' "
-			      "does not evaluate to a constant"), name);
-		}
-	    }
-	  
-	  if (!op_name && !add_name)
-	    as_bad (_(".size expression does not evaluate to a constant"));
+	  if (flag_size_check == size_check_error)
+	    as_bad (_(".size expression for %s "
+		      "does not evaluate to a constant"), S_GET_NAME (symp));
+	  else
+	    as_warn (_(".size expression for %s "
+		       "does not evaluate to a constant"), S_GET_NAME (symp));
 	}
       free (sy_obj->size);
       sy_obj->size = NULL;
