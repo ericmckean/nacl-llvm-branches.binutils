@@ -1,3 +1,250 @@
+2011-04-28  Daniel C. Klauer  <daniel.c.klauer@web.de>
+
+	PR ld/12614
+	* emultempl/pe.em (_after_open): Correctly check whether symbol is
+	in undef list.
+
+2011-04-26  Kai Tietz  <ktietz@redhat.com>
+
+	* scripttempl/pe.sc: Handle .eh_frame($|.)* sections.
+	* scripttempl/pep.sc: Likewise.
+
+2011-04-24  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12365
+	PR ld/12696
+	* ldmain.c (notice): Delete "name" param, add "h".
+	* plugin.c (plugin_notice): Likewise.  Set non_ir_ref.  Handle
+	redefinitions of IR symbols in real BFDs.
+	(plugin_multiple_definition, plugin_multiple_common): Delete.
+	(non_ironly_hash, init_non_ironly_hash): Delete.
+	(is_visible_from_outside): Traverse entry_symbol chain.
+	(get_symbols): Use non_ir_ref flag rather than hash lookup.
+
+2011-04-21  Tristan Gingold  <gingold@adacore.com>
+
+	* scripttempl/alphavms.sc: Add dwarf2 embedding marks.
+
+2011-04-20  Tristan Gingold  <gingold@adacore.com>
+
+	* emultempl/aix.em (_add_options): Ignore -bbigtoc switch.
+
+2011-04-20  Alan Modra  <amodra@gmail.com>
+
+	* ld.h (ld_config_type <hash_table_size>): Make it an unsigned long.
+
+2011-04-20  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12365
+	* ldfile.c (ldfile_try_open_bfd): Move code creating and switching
+	to plugin IR BFD..
+	* ldmain.c (add_archive_element): ..and similar code here..
+	* plugin.c (plugin_maybe_claim): ..to here.  New function.
+	(plugin_call_claim_file): Make static.
+	(asymbol_from_plugin_symbol): Set ELF st_shndx for common syms.
+	(plugin_multiple_common): New function.
+	(plugin_call_all_symbols_read): Hook in plugin_multiple_common.
+	* plugin.h (plugin_call_claim_file): Don't declare.
+	(plugin_maybe_claim): Declare.
+
+2011-04-20  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12365
+	* ldmain.c (multiple_definition): Take a bfd_link_hash_entry
+	pointer arg rather than "name", "obfd", "osec", "oval".  Add code
+	removed from linker.c.  Hack around xcofflink.c oddity in
+	passing NULL nbfd.
+	(multiple_common): Similarly.
+	* plugin.c (orig_allow_multiple_defs): Delete.
+	(plugin_call_all_symbols_read): Don't twiddle allow_multiple_definition.
+	(plugin_multiple_definition): Update.
+
+2011-04-18  Kai Tietz  <ktietz@redhat.com>
+
+	* deffilep.y (def_aligncomm): Avoid duplets.
+
+	* deffilep.y (def_pool_str): New type.
+	(pool_strs): Local static.
+	(def_pool_alloc): Local function.
+	(def_pool_strdup): Likewise.
+	(def_pool_free): Likewise.
+	(opt_name): Replace xmalloc/xstrdup by
+	def_pool_alloc/def_pool_strdup.
+	(dot_name): Likewise.
+	(anylang_id): Likewise.
+	(def_lex): Likewise.
+	(def_file_parse): Call def_pool_free on
+	exit and cleanup directives elements.
+	(def_file_add_directive): Call def_pool_free.
+
+2011-04-18  Paul Brook  <paul@codesourcery.com>
+
+	* emulparams/elf32_tic6x_le.sh: Define OTHER_READONLY_SECTIONS
+	for unwinding tables.
+
+2011-04-18  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12365
+	PR ld/12672
+	* ldfile.c (ldfile_try_open_bfd): Don't attempt any plugin action
+	when no_more_claiming.
+	* ldmain.c (add_archive_element): Likewise.
+	(multiple_definition): Remove plugin_multiple_definition call.
+	(notice): Remove plugin_notice call.
+	* ldlang.c (lang_list_insert_after, void lang_list_remove_tail): Move.
+	Delete prototype.
+	(plugin_insert): New static var.
+	(open_input_bfds): Only rescan libs after plugin insert point.
+	(lang_gc_sections): Omit plugin claimed files.
+	(lang_process): Set plugin_insert.  Only rescan when plugin adds
+	objects.
+	* plugin.h (no_more_claiming): Declare.
+	(plugin_notice, plugin_multiple_definition): Don't declare.
+	* plugin.c: Formatting.
+	(orig_notice_all, orig_allow_multiple_defs, orig_callbacks,
+	plugin_callbacks): New static vars.
+	(no_more_claiming): Make global.
+	(plugin_cached_allow_multiple_defs): Delete.
+	(plugin_get_ir_dummy_bfd): Set SEC_EXCLUDE on dummy .text section,
+	use newer bfd_make_section variant.  Make COMMON section too.
+	Error handling.  Correct setting of gp size.
+	(asymbol_from_plugin_symbol): Properly cast last arg of concat.
+	(message): Likewise for ACONCAT.
+	(asymbol_from_plugin_symbol): Use our COMMON section.
+	(get_symbols): When report_plugin_symbols, show visibility too.
+	(init_non_ironly_hash): Move.  Don't test non_ironly_hash.
+	(plugin_load_plugins): Save state of linker callbacks, set up to
+	call plugin_notice instead.  Call init_non_ironly_hash here.
+	(plugin_call_all_symbols_read): Set plugin_multiple_definition in
+	plugin callbacks.
+	(plugin_notice): Rewrite.
+	(plugin_multiple_definition): Make static, call original callback.
+
+2011-04-15  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12672
+	* ldlang.c (enum open_bfd_mode): New.
+	(open_input_bfds): Replace "force" param with "mode".  Reload
+	archives for rescan.  Update all callers.
+	(lang_process): Make another open_input_bfds pass for plugins.
+
+2011-04-13  Kai Tietz  <ktietz@redhat.com>
+
+	PR binutils/12658
+	* deffile.h (def_file_add_export): Add is_dup argument.
+	(def_file_add_import): Likewise.
+	* deffilep.y (are_names_equal): New helper.
+	(cmp_export_elem): New helper.
+	(find_export_in_list): Add search routine for exports.
+	(def_file_add_export): Check for duplicates.
+	(cmp_import_elem): New helper.
+	(find_import_in_list): Add search routine for imports.
+	(def_file_add_import): Check for duplicates.
+	(def_exports): Handle duplicates.
+	(def_imports): Likewise.
+	* pe-dll.c (process_def_file_and_drectve): Likewise.
+	(pe_implied_import_dll): Likewise.
+
+2011-04-11  Chris Quenelle  <chris.quenelle@oracle.com>
+
+	* scripttempl/elf.sc (.exception_ranges): Add new section.
+
+2011-04-08  Hector Oron  <hector.oron@gmail.com>
+
+	PR ld/12643
+	* configure.tgt: Add support for arm-*-gnueabihf targets.
+
+2011-04-07  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* Makefile.in: Regenerate. Remove stray eavrtiny10 rules.
+
+2011-04-07  Joseph Myers  <joseph@codesourcery.com>
+
+	* configure.tgt: Remove stray ;;.
+
+2011-04-06  Joseph Myers  <joseph@codesourcery.com>
+
+	* configure.tgt (thumb-*-linux-* | thumb-*-uclinux*,
+	strongarm-*-coff, strongarm-*-elf, strongarm-*-kaos*,
+	thumb-*-coff, thumb-*-elf, thumb-epoc-pe, thumb-*-pe,
+	xscale-*-coff, xscale-*-elf): Remove targets.
+
+2011-03-31  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* configure.tgt: Add elf_l1om to targ_extra_libpath for
+	 x86_64-*-linux-*.
+
+	* emulparams/elf_l1om.sh: Remove duplicates.
+
+2011-03-31  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* emulparams/elf32_tic6x_le.sh (BIG_OUTPUT_FORMAT, EXTRA_EM_FILE,
+	GENERATE_SHLIB_SCRIPT): New defines.
+	(TEXT_START_ADDR): Define differently depending on target.
+	(.got): Redefine to include "*(.dsbt)".
+	(SDATA_START_SYMBOLS): Remove, replace with
+	(OTHER_GOT_SYMBOLS): New.
+	(OTHER_BSS_SECTIONS): Define only for ELF targets.
+	* emultempl/tic6xdsbt.em: New file.
+	* gen-doc.texi: Set C6X.
+	* ld.texinfo: Likewise.
+	(Options specific to C6X uClinux targets): New section.
+
+2011-03-29  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12613
+	* ldlex.l (lex_warn_invalid): Don't assume char is unsigned.
+
+2011-03-26  John Marino  <binutils@marino.st>
+
+	* configure.host: Update *-*-dragonfly* host entry.
+	* configure.tgt: Update *-*-dragonfly* target entry.
+	* ldlex.l: Prevent redefinition of YY_NO_UNPUT.
+
+2011-03-28  Joseph Myers  <joseph@codesourcery.com>
+
+	* configure.in: Check for windows.h, not Windows.h.
+	* configure: Regenerate.
+	* plugin.c: Include windows.h, not Windows.h.
+
+2011-03-25  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* Makefile.in: Regenerate.
+
+2011-03-23  Joseph Myers  <joseph@codesourcery.com>
+
+	* lexsup.c (parse_args): Only set report_plugin_symbols if plugins
+	are enabled.  Mark level as possibly unused.
+
+2011-03-22  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* Makefile.am (ALL_EMULATION_SOURCES): Add AVR XMEGA architectures.
+	(eavrxmega?.c): Likewise.
+	* configure.tgt (targ_extra_emuls): Likewise.
+	* emulparams/avrxmega1.sh: New file.
+	* emulparams/avrxmega2.sh: Likewise.
+	* emulparams/avrxmega3.sh: Likewise.
+	* emulparams/avrxmega4.sh: Likewise.
+	* emulparams/avrxmega5.sh: Likewise.
+	* emulparams/avrxmega6.sh: Likewise.
+	* emulparams/avrxmega7.sh: Likewise.
+	* emultempl/avrelf.em (avr_elf_${EMULATION_NAME}_before_allocation):
+	Add avrxmega6, avrxmega7 to list of architectures for no stubs.
+
+2011-03-21  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* scripttempl/avr.sc: Add fuse, lock, and signature memory regions.
+
+2011-03-14  Richard Sandiford  <richard.sandiford@linaro.org>
+
+	* emultempl/armelf.em (gld${EMULATION_NAME}_finish): Check
+	eh->target_internal.
+
+2011-03-14  Richard Sandiford  <richard.sandiford@linaro.org>
+
+	* emultempl/armelf.em (arm_elf_before_allocation): Check dynobj
+	instead of dynamic_sections_created.
+
 2011-03-10  Dave Korn  <dave.korn.cygwin@gmail.com>
 
 	* plugin.c (get_symbols): Use wrapped lookup for undefined symbols.
@@ -108,6 +355,15 @@
 	the bfd_demangle of sym, change users of sym to c_sym when not
 	already demangling, and free when done.  Change callers of
 	cplus_demangle to bfd_demangle.
+
+2011-02-14  Alan Modra  <amodra@gmail.com>
+
+	* plugin.c (plugin_get_ir_dummy_bfd): Set SEC_EXCLUDE on dummy
+	.text section, use newer bfd_make_section variant.  Error handling.
+	Correct setting of gp size.
+	(asymbol_from_plugin_symbol): Properly cast last arg of concat.
+	(message): Likewise for ACONCAT.
+	(get_symbols): Formatting.
 
 2011-02-14  Alan Modra  <amodra@gmail.com>
 

@@ -1,6 +1,6 @@
 // object.cc -- support for an object file for linking in gold
 
-// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -349,11 +349,11 @@ Relobj::is_section_name_included(const char* name)
 
 // Finalize the incremental relocation information.  Allocates a block
 // of relocation entries for each symbol, and sets the reloc_bases_
-// array to point to the first entry in each block.  Returns the next
-// available relocation index.
+// array to point to the first entry in each block.  If CLEAR_COUNTS
+// is TRUE, also clear the per-symbol relocation counters.
 
 void
-Relobj::finalize_incremental_relocs(Layout* layout)
+Relobj::finalize_incremental_relocs(Layout* layout, bool clear_counts)
 {
   unsigned int nsyms = this->get_global_symbols()->size();
   this->reloc_bases_ = new unsigned int[nsyms];
@@ -366,7 +366,8 @@ Relobj::finalize_incremental_relocs(Layout* layout)
     {
       this->reloc_bases_[i] = rindex;
       rindex += this->reloc_counts_[i];
-      this->reloc_counts_[i] = 0;
+      if (clear_counts)
+	this->reloc_counts_[i] = 0;
     }
   layout->incremental_inputs()->set_reloc_count(rindex);
 }
@@ -379,7 +380,7 @@ Sized_relobj<size, big_endian>::Sized_relobj(
     Input_file* input_file,
     off_t offset,
     const elfcpp::Ehdr<size, big_endian>& ehdr)
-  : Relobj(name, input_file, offset),
+  : Sized_relobj_base<size, big_endian>(name, input_file, offset),
     elf_file_(this, ehdr),
     symtab_shndx_(-1U),
     local_symbol_count_(0),
@@ -1265,9 +1266,12 @@ Sized_relobj<size, big_endian>::do_layout(Symbol_table* symtab,
 
 	  // Add the section to the incremental inputs layout.
 	  Incremental_inputs* incremental_inputs = layout->incremental_inputs();
-	  if (incremental_inputs != NULL)
-	    incremental_inputs->report_input_section(this, i,
-						     discard ? NULL : name,
+	  if (incremental_inputs != NULL
+	      && !discard
+	      && (shdr.get_sh_type() == elfcpp::SHT_PROGBITS
+	          || shdr.get_sh_type() == elfcpp::SHT_NOBITS
+	          || shdr.get_sh_type() == elfcpp::SHT_NOTE))
+	    incremental_inputs->report_input_section(this, i, name,
 						     shdr.get_sh_size());
 
           if (discard)
@@ -1281,7 +1285,7 @@ Sized_relobj<size, big_endian>::do_layout(Symbol_table* symtab,
  
       if (is_gc_pass_one && parameters->options().gc_sections())
         {
-          if (is_section_name_included(name)
+          if (this->is_section_name_included(name)
               || shdr.get_sh_type() == elfcpp::SHT_INIT_ARRAY 
               || shdr.get_sh_type() == elfcpp::SHT_FINI_ARRAY)
             {
@@ -1689,6 +1693,51 @@ Sized_relobj<size, big_endian>::do_should_include_member(Symbol_table* symtab,
   if (tmpbuf != NULL)
     free(tmpbuf);
   return Archive::SHOULD_INCLUDE_UNKNOWN;
+}
+
+// Iterate over global defined symbols, calling a visitor class V for each.
+
+template<int size, bool big_endian>
+void
+Sized_relobj<size, big_endian>::do_for_all_global_symbols(
+    Read_symbols_data* sd,
+    Library_base::Symbol_visitor_base* v)
+{
+  const char* sym_names =
+      reinterpret_cast<const char*>(sd->symbol_names->data());
+  const unsigned char* syms =
+      sd->symbols->data() + sd->external_symbols_offset;
+  const int sym_size = elfcpp::Elf_sizes<size>::sym_size;
+  size_t symcount = ((sd->symbols_size - sd->external_symbols_offset)
+                     / sym_size);
+  const unsigned char* p = syms;
+
+  for (size_t i = 0; i < symcount; ++i, p += sym_size)
+    {
+      elfcpp::Sym<size, big_endian> sym(p);
+      if (sym.get_st_shndx() != elfcpp::SHN_UNDEF)
+	v->visit(sym_names + sym.get_st_name());
+    }
+}
+
+// Iterate over local symbols, calling a visitor class V for each GOT offset
+// associated with a local symbol.
+
+template<int size, bool big_endian>
+void
+Sized_relobj<size, big_endian>::do_for_all_local_got_entries(
+    Got_offset_list::Visitor* v) const
+{
+  unsigned int nsyms = this->local_symbol_count();
+  for (unsigned int i = 0; i < nsyms; i++)
+    {
+      Local_got_offsets::const_iterator p = this->local_got_offsets_.find(i);
+      if (p != this->local_got_offsets_.end())
+	{
+	  const Got_offset_list* got_offsets = p->second;
+	  got_offsets->for_all_got_offsets(v);
+	}
+    }
 }
 
 // Return whether the local symbol SYMNDX has a PLT offset.
@@ -2174,7 +2223,8 @@ Sized_relobj<size, big_endian>::write_local_symbols(
     const Stringpool* sympool,
     const Stringpool* dynpool,
     Output_symtab_xindex* symtab_xindex,
-    Output_symtab_xindex* dynsym_xindex)
+    Output_symtab_xindex* dynsym_xindex,
+    off_t symtab_off)
 {
   const bool strip_all = parameters->options().strip_all();
   if (strip_all)
@@ -2219,7 +2269,8 @@ Sized_relobj<size, big_endian>::write_local_symbols(
   off_t output_size = this->output_local_symbol_count_ * sym_size;
   unsigned char* oview = NULL;
   if (output_size > 0)
-    oview = of->get_output_view(this->local_symbol_offset_, output_size);
+    oview = of->get_output_view(symtab_off + this->local_symbol_offset_,
+				output_size);
 
   off_t dyn_output_size = this->output_local_dynsym_count_ * sym_size;
   unsigned char* dyn_oview = NULL;
@@ -2299,7 +2350,8 @@ Sized_relobj<size, big_endian>::write_local_symbols(
   if (output_size > 0)
     {
       gold_assert(ov - oview == output_size);
-      of->write_output_view(this->local_symbol_offset_, output_size, oview);
+      of->write_output_view(symtab_off + this->local_symbol_offset_,
+			    output_size, oview);
     }
 
   if (dyn_output_size > 0)
@@ -2425,7 +2477,7 @@ Sized_relobj<size, big_endian>::do_get_global_symbol_counts(
 {
   *defined = this->defined_count_;
   size_t count = 0;
-  for (Symbols::const_iterator p = this->symbols_.begin();
+  for (typename Symbols::const_iterator p = this->symbols_.begin();
        p != this->symbols_.end();
        ++p)
     if (*p != NULL
@@ -2569,46 +2621,43 @@ Input_objects::print_cref(const Symbol_table* symtab, FILE* f) const
 
 // Relocate_info methods.
 
-// Return a string describing the location of a relocation.  This is
-// only used in error messages.
+// Return a string describing the location of a relocation when file
+// and lineno information is not available.  This is only used in
+// error messages.
 
 template<int size, bool big_endian>
 std::string
 Relocate_info<size, big_endian>::location(size_t, off_t offset) const
 {
-  // See if we can get line-number information from debugging sections.
-  std::string filename;
-  std::string file_and_lineno;   // Better than filename-only, if available.
-
   Sized_dwarf_line_info<size, big_endian> line_info(this->object);
-  // This will be "" if we failed to parse the debug info for any reason.
-  file_and_lineno = line_info.addr2line(this->data_shndx, offset, NULL);
+  std::string ret = line_info.addr2line(this->data_shndx, offset, NULL);
+  if (!ret.empty())
+    return ret;
 
-  std::string ret(this->object->name());
-  ret += ':';
+  ret = this->object->name();
+
   Symbol_location_info info;
   if (this->object->get_symbol_location_info(this->data_shndx, offset, &info))
     {
-      ret += " in function ";
-      ret += info.enclosing_symbol_name;
-      ret += ":";
-      filename = info.source_file;
+      if (!info.source_file.empty())
+	{
+	  ret += ":";
+	  ret += info.source_file;
+	}
+      size_t len = info.enclosing_symbol_name.length() + 100;
+      char* buf = new char[len];
+      snprintf(buf, len, _(":function %s"),
+	       info.enclosing_symbol_name.c_str());
+      ret += buf;
+      delete[] buf;
+      return ret;
     }
 
-  if (!file_and_lineno.empty())
-    ret += file_and_lineno;
-  else
-    {
-      if (!filename.empty())
-        ret += filename;
-      ret += "(";
-      ret += this->object->section_name(this->data_shndx);
-      char buf[100];
-      // Offsets into sections have to be positive.
-      snprintf(buf, sizeof(buf), "+0x%lx", static_cast<long>(offset));
-      ret += buf;
-      ret += ")";
-    }
+  ret += "(";
+  ret += this->object->section_name(this->data_shndx);
+  char buf[100];
+  snprintf(buf, sizeof buf, "+0x%lx)", static_cast<long>(offset));
+  ret += buf;
   return ret;
 }
 
