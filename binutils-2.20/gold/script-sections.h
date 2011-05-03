@@ -47,12 +47,10 @@ class Orphan_section_placement;
 
 class Script_sections
 {
- private:
+ public:
   // This is a list, not a vector, because we insert orphan sections
   // in the middle.
   typedef std::list<Sections_element*> Sections_elements;
-
- public:
 
   // Logical script section types.  We map section types returned by the
   // parser into these since some section types have the same semantics.
@@ -234,10 +232,20 @@ class Script_sections
   Expression*
   find_memory_region_length(const char*, size_t);
 
-  // Find a memory region.
+  // Find a memory region by name.
   Memory_region*
   find_memory_region(const char*, size_t);
 
+  // Find a memory region that should be used by a given output section.
+  Memory_region*
+  find_memory_region(Output_section_definition*, bool,
+		     Output_section_definition**);
+
+  // Returns true if the provide block of memory is contained
+  // within a memory region.
+  bool
+  block_in_region(Symbol_table*, Layout*, uint64_t, uint64_t) const;
+    
   // Set the memory region of the section.
   void
   set_memory_region(Memory_region*, bool);

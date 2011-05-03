@@ -1,6 +1,6 @@
 // object.h -- support for an object file for linking in gold  -*- C++ -*-
 
-// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -664,7 +664,7 @@ class Object
 			     Symbol_table*);
 
   // If NAME is the name of the special section which indicates that
-  // this object was compiled with -fstack-split, mark it accordingly,
+  // this object was compiled with -fsplit-stack, mark it accordingly,
   // and return true.  Otherwise return false.
   bool
   handle_split_stack_section(const char* name);
@@ -2164,15 +2164,6 @@ class Sized_relobj : public Relobj
 		      const Stringpool_template<char>*,
 		      Output_symtab_xindex*,
 		      Output_symtab_xindex*);
-
-  // Clear the local symbol information.
-  void
-  clear_local_symbols()
-  {
-    this->local_values_.clear();
-    this->local_got_offsets_.clear();
-    this->local_plt_offsets_.clear();
-  }
 
   // Record a mapping from discarded section SHNDX to the corresponding
   // kept section.

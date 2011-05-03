@@ -1,6 +1,6 @@
 // archive.cc -- archive support for gold
 
-// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -45,7 +45,7 @@ namespace gold
 {
 
 // The header of an entry in the archive.  This is all readable text,
-// padded with spaces where necesary.  If the contents of an archive
+// padded with spaces where necessary.  If the contents of an archive
 // are all text file, the entire archive is readable.
 
 struct Archive::Archive_header
@@ -527,14 +527,16 @@ Archive::get_file_and_offset(off_t off, Input_file** input_file, off_t* memoff,
   return true;
 }
 
-// Return an ELF object for the member at offset OFF.  If the ELF
-// object has an unsupported target type, set *PUNCONFIGURED to true
-// and return NULL.
+// Return an ELF object for the member at offset OFF.  If
+// PUNCONFIGURED is not NULL, then if the ELF object has an
+// unsupported target type, set *PUNCONFIGURED to true and return
+// NULL.
 
 Object*
 Archive::get_elf_object_for_member(off_t off, bool* punconfigured)
 {
-  *punconfigured = false;
+  if (punconfigured != NULL)
+    *punconfigured = false;
 
   Input_file* input_file;
   off_t memoff;
@@ -593,9 +595,7 @@ Archive::read_all_symbols()
 void
 Archive::read_symbols(off_t off)
 {
-  bool dummy;
-  Object* obj = this->get_elf_object_for_member(off, &dummy);
-
+  Object* obj = this->get_elf_object_for_member(off, NULL);
   if (obj == NULL)
     return;
 
@@ -670,6 +670,10 @@ Archive::should_include_member(Symbol_table* symtab, Layout* layout,
 	return Archive::SHOULD_INCLUDE_UNKNOWN;
     }
   else if (!sym->is_undefined())
+    return Archive::SHOULD_INCLUDE_NO;
+  // PR 12001: Do not include an archive when the undefined
+  // symbol has actually been defined on the command line.
+  else if (layout->script_options()->is_pending_assignment(sym_name))
     return Archive::SHOULD_INCLUDE_NO;
   else if (sym->binding() == elfcpp::STB_WEAK)
     return Archive::SHOULD_INCLUDE_UNKNOWN;
@@ -775,6 +779,42 @@ Archive::add_symbols(Symbol_table* symtab, Layout* layout,
   return true;
 }
 
+// Return whether the archive includes a member which defines the
+// symbol SYM.
+
+bool
+Archive::defines_symbol(Symbol* sym) const
+{
+  const char* symname = sym->name();
+  size_t symname_len = strlen(symname);
+  size_t armap_size = this->armap_.size();
+  for (size_t i = 0; i < armap_size; ++i)
+    {
+      if (this->armap_checked_[i])
+	continue;
+      const char* archive_symname = (this->armap_names_.data()
+				     + this->armap_[i].name_offset);
+      if (strncmp(archive_symname, symname, symname_len) != 0)
+	continue;
+      char c = archive_symname[symname_len];
+      if (c == '\0' && sym->version() == NULL)
+	return true;
+      if (c == '@')
+	{
+	  const char* ver = archive_symname + symname_len + 1;
+	  if (*ver == '@')
+	    {
+	      if (sym->version() == NULL)
+		return true;
+	      ++ver;
+	    }
+	  if (sym->version() != NULL && strcmp(sym->version(), ver) == 0)
+	    return true;
+	}
+    }
+  return false;
+}
+
 // Include all the archive members in the link.  This is for --whole-archive.
 
 bool
@@ -859,17 +899,22 @@ Archive::include_member(Symbol_table* symtab, Layout* layout,
       return true;
     }
 
-  bool unconfigured;
-  Object* obj = this->get_elf_object_for_member(off, &unconfigured);
+  // If this is the first object we are including from this archive,
+  // and we searched for this archive, most likely because it was
+  // found via a -l option, then if the target is incompatible we want
+  // to move on to the next archive found in the search path.
+  bool unconfigured = false;
+  bool* punconfigured = NULL;
+  if (!this->included_member_ && this->searched_for())
+    punconfigured = &unconfigured;
 
-  if (!this->included_member_
-      && this->searched_for()
-      && obj == NULL
-      && unconfigured)
-    return false;
-
+  Object* obj = this->get_elf_object_for_member(off, punconfigured);
   if (obj == NULL)
-    return true;
+    {
+      // Return false to search for another archive, true if we found
+      // an error.
+      return unconfigured ? false : true;
+    }
 
   if (mapfile != NULL)
     mapfile->report_include_archive_member(obj->name(), sym, why);
@@ -992,8 +1037,18 @@ Add_archive_symbols::run(Workqueue* workqueue)
       if (incremental_inputs != NULL)
 	incremental_inputs->report_archive_end(this->archive_);
 
-      // We no longer need to know about this archive.
-      delete this->archive_;
+      if (!parameters->options().has_plugins()
+	  || this->archive_->input_file()->options().whole_archive())
+	{
+	  // We no longer need to know about this archive.
+	  delete this->archive_;
+	}
+      else
+	{
+	  // The plugin interface may want to rescan this archive.
+	  parameters->options().plugins()->save_archive(this->archive_);
+	}
+
       this->archive_ = NULL;
     }
 }
@@ -1010,7 +1065,7 @@ Lib_group::Lib_group(const Input_file_lib* lib, Task* task)
 }
 
 // Select members from the lib group and add them to the link.  We walk
-// through the the members, and check if each one up should be included.
+// through the members, and check if each one up should be included.
 // If the object says it should be included, we do so.  We have to do
 // this in a loop, since including one member may create new undefined
 // symbols which may be satisfied by other members.

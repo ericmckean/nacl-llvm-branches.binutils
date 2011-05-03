@@ -9,7 +9,7 @@ rm -f e${EMULATION_NAME}.c
 (echo;echo;echo;echo;echo)>e${EMULATION_NAME}.c # there, now line numbers match ;-)
 fragment <<EOF
 /* Copyright 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+   2005, 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -56,6 +56,7 @@ fragment <<EOF
 #include "bfdlink.h"
 #include "getopt.h"
 #include "libiberty.h"
+#include "filenames.h"
 #include "ld.h"
 #include "ldmain.h"
 #include "ldexp.h"
@@ -455,7 +456,7 @@ gld_${EMULATION_NAME}_list_options (FILE *file)
   fprintf (file, _("  --dll-search-prefix=<string>       When linking dynamically to a dll without\n\
                                        an importlib, use <string><basename>.dll\n\
                                        in preference to lib<basename>.dll \n"));
-  fprintf (file, _("  --enable-auto-import               Do sophistcated linking of _sym to\n\
+  fprintf (file, _("  --enable-auto-import               Do sophisticated linking of _sym to\n\
                                        __imp_sym for DATA references\n"));
   fprintf (file, _("  --disable-auto-import              Do not auto-import DATA items from DLLs\n"));
   fprintf (file, _("  --enable-runtime-pseudo-reloc      Work around auto-import limitations by\n\
@@ -688,12 +689,7 @@ gld${EMULATION_NAME}_handle_option (int optc)
     case OPTION_BASE_FILE:
       link_info.base_file = fopen (optarg, FOPEN_WB);
       if (link_info.base_file == NULL)
-	{
-	  /* xgettext:c-format */
-	  fprintf (stderr, _("%s: Can't open base file %s\n"),
-		   program_name, optarg);
-	  xexit (1);
-	}
+	einfo (_("%F%P: cannot open base file %s\n"), optarg);
       break;
 
       /* PE options.  */
@@ -946,8 +942,8 @@ gld_${EMULATION_NAME}_set_symbols (void)
       long val = init[j].value;
       lang_assignment_statement_type *rv;
 
-      rv = lang_add_assignment (exp_assop ('=', GET_INIT_SYMBOL_NAME (j),
-					   exp_intop (val)));
+      rv = lang_add_assignment (exp_assign (GET_INIT_SYMBOL_NAME (j),
+					    exp_intop (val)));
       if (init[j].size == sizeof (short))
 	*(short *) init[j].ptr = val;
       else if (init[j].size == sizeof (int))
@@ -1219,6 +1215,8 @@ debug_section_p (bfd *abfd ATTRIBUTE_UNUSED, asection *sect, void *obj)
 static void
 gld_${EMULATION_NAME}_after_open (void)
 {
+  after_open_default ();
+
 #ifdef DLL_SUPPORT
   if (pe_dll_extra_pe_debug)
     {
@@ -1408,8 +1406,9 @@ gld_${EMULATION_NAME}_after_open (void)
 			    ? bfd_get_filename (blhe->u.def.section->owner->my_archive)
 			    : bfd_get_filename (blhe->u.def.section->owner);
 
-			if (strcmp (bfd_get_filename (is->the_bfd->my_archive),
-				    other_bfd_filename) == 0)
+			if (filename_cmp (bfd_get_filename
+					    (is->the_bfd->my_archive),
+					  other_bfd_filename) == 0)
 			  continue;
 
 			/* Rename this implib to match the other one.  */
@@ -1463,7 +1462,7 @@ gld_${EMULATION_NAME}_after_open (void)
 		       extension, and use that for the remainder of the
 		       comparisons.  */
 		    pnt = strrchr (is3->the_bfd->filename, '.');
-		    if (pnt != NULL && strcmp (pnt, ".dll") == 0)
+		    if (pnt != NULL && filename_cmp (pnt, ".dll") == 0)
 		      break;
 		  }
 
@@ -1480,11 +1479,11 @@ gld_${EMULATION_NAME}_after_open (void)
 			/* Skip static members, ie anything with a .obj
 			   extension.  */
 			pnt = strrchr (is2->the_bfd->filename, '.');
-			if (pnt != NULL && strcmp (pnt, ".obj") == 0)
+			if (pnt != NULL && filename_cmp (pnt, ".obj") == 0)
 			  continue;
 
-			if (strcmp (is3->the_bfd->filename,
-				    is2->the_bfd->filename))
+			if (filename_cmp (is3->the_bfd->filename,
+					  is2->the_bfd->filename))
 			  {
 			    is_ms_arch = 0;
 			    break;
@@ -1498,7 +1497,7 @@ gld_${EMULATION_NAME}_after_open (void)
 	       then leave the filename alone.  */
 	    pnt = strrchr (is->the_bfd->filename, '.');
 
-	    if (is_ms_arch && (strcmp (pnt, ".dll") == 0))
+	    if (is_ms_arch && (filename_cmp (pnt, ".dll") == 0))
 	      {
 		int idata2 = 0, reloc_count=0;
 		asection *sec;
@@ -1671,7 +1670,7 @@ gld_${EMULATION_NAME}_unrecognized_file (lang_input_statement_type *entry ATTRIB
 #ifdef DLL_SUPPORT
   const char *ext = entry->filename + strlen (entry->filename) - 4;
 
-  if (strcmp (ext, ".def") == 0 || strcmp (ext, ".DEF") == 0)
+  if (filename_cmp (ext, ".def") == 0 || filename_cmp (ext, ".DEF") == 0)
     {
       pe_def_file = def_file_parse (entry->filename, pe_def_file);
 
@@ -1720,8 +1719,8 @@ gld_${EMULATION_NAME}_unrecognized_file (lang_input_statement_type *entry ATTRIB
 		= pe_def_file->base_address;
 	      init[IMAGEBASEOFF].inited = 1;
 	      if (image_base_statement)
-		image_base_statement->exp = exp_assop ('=', "__image_base__",
-						       exp_intop (pe.ImageBase));
+		image_base_statement->exp = exp_assign ("__image_base__",
+							exp_intop (pe.ImageBase));
 	    }
 
 	  if (pe_def_file->stack_reserve != -1
@@ -2010,10 +2009,17 @@ gld_${EMULATION_NAME}_place_orphan (asection *s,
 		     ->output_section_statement);
 	}
 
-      /* All sections in an executable must be aligned to a page boundary.  */
+      /* All sections in an executable must be aligned to a page boundary.
+	 In a relocatable link, just preserve the incoming alignment; the
+	 address is discarded by lang_insert_orphan in that case, anyway.  */
       address = exp_unop (ALIGN_K, exp_nameop (NAME, "__section_alignment__"));
       os = lang_insert_orphan (s, secname, constraint, after, place, address,
 			       &add_child);
+      if (link_info.relocatable)
+	{
+	  os->section_alignment = s->alignment_power;
+	  os->bfd_section->alignment_power = s->alignment_power;
+	}
     }
 
   /* If the section name has a '\$', sort it with the other '\$'
@@ -2086,7 +2092,7 @@ gld_${EMULATION_NAME}_open_dynamic_archive
   unsigned int i;
 
 
-  if (! entry->is_archive)
+  if (! entry->maybe_archive)
     return FALSE;
 
   filename = entry->filename;

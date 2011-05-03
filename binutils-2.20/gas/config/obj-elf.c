@@ -1,6 +1,6 @@
 /* ELF object file format
    Copyright 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
@@ -1879,6 +1879,7 @@ void
 elf_frob_symbol (symbolS *symp, int *puntp)
 {
   struct elf_obj_sy *sy_obj;
+  expressionS *size;
 
 #ifdef NEED_ECOFF_DEBUG
   if (ECOFF_DEBUGGING)
@@ -1887,24 +1888,49 @@ elf_frob_symbol (symbolS *symp, int *puntp)
 
   sy_obj = symbol_get_obj (symp);
 
-  if (sy_obj->size != NULL)
+  size = sy_obj->size;
+  if (size != NULL)
     {
-      switch (sy_obj->size->X_op)
+      if (resolve_expression (size)
+	  && size->X_op == O_constant)
+	S_SET_SIZE (symp, size->X_add_number);
+      else
 	{
-	case O_subtract:
-	  S_SET_SIZE (symp,
-		      (S_GET_VALUE (sy_obj->size->X_add_symbol)
-		       + sy_obj->size->X_add_number
-		       - S_GET_VALUE (sy_obj->size->X_op_symbol)));
-	  break;
-	case O_constant:
-	  S_SET_SIZE (symp,
-		      (S_GET_VALUE (sy_obj->size->X_add_symbol)
-		       + sy_obj->size->X_add_number));
-	  break;
-	default:
-	  as_bad (_(".size expression too complicated to fix up"));
-	  break;
+	  const char *op_name = NULL;
+	  const char *add_name = NULL;
+
+	  if (size->X_op == O_subtract)
+	    {
+	      op_name = S_GET_NAME (size->X_op_symbol);
+	      add_name = S_GET_NAME (size->X_add_symbol);
+	      if (strcmp (op_name, FAKE_LABEL_NAME) == 0)
+		op_name = NULL;
+	      if (strcmp (add_name, FAKE_LABEL_NAME) == 0)
+		add_name = NULL;
+
+	      if (op_name && add_name)
+		as_bad (_(".size expression with symbols `%s' and `%s' "
+			  "does not evaluate to a constant"),
+			op_name, add_name);
+	      else
+		{
+		  const char *name;
+
+		  if (op_name)
+		    name = op_name;
+		  else if (add_name)
+		    name = add_name;
+		  else
+		    name = NULL;
+
+		  if (name)
+		    as_bad (_(".size expression with symbol `%s' "
+			      "does not evaluate to a constant"), name);
+		}
+	    }
+	  
+	  if (!op_name && !add_name)
+	    as_bad (_(".size expression does not evaluate to a constant"));
 	}
       free (sy_obj->size);
       sy_obj->size = NULL;
@@ -2081,32 +2107,29 @@ static void free_section_idx (const char *key ATTRIBUTE_UNUSED, void *val)
 }
 
 void
-elf_frob_file (void)
+elf_adjust_symtab (void)
 {
   struct group_list list;
   unsigned int i;
-
-  bfd_map_over_sections (stdoutput, adjust_stab_sections, NULL);
 
   /* Go find section groups.  */
   list.num_group = 0;
   list.head = NULL;
   list.elt_count = NULL;
-  list.indexes  = hash_new ();
+  list.indexes = hash_new ();
   bfd_map_over_sections (stdoutput, build_group_lists, &list);
-
+  
   /* Make the SHT_GROUP sections that describe each section group.  We
      can't set up the section contents here yet, because elf section
      indices have yet to be calculated.  elf.c:set_group_contents does
      the rest of the work.  */
-  for (i = 0; i < list.num_group; i++)
+ for (i = 0; i < list.num_group; i++)
     {
       const char *group_name = elf_group_name (list.head[i]);
       const char *sec_name;
       asection *s;
       flagword flags;
       struct symbol *sy;
-      int has_sym;
       bfd_size_type size;
 
       flags = SEC_READONLY | SEC_HAS_CONTENTS | SEC_IN_MEMORY | SEC_GROUP;
@@ -2122,17 +2145,7 @@ elf_frob_file (void)
 	      }
 	  }
 
-      sec_name = group_name;
-      sy = symbol_find_exact (group_name);
-      has_sym = 0;
-      if (sy != NULL
-	  && (sy == symbol_lastP
-	      || (sy->sy_next != NULL
-		  && sy->sy_next->sy_previous == sy)))
-	{
-	  has_sym = 1;
-	  sec_name = ".group";
-	}
+      sec_name = ".group";
       s = subseg_force_new (sec_name, 0);
       if (s == NULL
 	  || !bfd_set_section_flags (stdoutput, s, flags)
@@ -2145,8 +2158,27 @@ elf_frob_file (void)
 
       /* Pass a pointer to the first section in this group.  */
       elf_next_in_group (s) = list.head[i];
-      if (has_sym)
-	elf_group_id (s) = sy->bsym;
+      /* Make sure that the signature symbol for the group has the
+	 name of the group.  */
+      sy = symbol_find_exact (group_name);
+      if (!sy
+	  || (sy != symbol_lastP
+	      && (sy->sy_next == NULL
+		  || sy->sy_next->sy_previous != sy)))
+	{
+	  /* Create the symbol now.  */
+	  sy = symbol_new (group_name, now_seg, (valueT) 0, frag_now);
+#ifdef TE_SOLARIS
+	  /* Before Solaris 11 build 154, Sun ld rejects local group
+	     signature symbols, so make them weak hidden instead.  */
+	  symbol_get_bfdsym (sy)->flags |= BSF_WEAK;
+	  S_SET_OTHER (sy, STV_HIDDEN);
+#else
+	  symbol_get_obj (sy)->local = 1;
+#endif
+	  symbol_table_insert (sy);
+	}
+      elf_group_id (s) = symbol_get_bfdsym (sy);
 
       size = 4 * (list.elt_count[i] + 1);
       bfd_set_section_size (stdoutput, s, size);
@@ -2155,13 +2187,19 @@ elf_frob_file (void)
       frag_wane (frag_now);
     }
 
-#ifdef elf_tc_final_processing
-  elf_tc_final_processing ();
-#endif
-
   /* Cleanup hash.  */
   hash_traverse (list.indexes, free_section_idx);
   hash_die (list.indexes);
+}
+
+void
+elf_frob_file (void)
+{
+  bfd_map_over_sections (stdoutput, adjust_stab_sections, NULL);
+
+#ifdef elf_tc_final_processing
+  elf_tc_final_processing ();
+#endif
 }
 
 /* It removes any unneeded versioned symbols from the symbol table.  */
@@ -2383,6 +2421,29 @@ sco_id (void)
 
 #endif /* SCO_ELF */
 
+static void
+elf_generate_asm_lineno (void)
+{
+#ifdef NEED_ECOFF_DEBUG
+  if (ECOFF_DEBUGGING)
+    ecoff_generate_asm_lineno ();
+#endif
+}
+
+static void
+elf_process_stab (segT sec ATTRIBUTE_UNUSED,
+		  int what ATTRIBUTE_UNUSED,
+		  const char *string ATTRIBUTE_UNUSED,
+		  int type ATTRIBUTE_UNUSED,
+		  int other ATTRIBUTE_UNUSED,
+		  int desc ATTRIBUTE_UNUSED)
+{
+#ifdef NEED_ECOFF_DEBUG
+  if (ECOFF_DEBUGGING)
+    ecoff_stab (sec, what, string, type, other, desc);
+#endif
+}
+
 static int
 elf_separate_stab_sections (void)
 {
@@ -2423,13 +2484,8 @@ const struct format_ops elf_format_ops =
   0,	/* s_get_type */
   0,	/* s_set_type */
   elf_copy_symbol_attributes,
-#ifdef NEED_ECOFF_DEBUG
-  ecoff_generate_asm_lineno,
-  ecoff_stab,
-#else
-  0,	/* generate_asm_lineno */
-  0,	/* process_stab */
-#endif
+  elf_generate_asm_lineno,
+  elf_process_stab,
   elf_separate_stab_sections,
   elf_init_stab_section,
   elf_sec_sym_ok_for_reloc,
@@ -2441,5 +2497,6 @@ const struct format_ops elf_format_ops =
 #endif
   elf_obj_read_begin_hook,
   elf_obj_symbol_new_hook,
-  0
+  0,
+  elf_adjust_symtab
 };

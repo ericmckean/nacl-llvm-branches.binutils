@@ -1,6 +1,6 @@
 // fileread.cc -- read files for gold
 
-// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -24,6 +24,7 @@
 
 #include <cstring>
 #include <cerrno>
+#include <climits>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -57,6 +58,17 @@ readv(int, const iovec*, int)
 namespace gold
 {
 
+// Class File_read.
+
+// A lock for the File_read static variables.
+static Lock* file_counts_lock = NULL;
+static Initialize_lock file_counts_initialize_lock(&file_counts_lock);
+
+// The File_read static variables.
+unsigned long long File_read::total_mapped_bytes;
+unsigned long long File_read::current_mapped_bytes;
+unsigned long long File_read::maximum_mapped_bytes;
+
 // Class File_read::View.
 
 File_read::View::~View()
@@ -70,7 +82,12 @@ File_read::View::~View()
     case DATA_MMAPPED:
       if (::munmap(const_cast<unsigned char*>(this->data_), this->size_) != 0)
         gold_warning(_("munmap failed: %s"), strerror(errno));
-      File_read::current_mapped_bytes -= this->size_;
+      if (!parameters->options_valid() || parameters->options().stats())
+	{
+	  file_counts_initialize_lock.initialize();
+	  Hold_optional_lock hl(file_counts_lock);
+	  File_read::current_mapped_bytes -= this->size_;
+	}
       break;
     case DATA_NOT_OWNED:
       break;
@@ -99,15 +116,6 @@ File_read::View::is_locked()
 }
 
 // Class File_read.
-
-// A lock for the File_read static variables.
-static Lock* file_counts_lock = NULL;
-static Initialize_lock file_counts_initialize_lock(&file_counts_lock);
-
-// The File_read static variables.
-unsigned long long File_read::total_mapped_bytes;
-unsigned long long File_read::current_mapped_bytes;
-unsigned long long File_read::maximum_mapped_bytes;
 
 File_read::~File_read()
 {
@@ -598,11 +606,22 @@ File_read::do_readv(off_t base, const Read_multiple& rm, size_t start,
 	       got, want, static_cast<long long>(base + first_offset));
 }
 
+// Portable IOV_MAX.
+
+#if !defined(HAVE_READV)
+#define GOLD_IOV_MAX 1
+#elif defined(IOV_MAX)
+#define GOLD_IOV_MAX IOV_MAX
+#else
+#define GOLD_IOV_MAX (File_read::max_readv_entries * 2)
+#endif
+
 // Read several pieces of data from the file.
 
 void
 File_read::read_multiple(off_t base, const Read_multiple& rm)
 {
+  static size_t iov_max = GOLD_IOV_MAX;
   size_t count = rm.size();
   size_t i = 0;
   while (i < count)
@@ -615,7 +634,7 @@ File_read::read_multiple(off_t base, const Read_multiple& rm)
       size_t j;
       for (j = i + 1; j < count; ++j)
 	{
-	  if (j - i >= File_read::max_readv_entries)
+	  if (j - i >= File_read::max_readv_entries || j - i >= iov_max / 2)
 	    break;
 	  const Read_multiple_entry& j_entry(rm[j]);
 	  off_t j_off = j_entry.file_offset;
@@ -698,7 +717,9 @@ File_read::clear_views(Clear_views_mode mode)
 	should_delete = false;
       else if (mode == CLEAR_VIEWS_ALL)
 	should_delete = true;
-      else if (p->second->should_cache() && keep_files_mapped)
+      else if ((p->second->should_cache()
+		|| p->second == this->whole_file_view_)
+	       && keep_files_mapped)
 	should_delete = false;
       else if (this->object_count_ > 1
       	       && p->second->accessed()
@@ -963,6 +984,8 @@ Input_file::find_file(const Dirsearch& dirpath, int* pindex,
                      input_argument->name());
           return false;
         }
+      *found_name = input_argument->name();
+      *namep = name;
       *pindex = index + 1;
       return true;
     }
