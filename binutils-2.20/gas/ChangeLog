@@ -1,3 +1,329 @@
+2011-04-26  Kai Tietz  <ktietz@redhat.com>
+
+	* dw2gencfi.c (dwcfi_seg_list): New struct.
+	(dwcfi_hash): New static hash variable.
+	(get_debugseg_name): New.
+	(alloc_debugseg_item): New.
+	(make_debug_seg): New.
+	(dwcfi_hash_insert): New.
+	(dwcfi_hash_find): New.
+	(dwcfi_hash_find_or_make): New.
+	(cfi_insn_data): New member cur_seg.
+	(cie_entry): Likewise.
+	(fde_entry): New cseg and handled members.
+	(alloc_fde_entry): Initialize cseg member.
+	(alloc_cfi_insn_data): Initialize cur_seg member.
+	(dot_cfi_sections): Compare for beginning of
+	section names via strncmp.
+	(get_cfi_seg): New.
+	(cfi_finish): Treat link-once sections.
+	(is_now_linkonce_segment): New local helper.
+	(output_cie): Ignore cie entries not member of current
+	segment.
+	(output_fde): Likewise.
+	(select_cie_for_fde): Likewise.
+	(cfi_change_reg_numbers): Add new argument for current segment
+	and ignore insn elements, if not part of current segment.
+	* ehopt.c (get_cie_info): Use strncmp for
+	section name matching.
+	(heck_eh_frame): Likewise.
+
+2011-04-20  Catherine Moore  <clm@codesourcery.com>
+            David Ung <davidu@mips.com>
+
+	* config/mips.c (mips_cl_insn): Add new field complete_p.
+	(create_insn): Initialize complete_p to zero.
+	(BASE_REG_EQ): New.
+	(fix_24k_align_to): New.
+	(fix_24k_store_info): Declare.
+	(fix_24k_sort): New.
+	(fix_24k_record_store_info): New.
+	(nops_for_24k): New.
+	(nops_for_insn): Call nops_for_24k.
+	(append_insn): Move O_constant expression handling.
+
+2011-04-20  Alan Modra  <amodra@gmail.com>
+
+	* hash.c (set_gas_hash_table_size): Use bfd_hash_set_default_size.
+	(hash_new_sized): New function, split out from..
+	(hash_new): ..here.
+
+2011-04-19  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-arm.c (v7m_psrs): Revert previous delta.
+
+2011-04-18  Julian Brown  <julian@codesourcery.com>
+	    Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-arm.c (parse_psr): Use selected_cpu not cpu_variant to
+	detect M-profile targets.
+	(do_t_swi): Exclude v7 and higher variants from arm_ext_os test.
+	(v7m_psrs): Fix typo: basepri_max should be basepri_mask.
+
+2011-04-14  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config/tc-s390.c (s390_machine): New prototype.
+	(md_pseudo_table): New pseudo-op .machine.
+	(s390_opcode_hash): Initialize to NULL.
+	(s390_parse_cpu): New function.
+	(md_parse_option): Use s390_parse_cpu.
+	(s390_setup_opcodes): New function.
+	(md_begin): Use s390_setup_opcodes.
+	(s390_machine): New hook handling the new .machine pseudo.
+
+	* doc/c-s390.texi: Document the new pseudo op .machine.
+
+2011-04-12  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (i386_mach): Start error message with lower
+	case.
+	(md_begin): Likewise.
+	(md_parse_option): Likewise.
+	(i386_target_format): Likewise.
+	(check_byte_reg): Likewise.
+	(check_long_reg): Likewise.
+	(check_qword_reg): Likewise.
+	(check_word_reg): Likewise.
+
+2011-04-12  Nick Clifton  <nickc@redhat.com>
+
+	PR gas/12532
+	* config/tc-arm.c (relax_branch): Do not relax branches to
+	preemptable global symbols.
+
+2011-04-11  Julian Brown  <julian@codesourcery.com>
+
+	* config/tc-arm.c (parse_psr): Add LHS argument. Improve support
+	for *APSR bitmasks.
+	(operand_parse_code): Replace OP_PSR with OP_wPSR and OP_rPSR.
+	Remove OP_RVC_PSR.
+	(parse_operands): Likewise.
+	(do_mrs): Tweak error message for constraint.
+	(do_t_mrs): Update constraints for changes to APSR support.
+	(do_t_msr): Likewise. Don't set PSR_f flag here.
+	(psrs): Remove "g", "nzcvq", "nzcvqg".
+	(insns): Tweak entries for msr and mrs instructions.
+
+2011-04-11  Kai Tietz  <ktietz@redhat.com>
+
+	* config/tc-i386.c (x86_cons): Initialize adjust with zero.
+
+2011-04-11  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-i386.c (x86_cons): Define even for non-ELF targets.
+	* config/tc-i386.h (x86_cons): Always prototype.
+
+	* config/tc-cr16.c (getprocregp_image): Fix type of 'r' parameter
+	in order to avoid a compile time warning.
+	(getprocreg_image): Likewise.
+
+2011-04-11  Alan Modra  <amodra@gmail.com>
+
+	* config/tc-cr16.c (getprocreg_image): Correct range check.
+	(getprocregp_image): Likewise.
+
+2011-04-06  Joseph Myers  <joseph@codesourcery.com>
+
+	* configure.tgt (strongarm*be, strongarm*b, strongarm*,
+	xscale*be|xscale*b, xscale*): Remove architectures.
+	(thumb-*-coff, thumb-*-rtems*, thumb-*-elf, thumb-epoc-pe,
+	thumb-*-pe, xscale-*-coff, xscale-*-elf): Remove targets.
+
+2011-04-01  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-ia64.c (md_apply_fix): Add a cast to avoid a warning.
+
+2011-03-31  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* config/tc-tic6x.c (sbss_section, scom_section, scom_symbol): New
+	static variables.
+	(md_begin): Initialize them.
+	(s_tic6x_scomm): New static function.
+	(md_pseudo_table): Add "scomm".
+	(tc_gen_reloc): Really undo all adjustments made by
+	bfd_install_relocation.
+	* doc/c-tic6x.texi: Document the .scomm directive.
+
+2011-03-31  Tristan Gingold  <gingold@adacore.com>
+
+	* dwarf2dbg.c (DWARF2_VERSION): Define.
+	(out_debug_line): Use it.
+	(out_debug_aranges): Ditto.
+	(out_debug_info): Ditto.
+	* config/tc-ia64.h (DWARF2_VERSION): Override it.
+
+2011-03-30  Michael Snyder  <msnyder@vmware.com>
+
+	* obj-elf.c (obj_elf_section): Free malloced name.
+	* macro.c (get_any_string): Free malloced br_buf.
+	(do_formals): Free 'formal'.
+
+2011-03-30  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-ppc.c (ppc_frob_symbol): Convert stsym symbols value
+	to offset only if within is set.
+	(ppc_stabx): Reformat.  For stsym stabs, add a check and set
+	within only for symbols.
+
+2011-03-29  Richard Henderson  <rth@redhat.com>
+
+	PR 12610
+	* config/tc-alpha.c (s_alpha_align): Don't auto-align a previous
+	label; zap alpha_insn_label.
+
+2011-03-29  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (handle_quad): Properly handle multiple
+	operands.
+
+2011-03-29  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (BYTEUNPACK): Return yyerror when dest
+	reg $2 is the same as dest reg $4.
+
+2011-03-29  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (BYTEOP16M): Return yyerror when dest
+	reg $2 is the same as dest reg $4.
+
+2011-03-29  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (BYTEOP16P): Return yyerror when dest
+	reg $2 is the same as dest reg $4.
+
+2011-03-28  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (16bit acc add): Return yyerror when dest
+	reg $1 is the same as dest reg $7.
+
+2011-03-28  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (handle_quad): New.
+	(md_pseudo_table): Add "quad".
+
+2011-03-26  John Marino  <binutils@marino.st>
+
+	* configure.tgt: Fix support for *-*-dragonfly*.
+	* config/tc-i386.c: define SVR4_COMMENT_CHARS for dragonfly.
+	* config/te-dragonfly.h: New file.
+
+2011-03-24  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* config/tc-avr.c (mcu_types): Add new devices: atmega325pa,
+	atmega3250pa, atmega3290pa, atmega16hvbrevb, atmega32hvbrevb,
+	at90pwm161.
+	* doc/c-avr.texi: Document new device names.
+
+2011-03-24  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (dual 32bit add/sub): Return yyerror when dest
+	reg $1 is the same as dest reg $7.
+	(quad 16bit add/sub): Return yyerror when dest reg $1 is the same as
+	dest reg $7.
+
+2011-03-24  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (check_macfuncs): Clarify error message when
+	P is mismatched.  Check destination regno are off by one when P is
+	set, or are equal when P is not set.
+
+2011-03-23  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (SEARCH): Return yyerror when dest reg $2 is
+	the same as dest reg $4.
+	(BITMUX): Return yyerror when dest reg $3 is the same as dest reg $5.
+
+2011-03-23  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* config/tc-avr.c (mcu_types): Add new xmega devices: atxmega64a1u,
+	atxmega128a1u, atxmega16x1, atxmega32x1, atxmega128b1, atxmega256a3bu.
+	* doc/c-avr.texi: Document new device names.
+
+2011-03-22  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* config/tc-avr.c (struct avr_opcodes_s): Add opcode field.
+	(AVR_INSN): Change definition to match.
+	(avr_opcodes): Likewise, change to match.
+	(mcu_types): Add XMEGA architecture names and new XMEGA device names.
+	(md_show_usage): Add XMEGA architecture names.
+	(avr_operand): Add 'E' constraint for DES instruction of XMEGA devices.
+	Add support for SPM Z+ instruction.
+	* doc/c-avr.texi: Add documentation for XMEGA architectures and
+	devices.
+
+2011-03-21  Eric B. Weddington  <eric.weddington@atmel.com>
+
+	* config/tc-avr.c (md_show_usage): Add "Assembler" text to output.
+
+2011-03-18  Alan Modra  <amodra@gmail.com>
+
+	* config/obj-elf.c (elf_frob_symbol): Report S_SET_SIZE symbol
+	on .size expression errors rather than symbols in the size expression.
+
+2011-03-18  Alan Modra  <amodra@gmail.com>
+
+	* input-scrub.c (line_numberT): Delete.
+	(input_scrub_close): Reset line counters.
+	* messages.c (as_show_where): Don't print invalid line number.
+	(as_warn_internal, as_bad_internal): Likewise.
+
+2011-03-18  Alan Modra  <amodra@gmail.com>
+
+	* read.c (read_a_source_file): Remove md_after_pass_hook.
+	Move "quit" label before set of dot_symbol.
+	* config/tc-d10v.h (md_after_pass_hook): Don't define.
+	* config/tc-d30v.h (md_after_pass_hook): Likewise.
+	* config/tc-m32r.h (md_after_pass_hook): Likewise.
+	(md_cleanup): Define to call m32r_fill_insn.
+
+2011-03-18  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config/tc-s390.c (md_parse_option): Add -march=all option which
+	switches to the highest available CPU.
+
+2011-03-17  Alan Modra  <amodra@gmail.com>
+
+	PR 12569
+	* expr.c (operand): Correct passing of "mode" to expr.
+	* read.c (do_org): Allow expr_section.
+	(get_known_segmented_expression): Don't assert anything about the
+	segment.
+
+2011-03-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* as.c (show_usage): Add --size-check=.
+	(parse_args): Add and handle OPTION_SIZE_CHECK.
+
+	* as.h (flag_size_check): New.
+
+	* config/obj-elf.c (elf_frob_symbol): Use as_bad to report
+	bad .size directive only for --size-check=error.
+
+	* doc/as.texinfo: Document --size-check=.
+
+2011-03-14  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/tc-bfin.c (bfin_cpus[]): Add 0.4 for
+	bf542/bf544/bf547/bf548/bf549.
+
+2011-03-14  Richard Sandiford  <richard.sandiford@linaro.org>
+
+	* config/tc-arm.c (md_pcrel_from_section): Use S_FORCE_RELOC to
+	determine whether a relocation is needed.
+	(md_apply_fix, arm_apply_sym_value): Likewise.
+
+2011-03-14  Richard Sandiford  <richard.sandiford@linaro.org>
+
+	* config/tc-arm.c (arm_adjust_symtab): Set the branch type
+	for Thumb symbols.
+
+2011-03-11  Nick Clifton  <nickc@redhat.com>
+
+	* remap.c (remap_debug_filename): Always allocate a buffer for the
+	returned pointer.
+	* stabs.c (stabs_generate_asm_file): Free the pointer returned by
+	remap_debug_filename.
+
 2011-03-10  Michael Snyder  <msnyder@vmware.com>
 
 	Revert the following change:

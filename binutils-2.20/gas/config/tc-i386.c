@@ -185,6 +185,7 @@ static void s_bss (int);
 #endif
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
 static void handle_large_common (int small ATTRIBUTE_UNUSED);
+static void handle_quad (int);
 #endif
 static void nativeclient_symbol_init (void);
 
@@ -314,6 +315,7 @@ const char extra_symbol_chars[] = "*%-(["
 	 && !defined (TE_LINUX)				\
  	 && !defined (TE_NETWARE)			\
 	 && !defined (TE_FreeBSD)			\
+	 && !defined (TE_DragonFly)			\
 	 && !defined (TE_NetBSD)))
 /* This array holds the chars that always start a comment.  If the
    pre-processor is disabled, these aren't very useful.  The option
@@ -831,6 +833,7 @@ const pseudo_typeS md_pseudo_table[] =
   {"sse_check", set_sse_check, 0},
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
   {"largecomm", handle_large_common, 0},
+  {"quad", handle_quad, 8},
 #else
   {"file", (void (*) (int)) dwarf2_directive_file, 0},
   {"loc", dwarf2_directive_loc, 0},
@@ -2266,7 +2269,7 @@ i386_mach ()
   else if (!strcmp (default_arch, "i386"))
     return bfd_mach_i386_i386;
   else
-    as_fatal (_("Unknown architecture"));
+    as_fatal (_("unknown architecture"));
 }
 
 void
@@ -2328,7 +2331,7 @@ md_begin ()
 				    (void *) core_optab);
 	    if (hash_err)
 	      {
-		as_fatal (_("Internal Error:  Can't hash %s: %s"),
+		as_fatal (_("internal Error:  Can't hash %s: %s"),
 			  (optab - 1)->name,
 			  hash_err);
 	      }
@@ -2350,7 +2353,7 @@ md_begin ()
       {
 	hash_err = hash_insert (reg_hash, regtab->reg_name, (void *) regtab);
 	if (hash_err)
-	  as_fatal (_("Internal Error:  Can't hash %s: %s"),
+	  as_fatal (_("internal Error:  Can't hash %s: %s"),
 		    regtab->reg_name,
 		    hash_err);
       }
@@ -4688,7 +4691,7 @@ check_byte_reg (void)
 	  if (flag_code == CODE_64BIT
 	      && !i.tm.operand_types[op].bitfield.inoutportreg)
 	    {
-	      as_bad (_("Incorrect register `%s%s' used with `%c' suffix"),
+	      as_bad (_("incorrect register `%s%s' used with `%c' suffix"),
 		      register_prefix, i.op[op].regs->reg_name,
 		      i.suffix);
 	      return 0;
@@ -4763,7 +4766,7 @@ check_long_reg (void)
 	   lowering is more complicated.  */
 	if (flag_code == CODE_64BIT)
 	  {
-	    as_bad (_("Incorrect register `%s%s' used with `%c' suffix"),
+	    as_bad (_("incorrect register `%s%s' used with `%c' suffix"),
 		    register_prefix, i.op[op].regs->reg_name,
 		    i.suffix);
 	    return 0;
@@ -4792,7 +4795,7 @@ check_long_reg (void)
 	  }
 	else
 	  {
-	    as_bad (_("Incorrect register `%s%s' used with `%c' suffix"),
+	    as_bad (_("incorrect register `%s%s' used with `%c' suffix"),
 		    register_prefix, i.op[op].regs->reg_name,
 		    i.suffix);
 	    return 0;
@@ -4838,7 +4841,7 @@ check_qword_reg (void)
 	  }
 	else
 	  {
-	    as_bad (_("Incorrect register `%s%s' used with `%c' suffix"),
+	    as_bad (_("incorrect register `%s%s' used with `%c' suffix"),
 		    register_prefix, i.op[op].regs->reg_name,
 		    i.suffix);
 	    return 0;
@@ -4876,7 +4879,7 @@ check_word_reg (void)
 	   lowering is more complicated.  */
 	if (flag_code == CODE_64BIT)
 	  {
-	    as_bad (_("Incorrect register `%s%s' used with `%c' suffix"),
+	    as_bad (_("incorrect register `%s%s' used with `%c' suffix"),
 		    register_prefix, i.op[op].regs->reg_name,
 		    i.suffix);
 	    return 0;
@@ -7015,6 +7018,7 @@ lex_got (enum bfd_reloc_code_real *rel,
   /* Might be a symbol version string.  Don't as_bad here.  */
   return NULL;
 }
+#endif
 
 void
 x86_cons (expressionS *exp, int size)
@@ -7027,7 +7031,7 @@ x86_cons (expressionS *exp, int size)
       /* Handle @GOTOFF and the like in an expression.  */
       char *save;
       char *gotfree_input_line;
-      int adjust;
+      int adjust = 0;
 
       save = input_line_pointer;
       gotfree_input_line = lex_got (&got_reloc, &adjust, NULL);
@@ -7066,7 +7070,6 @@ x86_cons (expressionS *exp, int size)
   if (intel_syntax)
     i386_intel_simplify (exp);
 }
-#endif
 
 static void
 signed_cons (int size)
@@ -8740,7 +8743,7 @@ md_parse_option (int c, char *arg)
 	      break;
 	    }
 	if (*l == NULL)
-	  as_fatal (_("No compiled in support for x86_64"));
+	  as_fatal (_("no compiled in support for x86_64"));
 	free (list);
       }
       break;
@@ -8760,7 +8763,7 @@ md_parse_option (int c, char *arg)
 		break;
 	      }
 	  if (*l == NULL)
-	    as_fatal (_("No compiled in support for 32bit x86_64"));
+	    as_fatal (_("no compiled in support for 32bit x86_64"));
 	  free (list);
 	}
       else
@@ -8794,7 +8797,7 @@ md_parse_option (int c, char *arg)
       do
 	{
 	  if (*arch == '.')
-	    as_fatal (_("Invalid -march= option: `%s'"), arg);
+	    as_fatal (_("invalid -march= option: `%s'"), arg);
 	  next = strchr (arch, '+');
 	  if (next)
 	    *next++ = '\0';
@@ -8850,7 +8853,7 @@ md_parse_option (int c, char *arg)
 	    }
 
 	  if (j >= ARRAY_SIZE (cpu_arch))
-	    as_fatal (_("Invalid -march= option: `%s'"), arg);
+	    as_fatal (_("invalid -march= option: `%s'"), arg);
 
 	  arch = next;
 	}
@@ -8859,7 +8862,7 @@ md_parse_option (int c, char *arg)
 
     case OPTION_MTUNE:
       if (*arg == '.')
-	as_fatal (_("Invalid -mtune= option: `%s'"), arg);
+	as_fatal (_("invalid -mtune= option: `%s'"), arg);
       for (j = 0; j < ARRAY_SIZE (cpu_arch); j++)
 	{
 	  if (strcmp (arg, cpu_arch [j].name) == 0)
@@ -8871,7 +8874,7 @@ md_parse_option (int c, char *arg)
 	    }
 	}
       if (j >= ARRAY_SIZE (cpu_arch))
-	as_fatal (_("Invalid -mtune= option: `%s'"), arg);
+	as_fatal (_("invalid -mtune= option: `%s'"), arg);
       break;
 
     case OPTION_MMNEMONIC:
@@ -8880,7 +8883,7 @@ md_parse_option (int c, char *arg)
       else if (strcasecmp (arg, "intel") == 0)
 	intel_mnemonic = 1;
       else
-	as_fatal (_("Invalid -mmnemonic= option: `%s'"), arg);
+	as_fatal (_("invalid -mmnemonic= option: `%s'"), arg);
       break;
 
     case OPTION_MSYNTAX:
@@ -8889,7 +8892,7 @@ md_parse_option (int c, char *arg)
       else if (strcasecmp (arg, "intel") == 0)
 	intel_syntax = 1;
       else
-	as_fatal (_("Invalid -msyntax= option: `%s'"), arg);
+	as_fatal (_("invalid -msyntax= option: `%s'"), arg);
       break;
 
     case OPTION_MINDEX_REG:
@@ -8916,7 +8919,7 @@ md_parse_option (int c, char *arg)
       else if (strcasecmp (arg, "none") == 0)
 	sse_check = sse_check_none;
       else
-	as_fatal (_("Invalid -msse-check= option: `%s'"), arg);
+	as_fatal (_("invalid -msse-check= option: `%s'"), arg);
       break;
 
     case OPTION_NACL_ALIGN:
@@ -8937,7 +8940,7 @@ md_parse_option (int c, char *arg)
       else if (strcasecmp (arg, "256") == 0)
 	avxscalar = vex256;
       else
-	as_fatal (_("Invalid -mavxscalar= option: `%s'"), arg);
+	as_fatal (_("invalid -mavxscalar= option: `%s'"), arg);
       break;
 
     default:
@@ -9103,7 +9106,7 @@ i386_target_format (void)
   else if (!strcmp (default_arch, "i386"))
     update_code_flag (CODE_32BIT, 1);
   else
-    as_fatal (_("Unknown architecture"));
+    as_fatal (_("unknown architecture"));
 
   if (cpu_flags_all_zero (&cpu_arch_isa_flags))
     cpu_arch_isa_flags = cpu_arch[flag_code == CODE_64BIT].flags;
@@ -9658,6 +9661,52 @@ handle_large_common (int small ATTRIBUTE_UNUSED)
       elf_com_section_ptr = saved_com_section_ptr;
       bss_section = saved_bss_section;
     }
+}
+
+static void
+handle_quad (int nbytes)
+{
+  expressionS exp;
+
+  if (x86_elf_abi != X86_64_X32_ABI)
+    {
+      cons (nbytes);
+      return;
+    }
+
+  if (is_it_end_of_statement ())
+    {
+      demand_empty_rest_of_line ();
+      return;
+    }
+
+  do
+    {
+      if (*input_line_pointer == '"')
+	{
+	  as_bad (_("unexpected `\"' in expression"));
+	  ignore_rest_of_line ();
+	  return;
+	}
+      x86_cons (&exp, nbytes);
+      /* Output 4 bytes if not constant.  */
+      if (exp.X_op != O_constant)
+	nbytes = 4;
+      emit_expr (&exp, (unsigned int) nbytes);
+      /* Zero-extends to 8 bytes if not constant.  */
+      if (nbytes == 4)
+	{
+	  memset (&exp, '\0', sizeof (exp));
+	  exp.X_op = O_constant;
+	  emit_expr (&exp, nbytes);
+	}
+      nbytes = 8;
+    }
+  while (*input_line_pointer++ == ',');
+
+  input_line_pointer--;		/* Put terminator back into stream.  */
+
+  demand_empty_rest_of_line ();
 }
 #ifdef TC_NACL_C
 void nacl_elf_final_processing(void)

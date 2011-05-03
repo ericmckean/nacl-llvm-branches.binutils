@@ -801,7 +801,7 @@ vms_get_remaining_object_record (bfd *abfd, int read_so_far)
   /* Extract record size.  */
   PRIV (recrd.rec_size) = bfd_getl16 (PRIV (recrd.rec) + 2);
 
-  if (PRIV (recrd.rec_size) <= 0)
+  if (PRIV (recrd.rec_size) == 0)
     {
       bfd_set_error (bfd_error_file_truncated);
       return 0;
@@ -945,19 +945,19 @@ static const struct sec_flags_struct evax_section_flags[] =
       0 },
     { EVAX_CODE_NAME,
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_SHR | EGPS__V_EXE,
-      SEC_CODE,
+      SEC_CODE | SEC_READONLY,
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_SHR | EGPS__V_EXE,
-      SEC_CODE | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD },
+      SEC_CODE | SEC_READONLY | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD },
     { EVAX_LITERAL_NAME,
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_SHR | EGPS__V_RD | EGPS__V_NOMOD,
       SEC_DATA | SEC_READONLY,
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_SHR | EGPS__V_RD,
-      SEC_DATA | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_READONLY | SEC_LOAD },
+      SEC_DATA | SEC_READONLY | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD },
     { EVAX_LINK_NAME,
       EGPS__V_REL | EGPS__V_RD,
       SEC_DATA | SEC_READONLY,
       EGPS__V_REL | EGPS__V_RD,
-      SEC_DATA | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_READONLY | SEC_LOAD },
+      SEC_DATA | SEC_READONLY | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD },
     { EVAX_DATA_NAME,
       EGPS__V_REL | EGPS__V_RD | EGPS__V_WRT | EGPS__V_NOMOD,
       SEC_DATA,
@@ -972,12 +972,12 @@ static const struct sec_flags_struct evax_section_flags[] =
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_RD,
       SEC_DATA | SEC_READONLY,
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_RD,
-      SEC_DATA | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_READONLY | SEC_LOAD },
+      SEC_DATA | SEC_READONLY | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD },
     { EVAX_READONLY_NAME,
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_SHR | EGPS__V_RD | EGPS__V_NOMOD,
       SEC_DATA | SEC_READONLY,
       EGPS__V_PIC | EGPS__V_REL | EGPS__V_SHR | EGPS__V_RD,
-      SEC_DATA | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_READONLY | SEC_LOAD },
+      SEC_DATA | SEC_READONLY | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD },
     { EVAX_LOCAL_NAME,
       EGPS__V_REL | EGPS__V_RD | EGPS__V_WRT,
       SEC_DATA,
@@ -987,7 +987,7 @@ static const struct sec_flags_struct evax_section_flags[] =
       EGPS__V_PIC | EGPS__V_OVR,
       SEC_DATA | SEC_READONLY,
       EGPS__V_PIC | EGPS__V_OVR,
-      SEC_DATA | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_READONLY | SEC_LOAD },
+      SEC_DATA | SEC_READONLY | SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD },
     { NULL,
       EGPS__V_REL | EGPS__V_RD | EGPS__V_WRT,
       SEC_DATA,
@@ -1709,7 +1709,7 @@ _bfd_vms_slurp_etir (bfd *abfd, struct bfd_link_info *info)
 #if VMS_DEBUG
       _bfd_vms_debug (4, "etir: %s(%d)\n",
                       _bfd_vms_etir_name (cmd), cmd);
-      _bfd_hexdump (8, ptr, cmd_length - 4, (intptr_t) ptr);
+      _bfd_hexdump (8, ptr, cmd_length - 4, 0);
 #endif
 
       switch (cmd)
@@ -2901,7 +2901,7 @@ alpha_vms_create_eisd_for_section (bfd *abfd, asection *sec)
 
   if (sec->flags & SEC_CODE)
     eisd->u.eisd.flags |= EISD__M_EXE;
-  else if (!(sec->flags & SEC_READONLY))
+  if (!(sec->flags & SEC_READONLY))
     eisd->u.eisd.flags |= EISD__M_WRT | EISD__M_CRF;
 
   /* If relocations or fixup will be applied, make this isect writeable.  */
@@ -3752,7 +3752,7 @@ _bfd_vms_write_etir (bfd * abfd, int objtype ATTRIBUTE_UNUSED)
 	  int pass2_in_progress = 0;
 	  unsigned int irel;
 
-	  if (section->reloc_count <= 0)
+	  if (section->reloc_count == 0)
 	    (*_bfd_error_handler)
 	      (_("SEC_RELOC with no relocs in section %s"), section->name);
 
@@ -4710,7 +4710,7 @@ _bfd_vms_find_nearest_dst_line (bfd *abfd, asection *section,
   *func = NULL;
   *line = 0;
 
-  if (PRIV (dst_section) == NULL || !(abfd->flags & (EXEC_P | DYNAMIC)))
+  if (PRIV (dst_section) == NULL)
     return FALSE;
 
   if (PRIV (modules) == NULL)

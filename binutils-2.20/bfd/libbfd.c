@@ -866,7 +866,15 @@ _bfd_generic_get_section_contents (bfd *abfd,
       return FALSE;
     }
 
-  sz = section->rawsize ? section->rawsize : section->size;
+  /* We do allow reading of a section after bfd_final_link has
+     written the contents out to disk.  In that situation, rawsize is
+     just a stale version of size, so ignore it.  Otherwise we must be
+     reading an input section, where rawsize, if different to size,
+     is the on-disk size.  */
+  if (abfd->direction != write_direction && section->rawsize != 0)
+    sz = section->rawsize;
+  else
+    sz = section->size;
   if (offset + count < count
       || offset + count > sz)
     {
@@ -919,7 +927,10 @@ _bfd_generic_get_section_contents_in_window
       w->data = w->i->data;
       return bfd_get_section_contents (abfd, section, w->data, offset, count);
     }
-  sz = section->rawsize ? section->rawsize : section->size;
+  if (abfd->direction != write_direction && section->rawsize != 0)
+    sz = section->rawsize;
+  else
+    sz = section->size;
   if (offset + count > sz
       || ! bfd_get_file_window (abfd, section->filepos + offset, count, w,
 				TRUE))
@@ -968,8 +979,12 @@ bfd_log2 (bfd_vma x)
 {
   unsigned int result = 0;
 
-  while ((x = (x >> 1)) != 0)
+  if (x <= 1)
+    return result;
+  --x;
+  do
     ++result;
+  while ((x >>= 1) != 0);
   return result;
 }
 
