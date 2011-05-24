@@ -3369,4 +3369,23 @@ public:
 
 Target_selector_x86_64 target_selector_x86_64;
 
+// @LOCALMOD-BEGIN
+// The selector for x86_64 Native Client object files.
+
+class Target_selector_x86_64_nacl : public Target_selector
+{
+public:
+  Target_selector_x86_64_nacl()
+    : Target_selector(elfcpp::EM_X86_64, 64, false, "elf64-nacl")
+  { }
+
+  Target*
+  do_instantiate_target()
+  { return new Target_x86_64(); }
+
+};
+
+Target_selector_x86_64_nacl target_selector_x86_64_nacl;
+// @LOCALMOD-END
+
 } // End anonymous namespace.
