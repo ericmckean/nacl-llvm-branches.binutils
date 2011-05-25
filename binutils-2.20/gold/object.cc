@@ -2583,6 +2583,54 @@ Input_objects::check_dynamic_dependencies() const
     }
 }
 
+// @LOCALMOD-BEGIN
+// Print needed sonames to file.
+
+void Input_objects::print_sonames(std::string filename, bool add_needed) const
+{
+  const char* filenm = filename.c_str();
+  FILE* fp = fopen(filenm, "w");
+  if (fp)
+    {
+      Unordered_set<std::string> needed_sonames;
+      // Add needed sonames.
+      for (Dynobj_list::const_iterator p = this->dynobj_list_.begin();
+           p != this->dynobj_list_.end();
+           ++p)
+        {
+          if ((*p)->is_needed())
+            {
+              needed_sonames.insert((*p)->soname());
+              if (add_needed)
+                {
+                  const Dynobj::Needed& needed((*p)->needed());
+                  Dynobj::Needed::const_iterator pneeded;
+                  for (pneeded = needed.begin();
+                       pneeded != needed.end();
+                       ++pneeded)
+                    {
+                      needed_sonames.insert(*pneeded);
+                    }
+                }
+            }
+        }
+      // print out collected sonames.
+      for (Unordered_set<std::string>::const_iterator s =
+               needed_sonames.begin();
+           s != needed_sonames.end();
+           ++s)
+        {
+          fprintf(fp, "%s\n", s->c_str());
+        }
+      fclose(fp);
+    }
+  else
+    {
+      gold_error(_("Unable to open sonames file: '%s\n"), filenm);
+    }
+}
+
+// @LOCALMOD-END
 // Start processing an archive.
 
 void

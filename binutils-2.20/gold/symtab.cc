@@ -2714,6 +2714,37 @@ Symbol_table::write_globals(const Stringpool* sympool,
     }
 }
 
+// @LOCALMOD-BEGIN
+void
+Symbol_table::assert_no_undefined_symbols(
+    const std::set<std::string> &exceptions) const
+{
+  const char* const real_prefix = "__real_";
+  int undef_count = 0;
+  for (Symbol_table_type::const_iterator p = this->table_.begin();
+       p != this->table_.end();
+       ++p)
+    {
+      Symbol *sym = p->second;
+      if (sym->is_undefined() &&
+          sym->binding() != elfcpp::STB_WEAK &&
+          exceptions.count(sym->name()) == 0 &&
+          // @TODO(pdox): If --wrap is to be a supported user-visible feature,
+          // then it should be implemented properly in the LLVM plugin.
+          // For now, since we need to use --wrap for the self-build, just
+          // ignore the undefined symbols that result from --wrap.
+          strncmp(sym->name(), real_prefix, strlen(real_prefix)) != 0)
+        {
+          gold_undefined_symbol(sym);
+          undef_count++;
+        }
+    }
+  if (undef_count > 0) {
+    gold_exit(false);
+  }
+}
+// @LOCALMOD-END
+
 // Write out the global symbols.
 
 template<int size, bool big_endian>

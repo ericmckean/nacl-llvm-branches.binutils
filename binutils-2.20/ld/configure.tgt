@@ -71,6 +71,7 @@ arm-*-elf | arm*-*-eabi*)
 arm*-*-symbianelf*)     targ_emul=armsymbian;;
 arm-*-kaos*)		targ_emul=armelf ;;
 arm9e-*-elf)		targ_emul=armelf ;;
+arm*-*-nacl)		targ_emul=armelf_nacl ;;
 arm*b-*-linux-*eabi*)	targ_emul=armelfb_linux_eabi
 			targ_extra_emuls=armelf_linux_eabi
 			targ_extra_libpath=$targ_extra_emuls
@@ -219,6 +220,9 @@ i[3-7]86-*-netbsdpe*)	targ_emul=i386pe
 			targ_extra_ofiles="deffilep.o pe-dll.o" ;;
 i[3-7]86-*-netbsd*)	targ_emul=i386nbsd
 			targ_extra_emuls=elf_i386 ;;
+i[3-7]86-*-nacl*)	targ_emul=elf_nacl ;;
+x86_64-*-nacl*)		targ_emul=elf64_nacl
+			targ_extra_emuls=elf_nacl ;;
 x86_64-*-netbsd*)	targ_emul=elf_x86_64
 			targ_extra_emuls="elf_i386 i386nbsd elf_l1om"
 			tdir_elf_i386=`echo ${targ_alias} | \

@@ -60,11 +60,14 @@ BUGS
 # endif /* PAGESIZE */
 #endif /* GNU_OUR_PAGESIZE */
 
-int
+/* @LOCALMOD-BEGIN */
+size_t 
+/* @LOCALMOD-END */
 getpagesize (void)
 {
   return (GNU_OUR_PAGESIZE);
 }
+
 
 #else /* VMS */
 

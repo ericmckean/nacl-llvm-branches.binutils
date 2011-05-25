@@ -596,6 +596,12 @@ class General_options
 	      N_("Not supported"),
 	      N_("Do not copy DT_NEEDED tags from shared libraries"));
 
+// @LOCALMOD-BEGIN
+  DEFINE_bool(add_needed_sonames, options::TWO_DASHES, '\0', false,
+              N_("Add all transitive needed sonames to printed sonames file."),
+              NULL);
+
+// @LOCALMOD-END
   DEFINE_bool_alias(allow_multiple_definition, muldefs, options::TWO_DASHES,
 		    '\0', N_("Allow multiple definitions of symbols"),
 		    N_("Do not allow multiple definitions"), false);
@@ -927,6 +933,13 @@ class General_options
   DEFINE_special(section_start, options::TWO_DASHES, '\0',
 		 N_("Set address of section"), N_("SECTION=ADDRESS"));
 
+ // @LOCALMOD-BEGIN
+  DEFINE_string(sonames, options::TWO_DASHES, '\0', NULL,
+                N_("Save needed sonames found while linking, "
+                   "and save in file."),
+                N_("FILENAME"));
+// @LOCALMOD-END
+
   DEFINE_optional_string(sort_common, options::TWO_DASHES, '\0', NULL,
 			 N_("Sort common symbols by alignment"),
 			 N_("[={ascending,descending}]"));
@@ -988,6 +1001,15 @@ class General_options
 
   DEFINE_set(keep_unique, options::TWO_DASHES, '\0',
 	     N_("Do not fold this symbol during ICF"), N_("SYMBOL"));
+
+  DEFINE_bool(native_client, options::TWO_DASHES, '\0', false,
+              N_("Produce a native client app"),
+              N_("Don't produce a native client app (default)"));
+
+  DEFINE_bool(undef_sym_check, options::TWO_DASHES, '\0', false,
+              N_("Check for undefined symbols before plugin replacement phase"),
+              N_("Don't check for undefined symbols before plugin replacement"
+                 " phase (default)"));
 
   DEFINE_bool(gc_sections, options::TWO_DASHES, '\0', false,
               N_("Remove unused sections"),

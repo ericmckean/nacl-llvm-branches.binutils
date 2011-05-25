@@ -82,7 +82,11 @@ am__objects_1 = app.$(OBJEXT) as.$(OBJEXT) atof-generic.$(OBJEXT) \
 	messages.$(OBJEXT) output-file.$(OBJEXT) read.$(OBJEXT) \
 	remap.$(OBJEXT) sb.$(OBJEXT) stabs.$(OBJEXT) subsegs.$(OBJEXT) \
 	symbols.$(OBJEXT) write.$(OBJEXT)
+ifeq ($(NACL_SRPC),1)
+am_as_new_OBJECTS = $(am__objects_1) nacl_file.$(OBJEXT)
+else 
 am_as_new_OBJECTS = $(am__objects_1)
+endif
 as_new_OBJECTS = $(am_as_new_OBJECTS)
 am__DEPENDENCIES_1 =
 am__DEPENDENCIES_2 = ../bfd/libbfd.la ../libiberty/libiberty.a
@@ -101,9 +105,17 @@ LTCOMPILE = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
+ifeq ($(NACL_SRPC),1)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
-	$(LDFLAGS) -o $@
+	$(LDFLAGS) -Xlinker --wrap=open -Xlinker --wrap=read \
+	-Xlinker --wrap=write -Xlinker --wrap=close -Xlinker --wrap=lseek \
+	-lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread -lm -o $@
+else
+LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
+	$(LDFLAGS) -lm -o $@
+endif
 @MAINTAINER_MODE_FALSE@am__skiplex = test -f $@ ||
 LEXCOMPILE = $(LEX) $(LFLAGS) $(AM_LFLAGS)
 LTLEXCOMPILE = $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -411,6 +423,7 @@ TARGET_CPU_CFILES = \
 	config/tc-moxie.c \
 	config/tc-msp430.c \
 	config/tc-mt.c \
+	config/tc-nacl.c \
 	config/tc-ns32k.c \
 	config/tc-openrisc.c \
 	config/tc-or32.c \
@@ -474,6 +487,7 @@ TARGET_CPU_HFILES = \
 	config/tc-mn10300.h \
 	config/tc-msp430.h \
 	config/tc-mt.h \
+	config/tc-nacl.h \
 	config/tc-ns32k.h \
 	config/tc-openrisc.h \
 	config/tc-or32.h \
@@ -615,7 +629,11 @@ GASLIBS = @OPCODES_LIB@ ../bfd/libbfd.la ../libiberty/libiberty.a
 
 # Files to be copied away after each stage in building.
 STAGESTUFF = *.@OBJEXT@ $(noinst_PROGRAMS)
+ifeq ($(NACL_SRPC),1)
+as_new_SOURCES = $(GAS_CFILES) nacl_file.c
+else
 as_new_SOURCES = $(GAS_CFILES)
+endif
 as_new_LDADD = $(TARG_CPU_O) $(OBJ_FORMAT_O) $(ATOF_TARG_O) \
 	$(extra_objects) $(GASLIBS) $(LIBINTL) $(LIBM)
 
@@ -818,6 +836,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-moxie.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-msp430.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-mt.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-nacl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-ns32k.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-openrisc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tc-or32.Po@am__quote@
@@ -1384,6 +1403,20 @@ tc-mt.obj: config/tc-mt.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-mt.c' object='tc-mt.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-mt.obj `if test -f 'config/tc-mt.c'; then $(CYGPATH_W) 'config/tc-mt.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-mt.c'; fi`
+
+tc-nacl.o: config/tc-nacl.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-nacl.o -MD -MP -MF $(DEPDIR)/tc-nacl.Tpo -c -o tc-nacl.o `test -f 'config/tc-nacl.c' || echo '$(srcdir)/'`config/tc-nacl.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/tc-nacl.Tpo $(DEPDIR)/tc-nacl.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-nacl.c' object='tc-nacl.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-nacl.o `test -f 'config/tc-nacl.c' || echo '$(srcdir)/'`config/tc-nacl.c
+
+tc-nacl.obj: config/tc-nacl.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-nacl.obj -MD -MP -MF $(DEPDIR)/tc-nacl.Tpo -c -o tc-nacl.obj `if test -f 'config/tc-nacl.c'; then $(CYGPATH_W) 'config/tc-nacl.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-nacl.c'; fi`
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/tc-nacl.Tpo $(DEPDIR)/tc-nacl.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='config/tc-nacl.c' object='tc-nacl.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o tc-nacl.obj `if test -f 'config/tc-nacl.c'; then $(CYGPATH_W) 'config/tc-nacl.c'; else $(CYGPATH_W) '$(srcdir)/config/tc-nacl.c'; fi`
 
 tc-ns32k.o: config/tc-ns32k.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT tc-ns32k.o -MD -MP -MF $(DEPDIR)/tc-ns32k.Tpo -c -o tc-ns32k.o `test -f 'config/tc-ns32k.c' || echo '$(srcdir)/'`config/tc-ns32k.c

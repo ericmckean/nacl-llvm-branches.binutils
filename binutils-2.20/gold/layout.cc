@@ -1457,7 +1457,8 @@ Layout::attach_allocated_section_to_segment(Output_section* os)
       if (!parameters->options().omagic()
 	  && ((*p)->flags() & elfcpp::PF_W) != (seg_flags & elfcpp::PF_W))
 	continue;
-      if (parameters->options().rosegment()
+      if ((parameters->options().native_client() ||
+           parameters->options().rosegment())
           && ((*p)->flags() & elfcpp::PF_X) != (seg_flags & elfcpp::PF_X))
         continue;
       // If -Tbss was specified, we need to separate the data and BSS
@@ -1755,7 +1756,7 @@ Layout::find_first_load_seg()
           if (best == NULL || this->segment_precedes(*p, best))
             best = *p;
         }
-    }
+        }
   if (best != NULL)
     return best;
 
@@ -2861,6 +2862,7 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
   const bool check_sections = parameters->options().check_sections();
   Output_segment* last_load_segment = NULL;
 
+  bool was_executable = false;
   for (Segment_list::iterator p = this->segment_list_.begin();
        p != this->segment_list_.end();
        ++p)
@@ -2900,6 +2902,11 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
 	  uint64_t aligned_addr = 0;
 	  uint64_t abi_pagesize = target->abi_pagesize();
 	  uint64_t common_pagesize = target->common_pagesize();
+          if (parameters->options().native_client())
+            {
+              abi_pagesize = 0x10000;
+              common_pagesize = 0x10000;
+            }
 
 	  if (!parameters->options().nmagic()
 	      && !parameters->options().omagic())
@@ -2916,8 +2923,27 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
 	      addr = align_address(addr, (*p)->maximum_alignment());
 	      aligned_addr = addr;
 
-	      if ((addr & (abi_pagesize - 1)) != 0)
-                addr = addr + abi_pagesize;
+
+		// NaCl wants the segment to be aligned, even if it is
+		// RW. This looks like a limitation in the loader since
+		// it is failing while calling NaCl_mprotect on an
+		// unaligned address. It should be probably be passing
+		// the address of the start of the page it loaded this
+		// data into.
+                if (!parameters->options().native_client())
+                  {
+            
+                    if ((addr & (abi_pagesize - 1)) != 0)
+                      addr = addr + abi_pagesize;
+                  }
+                else
+                  {
+                    // If the last segment was executable,
+                    // NaCl wants space in the end to add hlts.
+                    if (was_executable)
+                      addr += 32;
+                    addr = align_address(addr, abi_pagesize);
+                  }
 
 	      off = orig_off + ((addr - orig_addr) & (abi_pagesize - 1));
 	    }
@@ -2988,6 +3014,8 @@ Layout::set_segment_offsets(const Target* target, Output_segment* load_seg,
 	    }
 
 	  addr = new_addr;
+
+          was_executable = (*p)->flags() & elfcpp::PF_X;
 
 	  // Implement --check-sections.  We know that the segments
 	  // are sorted by LMA.
