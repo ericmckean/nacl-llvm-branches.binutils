@@ -421,7 +421,7 @@ if test -n "$GENERATE_AUTO_IMPORT_SCRIPT"; then
 fi
 
 case " $EMULATION_LIBPATH " in
-    *" ${EMULATION_NAME} "*) COMPILE_IN=true;;
+  *" ${EMULATION_NAME} "*) COMPILE_IN=true;;
 esac
 
 # PR ld/5652:

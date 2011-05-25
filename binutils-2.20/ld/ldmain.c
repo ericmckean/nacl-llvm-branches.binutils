@@ -65,6 +65,20 @@ extern void *sbrk ();
 
 /* EXPORTS */
 
+#if defined(__native_client__) && defined(NACL_SRPC)
+
+#include <fcntl.h>
+#include <sys/nacl_syscalls.h>
+#include <sys/stat.h>
+#include <nacl/nacl_srpc.h>
+
+/* TODO(robertm): get a real header file for nacl_file */
+extern int get_real_fd_by_name(char* pathname);
+extern int NaClFile_fd(char *pathname, int fd,
+                       int has_real_size, size_t real_size_opt);
+extern int NaClFile_new(char *pathname);
+#endif
+
 FILE *saved_script_handle = NULL;
 FILE *previous_script_handle = NULL;
 bfd_boolean force_make_executable = FALSE;
@@ -186,7 +200,7 @@ ld_cleanup (void)
 }
 
 int
-main (int argc, char **argv)
+ldmain (int argc, char **argv)
 {
   char *emulation;
   long start_time = get_run_time ();
@@ -564,9 +578,148 @@ main (int argc, char **argv)
   /* Prevent remove_output from doing anything, after a successful link.  */
   output_filename = NULL;
 
-  xexit (0);
   return 0;
 }
+
+#if !defined(NACL_SRPC)
+int
+main (int argc, char **argv) {
+  int ret_code = ldmain(argc, argv);
+  xexit (0);
+  return ret_code;
+}
+#elif defined(__native_client__)
+
+/***********************************************************************/
+/* NaCl RPCs                                                           */
+
+static void WrapRetcodeAsSrpcResult(int ret,
+                                    NaClSrpcRpc *rpc,
+                                    NaClSrpcClosure *done) {
+  rpc->result = ret ? NACL_SRPC_RESULT_INTERNAL : NACL_SRPC_RESULT_OK;
+  done->Run(done);
+}
+
+/** Add a mapping to our internal file_system so that opening a file
+    with name in_args[0] will result in using the handle from in_args[1]. */
+void
+add_file(NaClSrpcRpc *rpc,
+         NaClSrpcArg **in_args,
+         NaClSrpcArg **out_args,
+         NaClSrpcClosure *done) {
+  /* These are urlAsNaClDesc'ed files, and have an accurate size from fstat */
+  int ret = NaClFile_fd(in_args[0]->arrays.str, in_args[1]->u.hval, 0, 0);
+  WrapRetcodeAsSrpcResult(ret, rpc, done);
+}
+
+/** Add a mapping to our internal file_system so that opening a file
+    with name in_args[0] will result in using the handle from in_args[1].
+    The file size is initialized to in_args[2] (overriding fstat). */
+void
+add_file_with_size(NaClSrpcRpc *rpc,
+                   NaClSrpcArg **in_args,
+                   NaClSrpcArg **out_args,
+                   NaClSrpcClosure *done) {
+  /* These are intermediate shm files with file size supplied externally
+   * (fstat will not give you an accurate size) */
+  int ret = NaClFile_fd(in_args[0]->arrays.str,
+                        in_args[1]->u.hval,
+                        1,
+                        in_args[2]->u.ival);
+  WrapRetcodeAsSrpcResult(ret, rpc, done);
+}
+
+#define MAX_LD_ARGS 128
+#define BUILTIN_LD_ARGS 1
+static char *ld_argv[MAX_LD_ARGS] = { "ld" };
+static int ld_argc = BUILTIN_LD_ARGS;
+
+/** Free old args when not using standard static args */
+static void reset_arg_array() {
+  int i;
+  for (i = BUILTIN_LD_ARGS; i < ld_argc; ++i) {
+    free(ld_argv[i]);
+  }
+  ld_argc = BUILTIN_LD_ARGS;
+}
+
+/** Supply a commandline argument via in_args[0]. */
+static void add_ld_arg(NaClSrpcRpc *rpc,
+                       NaClSrpcArg **in_args,
+                       NaClSrpcArg **out_args,
+                       NaClSrpcClosure *done) {
+  int ret = 0;
+  if (ld_argc >= MAX_LD_ARGS) {
+    einfo("Can't AddArg #(%d) beyond MAX_LD_ARGS(%d)\n",
+          ld_argc, MAX_LD_ARGS);
+    ret = 1;
+    goto done;
+  }
+
+  ld_argv[ld_argc] = strdup(in_args[0]->arrays.str);
+  if (NULL == ld_argv[ld_argc]) {
+    einfo("Out of memory for copying arg string\n");
+    ret = 1;
+    goto done;
+  }
+  ld_argc++;
+
+done:
+  WrapRetcodeAsSrpcResult(ret, rpc, done);
+}
+
+/** Run the link returning a file handle for the result along with file size. */
+void
+ldlink(NaClSrpcRpc *rpc,
+       NaClSrpcArg **in_args,
+       NaClSrpcArg **out_args,
+       NaClSrpcClosure *done) {
+  int ret = 0;
+  /* Define output file. */
+  NaClFile_new("a.out");
+
+  ret = ldmain(ld_argc, ld_argv);
+  reset_arg_array();
+
+  /* Save nexe fd for return. */
+  out_args[0]->u.hval = get_real_fd_by_name("a.out");
+  out_args[1]->u.ival = get_real_size_by_name("a.out");
+
+  /* TODO(abetul): Close all open fd's */
+
+  /* Unfortunately, if ld uses xexit(non_zero) it could terminate our
+     RPC loop instead of returning from this RPC with an error code.
+     Maybe we could do some setjmp/longjmp + xatexit() hack to have
+     more control over how this ends. */
+  WrapRetcodeAsSrpcResult(ret, rpc, done);
+}
+
+/*
+ * Protocol as a regex: (AddFile|AddFileWithSize|AddArg)* Link
+ * Link is likely not re-entrant. In any case, if you wish to try to run
+ * another Link, note that the effects of AddArg are reset after the Link,
+ * while the effects of AddFile|AddFileWithSize are not.
+ */
+const struct NaClSrpcHandlerDesc srpc_methods[] = {
+  { "AddFile:sh:", add_file },
+  { "AddFileWithSize:shi:", add_file_with_size },
+  { "AddArg:s:", add_ld_arg },
+  { "Link::hi", ldlink },
+  { NULL, NULL },
+};
+
+int
+main() {
+  if (!NaClSrpcModuleInit()) {
+    return 1;
+  }
+  if (!NaClSrpcAcceptClientConnection(srpc_methods)) {
+    return 1;
+  }
+  NaClSrpcModuleFini();
+  return 0;
+}
+#endif /* __native_client__ */
 
 /* If the configured sysroot is relocatable, try relocating it based on
    default prefix FROM.  Return the relocated directory if it exists,

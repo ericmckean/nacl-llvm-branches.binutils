@@ -284,6 +284,13 @@ main(int argc, char** argv)
   if (mapfile != NULL)
     mapfile->close();
 
+// @LOCALMOD-BEGIN
+  // Save sonames if specified.
+  if (command_line.options().sonames() != NULL)
+    input_objects.print_sonames(command_line.options().sonames(),
+                                command_line.options().add_needed_sonames());
+
+// @LOCALMOD-END
   if (parameters->options().fatal_warnings()
       && errors.warning_count() > 0
       && errors.error_count() == 0)

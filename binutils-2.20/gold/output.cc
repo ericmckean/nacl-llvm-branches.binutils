@@ -4662,6 +4662,7 @@ Output_file::open(off_t file_size)
 	this->o_ = STDOUT_FILENO;
       else
 	{
+#if ! defined(__native_client__)
 	  struct stat s;
 	  if (::stat(this->name_, &s) == 0
 	      && (S_ISREG (s.st_mode) || S_ISLNK (s.st_mode)))
@@ -4679,7 +4680,7 @@ Output_file::open(off_t file_size)
 		  ::chmod(this->name_, s.st_mode & ~mask);
 		}
 	    }
-
+#endif
 	  int mode = parameters->options().relocatable() ? 0666 : 0777;
 	  int o = open_descriptor(-1, this->name_, O_RDWR | O_CREAT | O_TRUNC,
 				  mode);

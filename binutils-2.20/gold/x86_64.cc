@@ -2465,6 +2465,12 @@ Target_x86_64::do_finalize_sections(
     const Input_objects*,
     Symbol_table* symtab)
 {
+  if (parameters->options().native_client())
+    {
+      const int EF_NACL_ALIGN_32 = 0x200000;
+      this->set_processor_specific_flags(EF_NACL_ALIGN_32);
+    }
+
   const Reloc_section* rel_plt = (this->plt_ == NULL
 				  ? NULL
 				  : this->plt_->rela_plt());
@@ -3625,5 +3631,24 @@ public:
 };
 
 Target_selector_x86_64 target_selector_x86_64;
+
+// @LOCALMOD-BEGIN
+// The selector for x86_64 Native Client object files.
+
+class Target_selector_x86_64_nacl : public Target_selector
+{
+public:
+  Target_selector_x86_64_nacl()
+    : Target_selector(elfcpp::EM_X86_64, 64, false, "elf64-nacl")
+  { }
+
+  Target*
+  do_instantiate_target()
+  { return new Target_x86_64(); }
+
+};
+
+Target_selector_x86_64_nacl target_selector_x86_64_nacl;
+// @LOCALMOD-END
 
 } // End anonymous namespace.

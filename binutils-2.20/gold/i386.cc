@@ -2100,6 +2100,12 @@ Target_i386::do_finalize_sections(
     const Input_objects*,
     Symbol_table* symtab)
 {
+  if (parameters->options().native_client())
+    {
+      const int EF_NACL_ALIGN_32 = 0x200000;
+      this->set_processor_specific_flags(EF_NACL_ALIGN_32);
+    }
+
   const Reloc_section* rel_plt = (this->plt_ == NULL
 				  ? NULL
 				  : this->plt_->rel_plt());
@@ -3295,5 +3301,22 @@ public:
 };
 
 Target_selector_i386 target_selector_i386;
+
+// @LOCALMOD-BEGIN
+// The selector for i386 Native Client object files.
+class Target_selector_i386_nacl : public Target_selector
+{
+public:
+  Target_selector_i386_nacl()
+    : Target_selector(elfcpp::EM_386, 32, false, "elf32-nacl")
+  { }
+
+  Target*
+  do_instantiate_target()
+  { return new Target_i386(); }
+};
+
+Target_selector_i386_nacl target_selector_i386_nacl;
+// @LOCALMOD-END
 
 } // End anonymous namespace.
