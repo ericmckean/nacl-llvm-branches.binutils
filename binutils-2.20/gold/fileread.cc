@@ -997,6 +997,7 @@ Input_file::find_file(const Dirsearch& dirpath, int* pindex,
 	    names.push_back(prefix + ".a");
 	  else
 	    {
+	      names.push_back(prefix + ".pso"); // @LOCALMOD
 	      names.push_back(prefix + ".so");
 	      names.push_back(prefix + ".a");
 	    }
