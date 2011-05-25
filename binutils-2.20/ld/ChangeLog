@@ -1,3 +1,126 @@
+2011-05-23  Alan Modra  <amodra@gmail.com>
+
+	* ldmisc.c (vfinfo): Add %H.
+	* ldmain.c (reloc_overflow): Use %H rather than %C.
+	(reloc_dangerous, unattached_reloc): Likewise.
+
+2011-05-23  Alan Modra  <amodra@gmail.com>
+
+	PR 12763
+	* ldlang.c (lang_output_section_find_by_flags): Match orphan .sdata2
+	like sections to existing .sdata2, and similarly for orphan TLS
+	sections.
+	* emultempl/elf32.em (place_orphan): Exclude .tbss from orphan_bss.
+
+2011-05-17  Tomohiro Kashiwada  <kikairoya@gmail.com>
+
+	PR ld/12759
+	* emultempl/rxelf.em (ignore_lma): New variable.
+	(rx_elf_create_output_section_statements): Pass the setiing of
+	ignore_lma to bfd_elf32_rx_set_target_flags.
+	(OPTION_IGNORE_LMA): Define.
+	(OPTION_NO_IGNORE_LMA): Define.
+	(PARSE_AND_LIST_LONGOPTS): Add ignore lma.
+	(PARSE_AND_LIST_OPTIONS): Add ignore lma.
+	(PARSE_AND_LIST_ARGS_CASES): Add ignore lma.
+
+2011-05-17  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12760
+	* ldmain.c (notice): Add "flags" and "string" param.
+	* plugin.c (plugin_notice): Likewise.  Handle indirect, warning
+	and constructor syms.
+
+2010-05-16  Daniel Jacobowitz  <dan@codesourcery.com>
+
+	* ldlang.c (print_assignment): Use the symbol's section if we
+	use its value.
+	* ldexp.c (exp_fold_tree_1): Skip self-assignment.  Expand
+	comment on copying symbol type.
+
+2011-05-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR ld/12760
+	* plugin.c (plugin_notice): Set u.undef.abfd for symbols made
+	undefweak.
+
+2011-05-16  Alan Modra  <amodra@gmail.com>
+
+	* ldlang.c (lang_leave_output_section_statement): Don't copy
+	previous lma_region if given address.
+
+2011-05-13  Bernd Schmidt  <bernds@codesourcery.com>
+
+	(eelf32_tic6x_linux_be.c, eelf32_tic6x_linux_le.c,
+	eelf32_tic6x_elf_be.c, eelf32_tic6x_elf_le.c): New rules.
+	* Makefile.am (ALL_EMULATIONS): Add these files.
+	(eelf32_tic6x_be.c, eelf32_tic6x_le.c): Depend on tic6xdsbt.em.
+	* Makefile.in: Regenerated.
+	* emultempl/tic6xdsbt.em (is_tic6x_target): Allow more tic6x target
+	vectors.
+	* emulparams/elf32_tic6x_elf_be.sh: New file.
+	* emulparams/elf32_tic6x_elf_le.sh: New file.
+	* emulparams/elf32_tic6x_linux_be.sh: New file.
+	* emulparams/elf32_tic6x_linux_le.sh: New file.
+	* configure.tgt (tic6x-*-elf, tic6x-*-uclinux): New.
+	(tic6x-*-*): Replaced by these.
+
+2011-05-13  Jan Beulich  <jbeulich@novell.com>
+
+	* configure.tgt: Add targets x86_64-*-pe and x86_64-*-pep.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* emultempl/tic6xdsbt.em (merge_exidx_entries): New.
+	(compare_output_sec_vma): New function.
+	(gld${EMULATION_NAME}_after_allocation): New function.
+	(OPTION_NO_MERGE_EXIDX_ENTRIES): Define.
+	(PARSE_AND_LIST_OPTIONS): Add --no-merge-exidx-entries.
+	(PARSE_AND_LIST_ARGS_CASES): Add OPTION_NO_MERGE_EXIDX_ENTRIES.
+	(LDEMUL_AFTER_ALLOCATION): Set.
+	* ld.texinfo: Document c6x --no-merge-exidx-entries.
+
+2011-05-07  Dave Korn  <dave.korn.cygwin@gmail.com>
+
+	PR ld/12365
+	* scripttempl/pe.sc (__rt_psrelocs_start): New symbol definition.
+	(__rt_psrelocs_end): Likewise.
+	(__rt_psrelocs_size): Likewise difference between the above.
+	(__RUNTIME_PSEUDO_RELOC_LIST_END__): Move outside .rdata section
+	immediately after end of pseudo-reloc data.
+	(___RUNTIME_PSEUDO_RELOC_LIST_END___): Likewise.
+	(__RUNTIME_PSEUDO_RELOC_LIST__): Move outside .rdata section and
+	calculate backward from list end.
+	(___RUNTIME_PSEUDO_RELOC_LIST___): Likewise.
+	* scripttempl/pep.sc: Likewise.
+
+2011-05-06  Tristan Gingold  <gingold@adacore.com>
+
+	* scripttempl/alphavms.sc (CODE): Add *$CODE*.
+
+2011-05-04  Tristan Gingold  <gingold@adacore.com>
+
+	* emultempl/generic.em (ld_${EMULATION_NAME}_emulation): Add
+	LDEMUL_ADD_OPTIONS and LDEMUL_HANDLE_OPTION.
+	* emultempl/vms.em (OPTION_IDENTIFICATION): New macro.
+	(gld${EMULATION_NAME}_add_options): New function.
+	(gld${EMULATION_NAME}_list_options): Ditto.
+	(gld${EMULATION_NAME}_handle_option): Ditto.
+	(LDEMUL_ADD_OPTIONS, LDEMUL_HANDLE_OPTION)
+	(LDEMUL_LIST_OPTIONS): Define.
+
+2011-05-04  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12726
+	* ldexp.h (lang_phase_type): Add lang_assigning_phase_enum.
+	* ldexp.c (exp_fold_tree_1): Correct assign to dot comment.  Don't
+	assign to dot when lang_assigning_phase_enum.
+	* ldlang.h (lang_do_assignments): Update prototype.
+	* ldlang.c (lang_do_assignments): Add phase parameter.  Update all
+	callers.
+	* pe-dll.c (pe_dll_fill_sections, pe_exe_fill_sections): Update
+	lang_do_assignments calls.
+
 2011-04-28  Daniel C. Klauer  <daniel.c.klauer@web.de>
 
 	PR ld/12614

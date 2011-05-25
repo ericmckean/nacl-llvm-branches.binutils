@@ -1,3 +1,26 @@
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* s390-opc.c: Replace S390_OPERAND_REG_EVEN with
+	S390_OPERAND_REG_PAIR.  Fix INSTR_RRF_0UFEF instruction type.
+	* s390-opc.txt: Fix cxr instruction type.
+
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* s390-opc.c: Add new instruction types marking register pair
+	operands.
+	* s390-opc.txt: Match instructions having register pair operands
+	to the new instruction types.
+
+2011-05-19  Nick Clifton  <nickc@redhat.com>
+
+	* v850-opc.c (cmpf.[sd]): Reverse the order of the reg1 and reg2
+	operands.
+
+2011-05-10  Quentin Neill  <quentin.neill@amd.com>
+
+	* i386-gen.c (cpu_flag_init): Add new CPU_BDVER2_FLAGS.
+	* i386-init.h: Regenerated.
+
 2011-04-27  Nick Clifton  <nickc@redhat.com>
 
 	* po/da.po: Updated Danish translation.

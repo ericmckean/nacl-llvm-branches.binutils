@@ -1,3 +1,286 @@
+2011-05-25  Tristan Gingold  <gingold@adacore.com>
+
+	* configure.in (bfd_elf32_ia64_big_vec, bfd_elf32_ia64_hpux_big_vec)
+	(bfd_elf64_ia64_big_vec, bfd_elf64_ia64_hpux_big_vec)
+	(bfd_elf64_ia64_little_vec, bfd_elf64_ia64_vms_vec): Add elfxx-ia64.lo
+	* Makefile.am (BFD64_BACKENDS): Add elfxx-ia64.lo
+	(BFD64_BACKENDS_CFILES): Add elfxx-ia64.c
+	(elf32-ia64.c): Created from elfnn-ia64.c
+	(elf64-ia64.c): Likewise.
+	* elfxx-ia64.h: New file.
+	* elfxx-ia64.c: Split with elfnn-ia64.c.  Keep only the following
+	functions.Includes elfxx-ia64.h.
+	(elfNN_ia64_reloc): Renames to ia64_elf_reloc.  Adjust error message.
+	(IA64_HOWTO): Adjust.
+	(lookup_howto): Renames to ia64_elf_lookup_howto.  Make it public.
+	(elfNN_ia64_reloc_type_lookup): Renames to
+	ia64_elf_reloc_type_lookup. Make it public. Adjust calls.
+	(elfNN_ia64_reloc_name_lookup): Renames to
+	ia64_elf_reloc_name_lookup. Make it public.
+	(elfNN_ia64_relax_br): Renames to ia64_elf_relax_br.  Make it public.
+	(elfNN_ia64_relax_brl): Renames to ia64_elf_relax_brl. Make it
+	public.
+	(elfNN_ia64_relax_ldxmov): Renames to ia64_elf_relax_ldxmov.
+	Move it and make it public.  Move prototype to elfxx-ia64.h
+	(elfNN_ia64_install_value): Renames to ia64_elf_install_value.
+	Move prototype to elfxx-ia64.h
+	* elfnn-ia64.c: New file, split from elfxx-ia64.c.
+	(elfNN_ia64_info_to_howto): Adjust calls.
+	(elfNN_ia64_relax_section): Adjust calls.
+	(count_dyn_reloc): Fix typo.
+	(elfNN_ia64_relocate_section): Adjust calls.
+	(elfNN_ia64_finish_dynamic_symbol): Likewise.
+	(bfd_elfNN_bfd_reloc_type_lookup)
+	(bfd_elfNN_bfd_reloc_name_lookup): Adjust macros.
+	* configure: Regenerate.
+	* Makefile.in: Regenerate.
+
+2011-05-23  DJ Delorie  <dj@redhat.com>
+
+	* elf32-rx.c (rx_elf_object_p): When reading an RX object in, undo
+	the vma/lma swapping done in elf32_rx_modify_program_headers.
+
+2011-05-23  Nick Clifton  <nickc@redhat.com>
+
+	* elf-m10300.c (mn10300_elf_mkobject): New function.
+	(bfd_elf32_mkobject): Define.
+
+2011-05-23  Alan Modra  <amodra@gmail.com>
+
+	* elf-bfd.h: Comment typo fix.
+	* elf32-ppc.c (struct ppc_elf_dyn_relocs): Delete.  Replace with
+	struct elf_dyn_relocs throughout.
+	* elf64-ppc.c (struct ppc_dyn_relocs): Likewise.
+
+2011-05-23  Alan Modra  <amodra@gmail.com>
+
+	* elf32-frv.c: Use info->callbacks->einfo throughout file in linker
+	functions rather than warning callback or _bfd_error_handler.
+	* elf32-ppc.c: Likewise.
+	* elf64-ppc.c: Likewise.
+	* elf32-ppc.c (ppc_elf_tls_optimize): Use %H in __tls_get_addr lost
+	arg error.
+	* elf64-ppc.c (ppc64_elf_tls_optimize): Likewise.
+
+2011-05-23  Alan Modra  <amodra@gmail.com>
+
+	PR 12763
+	* elf.c (assign_file_positions_for_load_sections): Set sh_offset for
+	.tbss, and page align same for all SHT_NOBITS sections.
+
+2011-05-21  Alan Modra  <amodra@gmail.com>
+
+	PR 12763
+	* elf.c (_bfd_elf_make_section_from_shdr): Set up TLS section LMAs
+	from PT_TLS header.
+	(_bfd_elf_map_sections_to_segments): Don't create a final PT_LOAD
+	segment if just for .tbss.
+	(assign_file_positions_for_load_sections): Don't report "can't
+	allocate in segment" errors for .tbss.
+	(assign_file_positions_for_non_load_sections): Don't set p_filesz
+	from SHT_NOBITS section filepos.
+
+2011-05-20  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* elf32-tic6x.c (elf32_tic6x_howto_table): Add entries for
+	R_C6000_PCR_H16 and R_C6000_PCR_L16.
+	(elf32_tic6x_relocate_section): Handle them.
+
+2011-05-18  Nick Clifton  <nickc@redhat.com>
+
+	PR ld/12761
+	* elflink.c (elf_link_add_object_symbols): Process .gnu.warning
+	sections when building shared libraries.
+
+2011-05-18  Rafał Krypa  <r.krypa@samsung.com>
+
+	PR ld/12778
+	* elf32-arm.c (elf32_arm_gc_sweep_hook): Use the computed dynamic
+	reloc pointer.
+
+2011-05-18  Tristan Gingold  <gingold@adacore.com>
+
+	* xcofflink.c (xcoff_link_add_symbols): Handle C_DWARF symbols.
+	(xcoff_sweep): Always keep dwarf sections.
+	(xcoff_link_input_bfd): Handle dwarf symbols and sections.
+
+2011-05-18  Tristan Gingold  <gingold@adacore.com>
+
+	* libxcoff.h (struct xcoff_dwsect_name): New type.
+	(XCOFF_DWSECT_NBR_NAMES): New macro.
+	(xcoff_dwsect_names): Declare.
+	* coffcode.h (sec_to_styp_flags): Handle xcoff dwarf sections.
+	(styp_to_sec_flags): Ditto.
+	(coff_new_section_hook): Ditto.
+	(coff_slurp_symbol_table): Handle C_DWARF and C_INFO.
+	* coff-rs6000.c (xcoff_dwsect_name): New variable.
+
+2011-05-17  Tomohiro Kashiwada  <kikairoya@gmail.com>
+
+	PR ld/12759
+	* elf32-rx.c (ignore_lma): New variable.
+	(bfd_elf32_rx_set_target_flags): Add ignore_lma parameter.
+	(rx_modify_program_headers): Only copy the LMA into the VMA if
+	ignore_lma is true.
+
+2011-05-17  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12760
+	* coff-aux.c (coff_m68k_aux_link_add_one_symbol): Adjust "notice" call.
+	* elflink.c (elf_link_add_object_symbols): Likewise.
+	* linker.c (_bfd_generic_link_add_one_symbol): Likewise.
+
+2011-05-16  Alan Modra  <amodra@gmail.com>
+
+	* linker.c (_bfd_generic_link_add_one_symbol): Don't init u.undef.weak.
+
+2011-05-15  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* elfxx-mips.c (_bfd_mips_elf_check_relocs): Record both local and
+	global GOT entries for GOT_PAGE relocations against global symbols.
+
+2011-05-13  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* config.bfd (tic6x-*-elf, tic6x-*-uclinux): New.
+	(tic6x-*-*): Replaced by these.
+	* elf32-tic6x.c (elf32_tic6x_set_osabi): New static function.
+	(elf32_tic6x_check_relocs): Create dynamic sections if -shared.
+	(elf_backend_relocs_compatible, elf_backend_post_process_headers):
+	Define.
+	(elf32_bed, TARGET_LITTLE_SYM, TARGET_LITTLE_NAME, TARGET_BIG_SYM,
+	TARGET_BIG_NAME, ELF_OSABI): Redefine twice, and include
+	"elf32-target.h" two more times.
+	* configure.in: Handle bfd_elf32_tic6x_linux_be_vec,
+	bfd_elf32_tic6x_linux_le_vec, bfd_elf32_tic6x_elf_be_vec and
+	bfd_elf32_tic6x_elf_le_vec.
+	* configure: Regenerate.
+
+2011-05-13  Jan Beulich  <jbeulich@novell.com>
+
+	* config.bfd: Add targets x86_64-*-pe and x86_64-*-pep.
+
+2011-05-12  Jan Kratochvil  <jan.kratochvil@redhat.com>
+
+	* config.in: Regenerated.
+	* configure: Regenerated.
+	* configure.in: New tests for HAVE_PRPSINFO_T_PR_PID,
+	HAVE_PRPSINFO32_T_PR_PID, HAVE_PSINFO_T_PR_PID and
+	HAVE_PSINFO32_T_PR_PID.
+	* elf.c (elfcore_grok_psinfo): Protect reading psinfo.pr_pid by
+	HAVE_PRPSINFO_T_PR_PID, HAVE_PRPSINFO32_T_PR_PID, HAVE_PSINFO_T_PR_PID
+	and HAVE_PSINFO32_T_PR_PID.
+	* hosts/x86-64linux.h (HAVE_PRPSINFO32_T_PR_PID): New redefinition.
+
+2011-05-10  Jan Kratochvil  <jan.kratochvil@redhat.com>
+
+	* elf.c (elfcore_grok_psinfo): Initialize CORE_PID for both native and
+	32bit psinfo.
+	* elf32-ppc.c (ppc_elf_grok_psinfo): Initialize core_pid.
+	* elf64-ppc.c (ppc64_elf_grok_psinfo): Likewise.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* bfd-in.h (elf32_tic6x_fix_exidx_coverage): Add prototype.
+	* bfd-in2.h: Regenerate.
+	* elf32-tic6x.c: Include limits.h.
+	(tic6x_unwind_edit_type, tic6x_unwind_table_edit,
+	_tic6x_elf_section_data): New.
+	(elf32_tic6x_section_data): Define.
+	(elf32_tic6x_new_section_hook): Allocate target specific data.
+	(elf32_tic6x_add_unwind_table_edit): New function.
+	(get_tic6x_elf_section_data, elf32_tic6x_adjust_exidx_size,
+	elf32_tic6x_insert_cantunwind_after, elf32_tic6x_add_low31,
+	elf32_tic6x_copy_exidx_entry): New functions.
+	(elf_backend_write_section): Define.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* elf32-tic6x.c (is_tic6x_elf_unwind_section_name,
+	elf32_tic6x_fake_sections): New functions.
+	(elf_backend_fake_sections): Define.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* elf32-tic6x.c (elf32_tic6x_gc_mark_extra_sections): New function.
+	(elf_backend_gc_mark_extra_sections): Define.
+
+2011-05-07  Dave Korn  <dave.korn.cygwin@gmail.com>
+
+	PR ld/12365
+	* cofflink.c (bfd_coff_link_input_bfd): Check for and warn about
+	references to symbols defined in discarded sections.
+
+2011-05-07  Dave Korn  <dave.korn.cygwin@gmail.com>
+
+	PR ld/12365
+	* coffgen.c (coff_write_symbol): Assume input section is its own
+	output section if output_section member not set.
+	(coff_write_alien_symbol): Likewise.
+
+2011-05-07  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR ld/12730
+	* elf.c (_bfd_elf_section_offset): Check SEC_ELF_REVERSE_COPY.
+
+	* elflink.c (elf_link_input_bfd): Reverse copy .ctors/.dtors
+	sections if needed.
+
+	* section.c (SEC_ELF_REVERSE_COPY): New.
+	* bfd-in2.h: Regenerated.
+
+2011-05-07  Anders Kaseorg  <andersk@ksplice.com>
+
+	PR 12739
+	* libbfd.c (bfd_get_8, bfd_get_signed_8): Use const cast.
+	* bfd-in2.h: Regenerate.
+
+2011-05-06  Tristan Gingold  <gingold@adacore.com>
+
+	* vms-alpha.c (evax_section_flags): Remove SEC_IN_MEMORY.
+	(_bfd_vms_slurp_egsd): Rename old_flags to vms_flags.  Handle
+	any code section.  Add comments.
+	(alpha_vms_object_p): Use void * instead of PTR.
+	(alpha_vms_create_eisd_for_section): Fix test for setting DZRO.
+	(build_module_list): Guard against no DST section.  Add comments.
+	(alpha_vms_link_output_symbol): Discard undefined symbols.
+	(alpha_vms_get_section_contents): Simply memcpy if the section was
+	already loaded.  Fix typo.
+	(vms_new_section_hook): Use void * instead of PTR.
+	(vms_alpha_vec): Ditto.
+
+2011-05-06  Richard Sandiford  <richard.sandiford@linaro.org>
+
+	* elf32-arm.c (cortex_a8_erratum_scan): If the stub is a Thumb
+	branch to a PLT entry, redirect it to the PLT's Thumb entry point.
+
+2011-05-05  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* elf32-tic6x.c (elf32_tic6x_final_link): New function.
+	(elf32_tic6x_merge_attributes): Do not warn for PID or PIC
+	mismatch.  Choose the lower of the two values.
+	(bfd_elf32_bfd_final_link): New macro.
+
+2011-04-28  Tristan Gingold  <gingold@adacore.com>
+
+	* coff-rs6000.c (_bfd_xcoff_swap_aux_in): Adjust for x_file.
+	(bfd_xcoff_swap_aux_out): Ditto.
+	* coff64-rs6000.c (_bfd_xcoff64_swap_aux_in): Ditto.
+	(bfd_xcoff64_swap_aux_out): Ditto.
+
+2011-05-04  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12727
+	* elf64-ppc.c (ppc_build_one_stub <ppc_sub_plt_call>): Clear
+	was_undefined on dot-symbols.
+
+2011-05-03  Paul Brook  <paul@codesourcery.com>
+
+
+	* elf32-tic6x.c (elf32_tic6x_howto_table,
+	elf32_tic6x_howto_table_rel, (elf32_tic6x_gc_sweep_hook,
+	elf32_tic6x_relocate_section, elf32_tic6x_check_relocs):
+	Add R_C6000_EHTYPE.
+
 2011-05-01  Alan Modra  <amodra@gmail.com>
 
 	PR ld/12718

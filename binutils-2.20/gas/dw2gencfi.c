@@ -68,12 +68,32 @@
 #define tc_cfi_frame_initial_instructions() ((void)0)
 #endif
 
+#ifndef tc_cfi_startproc
+# define tc_cfi_startproc() ((void)0)
+#endif
+
+#ifndef tc_cfi_endproc
+# define tc_cfi_endproc(fde) ((void) (fde))
+#endif
+
 #ifndef DWARF2_FORMAT
 #define DWARF2_FORMAT(SEC) dwarf2_format_32bit
 #endif
 
 #ifndef DWARF2_ADDR_SIZE
 #define DWARF2_ADDR_SIZE(bfd) (bfd_arch_bits_per_address (bfd) / 8)
+#endif
+
+#if SUPPORT_FRAME_LINKONCE
+#define CUR_SEG(structp) structp->cur_seg
+#define SET_CUR_SEG(structp, seg) structp->cur_seg = seg 
+#define HANDLED(structp) structp->handled
+#define SET_HANDLED(structp, val) structp->handled = val
+#else
+#define CUR_SEG(structp) NULL
+#define SET_CUR_SEG(structp, seg) (void) (0 && seg)
+#define HANDLED(structp) 0
+#define SET_HANDLED(structp, val) (void) (0 && val)
 #endif
 
 /* Private segment collection list.  */
@@ -141,13 +161,11 @@ alloc_debugseg_item (segT seg, int subseg, char *name)
 static segT
 is_now_linkonce_segment (void)
 {
-#if defined (TE_PE) || defined (TE_PEP)
   if ((bfd_get_section_flags (stdoutput, now_seg)
        & (SEC_LINK_ONCE | SEC_LINK_DUPLICATES_DISCARD
 	  | SEC_LINK_DUPLICATES_ONE_ONLY | SEC_LINK_DUPLICATES_SAME_SIZE
 	  | SEC_LINK_DUPLICATES_SAME_CONTENTS)) != 0)
     return now_seg;
-#endif
   return NULL;
 }
 
@@ -252,65 +270,12 @@ struct cfi_escape_data
   expressionS exp;
 };
 
-struct cfi_insn_data
-{
-  struct cfi_insn_data *next;
-  segT cur_seg;
-  int insn;
-  union
-  {
-    struct
-    {
-      unsigned reg;
-      offsetT offset;
-    } ri;
-
-    struct
-    {
-      unsigned reg1;
-      unsigned reg2;
-    } rr;
-
-    unsigned r;
-    offsetT i;
-
-    struct
-    {
-      symbolS *lab1;
-      symbolS *lab2;
-    } ll;
-
-    struct cfi_escape_data *esc;
-
-    struct
-    {
-      unsigned reg, encoding;
-      expressionS exp;
-    } ea;
-  } u;
-};
-
-struct fde_entry
-{
-  struct fde_entry *next;
-  segT cseg;
-  symbolS *start_address;
-  symbolS *end_address;
-  struct cfi_insn_data *data;
-  struct cfi_insn_data **last;
-  unsigned char per_encoding;
-  unsigned char lsda_encoding;
-  expressionS personality;
-  expressionS lsda;
-  unsigned int return_column;
-  unsigned int signal_frame;
-  int handled;
-};
-
 struct cie_entry
 {
   struct cie_entry *next;
+#if SUPPORT_FRAME_LINKONCE
   segT cur_seg;
+#endif
   symbolS *start_address;
   unsigned int return_column;
   unsigned int signal_frame;
@@ -357,8 +322,8 @@ alloc_fde_entry (void)
   frchain_now->frch_cfi_data->cur_fde_data = fde;
   *last_fde_data = fde;
   last_fde_data = &fde->next;
-  fde->cseg = is_now_linkonce_segment ();
-  fde->handled = 0;
+  SET_CUR_SEG (fde, is_now_linkonce_segment ());
+  SET_HANDLED (fde, 0);
   fde->last = &fde->data;
   fde->return_column = DWARF2_DEFAULT_RETURN_COLUMN;
   fde->per_encoding = DW_EH_PE_omit;
@@ -382,8 +347,7 @@ alloc_cfi_insn_data (void)
 
   *cur_fde_data->last = insn;
   cur_fde_data->last = &insn->next;
-  insn->cur_seg = is_now_linkonce_segment ();
-
+  SET_CUR_SEG (insn, is_now_linkonce_segment ());
   return insn;
 }
 
@@ -587,14 +551,6 @@ static void dot_cfi_endproc (int);
 static void dot_cfi_personality (int);
 static void dot_cfi_lsda (int);
 static void dot_cfi_val_encoded_addr (int);
-
-/* Fake CFI type; outside the byte range of any real CFI insn.  */
-#define CFI_adjust_cfa_offset	0x100
-#define CFI_return_column	0x101
-#define CFI_rel_offset		0x102
-#define CFI_escape		0x103
-#define CFI_signal_frame	0x104
-#define CFI_val_encoded_addr	0x105
 
 const pseudo_typeS cfi_pseudo_table[] =
   {
@@ -1064,6 +1020,7 @@ dot_cfi_val_encoded_addr (int ignored ATTRIBUTE_UNUSED)
 /* By default emit .eh_frame only, not .debug_frame.  */
 #define CFI_EMIT_eh_frame	(1 << 0)
 #define CFI_EMIT_debug_frame	(1 << 1)
+#define CFI_EMIT_target		(1 << 2)
 static int cfi_sections = CFI_EMIT_eh_frame;
 
 static void
@@ -1085,6 +1042,10 @@ dot_cfi_sections (int ignored ATTRIBUTE_UNUSED)
 	  sections |= CFI_EMIT_eh_frame;
 	else if (strncmp (name, ".debug_frame", sizeof ".debug_frame") == 0)
 	  sections |= CFI_EMIT_debug_frame;
+#ifdef tc_cfi_section_name
+	else if (strcmp (name, tc_cfi_section_name) == 0)
+	  sections |= CFI_EMIT_target;
+#endif
 	else
 	  {
 	    *input_line_pointer = c;
@@ -1147,11 +1108,16 @@ dot_cfi_startproc (int ignored ATTRIBUTE_UNUSED)
   frchain_now->frch_cfi_data->cur_cfa_offset = 0;
   if (!simple)
     tc_cfi_frame_initial_instructions ();
+
+  if ((cfi_sections & CFI_EMIT_target) != 0)
+    tc_cfi_startproc ();
 }
 
 static void
 dot_cfi_endproc (int ignored ATTRIBUTE_UNUSED)
 {
+  struct fde_entry *fde;
+
   if (frchain_now->frch_cfi_data == NULL)
     {
       as_bad (_(".cfi_endproc without corresponding .cfi_startproc"));
@@ -1159,9 +1125,14 @@ dot_cfi_endproc (int ignored ATTRIBUTE_UNUSED)
       return;
     }
 
+  fde = frchain_now->frch_cfi_data->cur_fde_data;
+
   cfi_end_fde (symbol_temp_new_now ());
 
   demand_empty_rest_of_line ();
+
+  if ((cfi_sections & CFI_EMIT_target) != 0)
+    tc_cfi_endproc (fde);
 }
 
 
@@ -1552,7 +1523,7 @@ output_cie (struct cie_entry *cie, bfd_boolean eh_frame, int align)
     {
       for (i = cie->first; i != cie->last; i = i->next)
         {
-	  if (i->cur_seg != cie->cur_seg)
+	  if (CUR_SEG (i) != CUR_SEG (cie))
 	    continue;
 	  output_cfi_insn (i);
 	}
@@ -1663,10 +1634,8 @@ output_fde (struct fde_entry *fde, struct cie_entry *cie,
     }
 
   for (; first; first = first->next)
-    {
-      if (first->cur_seg == fde->cseg)
-        output_cfi_insn (first);
-    }
+    if (CUR_SEG (first) == CUR_SEG (fde))
+      output_cfi_insn (first);
 
   frag_align (align, DW_CFA_nop, 0);
   symbol_set_value_now (end_address);
@@ -1681,8 +1650,9 @@ select_cie_for_fde (struct fde_entry *fde, bfd_boolean eh_frame,
 
   for (cie = cie_root; cie; cie = cie->next)
     {
-      if (cie->cur_seg != fde->cseg
-          || cie->return_column != fde->return_column
+      if (CUR_SEG (cie) != CUR_SEG (fde))
+	continue;
+      if (cie->return_column != fde->return_column
 	  || cie->signal_frame != fde->signal_frame
 	  || cie->per_encoding != fde->per_encoding
 	  || cie->lsda_encoding != fde->lsda_encoding)
@@ -1780,7 +1750,7 @@ select_cie_for_fde (struct fde_entry *fde, bfd_boolean eh_frame,
   cie = (struct cie_entry *) xmalloc (sizeof (struct cie_entry));
   cie->next = cie_root;
   cie_root = cie;
-  cie->cur_seg = fde->cseg;
+  SET_CUR_SEG (cie, CUR_SEG (fde));
   cie->return_column = fde->return_column;
   cie->signal_frame = fde->signal_frame;
   cie->per_encoding = fde->per_encoding;
@@ -1809,7 +1779,7 @@ cfi_change_reg_numbers (struct cfi_insn_data *insn, segT ccseg)
 {
   for (; insn; insn = insn->next)
     {
-      if (insn->cur_seg != ccseg)
+      if (CUR_SEG (insn) != ccseg)
         continue;
       switch (insn->insn)
 	{
@@ -1854,13 +1824,22 @@ cfi_change_reg_numbers (struct cfi_insn_data *insn, segT ccseg)
 static segT
 get_cfi_seg (segT cseg, const char *base, flagword flags, int align)
 {
-  struct dwcfi_seg_list *l;
+  if (SUPPORT_FRAME_LINKONCE)
+    {
+      struct dwcfi_seg_list *l;
 
-  l = dwcfi_hash_find_or_make (cseg, base, flags);
+      l = dwcfi_hash_find_or_make (cseg, base, flags);
 
-  subseg_set (l->seg, l->subseg);
-  record_alignment (l->seg, align);
-  return l->seg;
+      cseg = l->seg;
+      subseg_set (cseg, l->subseg);
+    }
+  else
+    {
+      cseg = subseg_new (base, 0);
+      bfd_set_section_flags (stdoutput, cseg, flags);
+    }
+  record_alignment (cseg, align);
+  return cseg;
 }
 
 void
@@ -1881,11 +1860,25 @@ cfi_finish (void)
       save_flag_traditional_format = flag_traditional_format;
       flag_traditional_format = 1;
 
+      if (!SUPPORT_FRAME_LINKONCE)
+	{
+	  /* Open .eh_frame section.  */
+	  cfi_seg = get_cfi_seg (NULL, ".eh_frame",
+				 (SEC_ALLOC | SEC_LOAD | SEC_DATA
+				  | DWARF2_EH_FRAME_READ_ONLY),
+				 EH_FRAME_ALIGNMENT);
+#ifdef md_fix_up_eh_frame
+	  md_fix_up_eh_frame (cfi_seg);
+#else
+	  (void) cfi_seg;
+#endif
+	}
+
       do
         {
 	  ccseg = NULL;
-	  cfi_seg = NULL;
 	  seek_next_seg = 0;
+
 	  for (cie = cie_root; cie; cie = cie_next)
 	    {
 	      cie_next = cie->next;
@@ -1895,27 +1888,32 @@ cfi_finish (void)
 
 	  for (fde = all_fde_data; fde ; fde = fde->next)
 	    {
-	      if (fde->handled != 0)
-	        continue;
-	      if (seek_next_seg && fde->cseg != ccseg)
-	        {
-		  seek_next_seg = 2;
-		  continue;
-		}
-	      if (!seek_next_seg)
-	        {
-		  ccseg = fde->cseg;
-		  /* Open .eh_frame section.  */
-		  cfi_seg = get_cfi_seg (ccseg, ".eh_frame",
-					 SEC_ALLOC | SEC_LOAD | SEC_DATA
-					 | DWARF2_EH_FRAME_READ_ONLY,
-					 EH_FRAME_ALIGNMENT);
+	      if (SUPPORT_FRAME_LINKONCE)
+		{
+		  if (HANDLED (fde))
+		    continue;
+		  if (seek_next_seg && CUR_SEG (fde) != ccseg)
+		    {
+		      seek_next_seg = 2;
+		      continue;
+		    }
+		  if (!seek_next_seg)
+		    {
+		      ccseg = CUR_SEG (fde);
+		      /* Open .eh_frame section.  */
+		      cfi_seg = get_cfi_seg (ccseg, ".eh_frame",
+					     (SEC_ALLOC | SEC_LOAD | SEC_DATA
+					      | DWARF2_EH_FRAME_READ_ONLY),
+					     EH_FRAME_ALIGNMENT);
 #ifdef md_fix_up_eh_frame
-		  md_fix_up_eh_frame (cfi_seg);
+		      md_fix_up_eh_frame (cfi_seg);
+#else
+		      (void) cfi_seg;
 #endif
-		  seek_next_seg = 1;
+		      seek_next_seg = 1;
+		    }
+		  SET_HANDLED (fde, 1);
 		}
-	      fde->handled = 1;
 
 	      if (fde->end_address == NULL)
 		{
@@ -1928,10 +1926,11 @@ cfi_finish (void)
 			  fde->next == NULL ? EH_FRAME_ALIGNMENT : 2);
 	    }
 	}
-      while (seek_next_seg == 2);
+      while (SUPPORT_FRAME_LINKONCE && seek_next_seg == 2);
 
-      for (fde = all_fde_data; fde ; fde = fde->next)
-        fde->handled = 0;
+      if (SUPPORT_FRAME_LINKONCE)
+	for (fde = all_fde_data; fde ; fde = fde->next)
+	  SET_HANDLED (fde, 0);
 
       flag_traditional_format = save_flag_traditional_format;
     }
@@ -1940,11 +1939,16 @@ cfi_finish (void)
     {
       int alignment = ffs (DWARF2_ADDR_SIZE (stdoutput)) - 1;
 
+      if (!SUPPORT_FRAME_LINKONCE)
+	get_cfi_seg (NULL, ".debug_frame",
+		     SEC_READONLY | SEC_DEBUGGING,
+		     alignment);
+
       do
         {
 	  ccseg = NULL;
-	  cfi_seg = NULL;
 	  seek_next_seg = 0;
+
 	  for (cie = cie_root; cie; cie = cie_next)
 	    {
 	      cie_next = cie->next;
@@ -1954,23 +1958,26 @@ cfi_finish (void)
 
 	  for (fde = all_fde_data; fde ; fde = fde->next)
 	    {
-	      if (fde->handled != 0)
-	        continue;
-	      if (seek_next_seg && fde->cseg != ccseg)
-	        {
-		  seek_next_seg = 2;
-		  continue;
+	      if (SUPPORT_FRAME_LINKONCE)
+		{
+		  if (HANDLED (fde))
+		    continue;
+		  if (seek_next_seg && CUR_SEG (fde) != ccseg)
+		    {
+		      seek_next_seg = 2;
+		      continue;
+		    }
+		  if (!seek_next_seg)
+		    {
+		      ccseg = CUR_SEG (fde);
+		      /* Open .debug_frame section.  */
+		      get_cfi_seg (ccseg, ".debug_frame",
+				   SEC_READONLY | SEC_DEBUGGING,
+				   alignment);
+		      seek_next_seg = 1;
+		    }
+		  SET_HANDLED (fde, 1);
 		}
-	      if (!seek_next_seg)
-	        {
-		  ccseg = fde->cseg;
-		  /* Open .debug_frame section.  */
-		  cfi_seg = get_cfi_seg (ccseg, ".debug_frame",
-					 SEC_READONLY | SEC_DEBUGGING,
-					 alignment);
-		  seek_next_seg = 1;
-		}
-	      fde->handled = 1;
 	      if (fde->end_address == NULL)
 		{
 		  as_bad (_("open CFI at the end of file; missing .cfi_endproc directive"));
@@ -1984,10 +1991,11 @@ cfi_finish (void)
 	      output_fde (fde, cie, FALSE, first, alignment);
 	    }
 	}
-      while (seek_next_seg == 2);
+      while (SUPPORT_FRAME_LINKONCE && seek_next_seg == 2);
 
-      for (fde = all_fde_data; fde ; fde = fde->next)
-        fde->handled = 0;
+      if (SUPPORT_FRAME_LINKONCE)
+	for (fde = all_fde_data; fde ; fde = fde->next)
+	  SET_HANDLED (fde, 0);
     }
 }
 

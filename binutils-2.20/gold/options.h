@@ -761,9 +761,6 @@ class General_options
   DEFINE_string(soname, options::ONE_DASH, 'h', NULL,
                 N_("Set shared library name"), N_("FILENAME"));
 
-  DEFINE_bool(i, options::EXACTLY_ONE_DASH, '\0', false,
-	      N_("Ignored"), NULL);
-
   DEFINE_double(hash_bucket_empty_fraction, options::TWO_DASHES, '\0', 0.0,
 		N_("Min fraction of empty buckets in dynamic hash"),
 		N_("FRACTION"));
@@ -789,6 +786,11 @@ class General_options
 
   DEFINE_special(incremental_update, options::TWO_DASHES, '\0',
 		 N_("Do an incremental link; exit if not possible"), NULL);
+
+  DEFINE_string(incremental_base, options::TWO_DASHES, '\0', NULL,
+                N_("Set base file for incremental linking"
+                   " (default is output file)"),
+                N_("FILE"));
 
   DEFINE_special(incremental_changed, options::TWO_DASHES, '\0',
                  N_("Assume files changed"), NULL);
@@ -896,6 +898,8 @@ class General_options
 
   DEFINE_bool(relocatable, options::EXACTLY_ONE_DASH, 'r', false,
               N_("Generate relocatable output"), NULL);
+  DEFINE_bool_alias(i, relocatable, options::EXACTLY_ONE_DASH, '\0',
+		    N_("Synonym for -r"), NULL, false);
 
   DEFINE_bool(relax, options::TWO_DASHES, '\0', false,
 	      N_("Relax branches on certain targets"), NULL);

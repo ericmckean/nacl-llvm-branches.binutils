@@ -1,11 +1,11 @@
 #objdump: -d
-#as: -mfix-24k
+#as: -mfix-24k -32
 #name: 24K: Triple Store (gprel relocs)
 
 .*: +file format .*mips.*
 
 Disassembly of section .text:
-00000000 <.text>:
+0+ <.*>:
    0:	00842020 	add	a0,a0,a0
    4:	00842020 	add	a0,a0,a0
    8:	00842020 	add	a0,a0,a0

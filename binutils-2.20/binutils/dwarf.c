@@ -376,14 +376,22 @@ process_extended_line_op (unsigned char *data, int is_stmt)
       break;
 
     default:
-      if (op_code >= DW_LNE_lo_user
-	  /* The test against DW_LNW_hi_user is redundant due to
-	     the limited range of the unsigned char data type used
-	     for op_code.  */
-	  /*&& op_code <= DW_LNE_hi_user*/)
-	printf (_("user defined: length %d\n"), len - bytes_read);
-      else
-	printf (_("UNKNOWN: length %d\n"), len - bytes_read);
+      {
+        unsigned int rlen = len - bytes_read - 1;
+
+        if (op_code >= DW_LNE_lo_user
+            /* The test against DW_LNW_hi_user is redundant due to
+               the limited range of the unsigned char data type used
+               for op_code.  */
+            /*&& op_code <= DW_LNE_hi_user*/)
+          printf (_("user defined: "));
+        else
+          printf (_("UNKNOWN: "));
+        printf (_("length %d ["), rlen);
+        for (; rlen; rlen--)
+          printf (" %02x", *data++);
+        printf ("]\n");
+      }
       break;
     }
 
@@ -1084,17 +1092,6 @@ decode_location_expression (unsigned char * data,
 	  display_block (data, uvalue);
 	  data += uvalue;
 	  break;
-	case DW_OP_GNU_entry_value:
-	  uvalue = read_leb128 (data, &bytes_read, 0);
-	  data += bytes_read;
-	  printf ("DW_OP_GNU_entry_value: (");
-	  if (decode_location_expression (data, pointer_size, offset_size,
-					  dwarf_version, uvalue,
-					  cu_offset, section))
-	    need_frame_base = 1;
-	  putchar (')');
-	  data += uvalue;
-	  break;
 
 	  /* GNU extensions.  */
 	case DW_OP_GNU_push_tls_address:
@@ -1142,6 +1139,53 @@ decode_location_expression (unsigned char * data,
 				     &bytes_read)));
 	      data += offset_size + bytes_read;
 	    }
+	  break;
+	case DW_OP_GNU_entry_value:
+	  uvalue = read_leb128 (data, &bytes_read, 0);
+	  data += bytes_read;
+	  printf ("DW_OP_GNU_entry_value: (");
+	  if (decode_location_expression (data, pointer_size, offset_size,
+					  dwarf_version, uvalue,
+					  cu_offset, section))
+	    need_frame_base = 1;
+	  putchar (')');
+	  data += uvalue;
+	  break;
+	case DW_OP_GNU_const_type:
+	  uvalue = read_leb128 (data, &bytes_read, 0);
+	  data += bytes_read;
+	  printf ("DW_OP_GNU_const_type: <0x%s> ",
+		  dwarf_vmatoa ("x", cu_offset + uvalue));
+	  uvalue = byte_get (data++, 1);
+	  display_block (data, uvalue);
+	  data += uvalue;
+	  break;
+	case DW_OP_GNU_regval_type:
+	  uvalue = read_leb128 (data, &bytes_read, 0);
+	  data += bytes_read;
+	  printf ("DW_OP_GNU_regval_type: %s (%s)",
+		  dwarf_vmatoa ("u", uvalue), regname (uvalue, 1));
+	  uvalue = read_leb128 (data, &bytes_read, 0);
+	  data += bytes_read;
+	  printf (" <0x%s>", dwarf_vmatoa ("x", cu_offset + uvalue));
+	  break;
+	case DW_OP_GNU_deref_type:
+	  printf ("DW_OP_GNU_deref_type: %ld", (long) byte_get (data++, 1));
+	  uvalue = read_leb128 (data, &bytes_read, 0);
+	  data += bytes_read;
+	  printf (" <0x%s>", dwarf_vmatoa ("x", cu_offset + uvalue));
+	  break;
+	case DW_OP_GNU_convert:
+	  uvalue = read_leb128 (data, &bytes_read, 0);
+	  data += bytes_read;
+	  printf ("DW_OP_GNU_convert <0x%s>",
+		  dwarf_vmatoa ("x", cu_offset + uvalue));
+	  break;
+	case DW_OP_GNU_reinterpret:
+	  uvalue = read_leb128 (data, &bytes_read, 0);
+	  data += bytes_read;
+	  printf ("DW_OP_GNU_reinterpret <0x%s>",
+		  dwarf_vmatoa ("x", cu_offset + uvalue));
 	  break;
 
 	  /* HP extensions.  */
@@ -3444,6 +3488,19 @@ display_debug_abbrev (struct dwarf_section *section,
   return 1;
 }
 
+/* Sort array of indexes in ascending order of loc_offsets[idx].  */
+
+static dwarf_vma *loc_offsets;
+
+static int
+loc_offsets_compar (const void *ap, const void *bp)
+{
+  dwarf_vma a = loc_offsets[*(const unsigned int *) ap];
+  dwarf_vma b = loc_offsets[*(const unsigned int *) bp];
+
+  return (a > b) - (b > a);
+}
+
 static int
 display_debug_loc (struct dwarf_section *section, void *file)
 {
@@ -3456,9 +3513,11 @@ display_debug_loc (struct dwarf_section *section, void *file)
   unsigned int first = 0;
   unsigned int i;
   unsigned int j;
+  unsigned int k;
   int seen_first_offset = 0;
-  int use_debug_info = 1;
+  int locs_sorted = 1;
   unsigned char *next;
+  unsigned int *array = NULL;
 
   bytes = section->size;
   section_end = start + bytes;
@@ -3484,10 +3543,11 @@ display_debug_loc (struct dwarf_section *section, void *file)
       unsigned int num;
 
       num = debug_information [i].num_loc_offsets;
-      num_loc_list += num;
+      if (num > num_loc_list)
+	num_loc_list = num;
 
       /* Check if we can use `debug_information' directly.  */
-      if (use_debug_info && num != 0)
+      if (locs_sorted && num != 0)
 	{
 	  if (!seen_first_offset)
 	    {
@@ -3505,17 +3565,13 @@ display_debug_loc (struct dwarf_section *section, void *file)
 	      if (last_offset >
 		  debug_information [i].loc_offsets [j])
 		{
-		  use_debug_info = 0;
+		  locs_sorted = 0;
 		  break;
 		}
 	      last_offset = debug_information [i].loc_offsets [j];
 	    }
 	}
     }
-
-  if (!use_debug_info)
-    /* FIXME: Should we handle this case?  */
-    error (_("Location lists in .debug_info section aren't in ascending order!\n"));
 
   if (!seen_first_offset)
     error (_("No location lists in .debug_info section!\n"));
@@ -3527,6 +3583,8 @@ display_debug_loc (struct dwarf_section *section, void *file)
 	  section->name,
 	  dwarf_vmatoa ("x", debug_information [first].loc_offsets [0]));
 
+  if (!locs_sorted)
+    array = (unsigned int *) xcmalloc (num_loc_list, sizeof (unsigned int));
   printf (_("Contents of the %s section:\n\n"), section->name);
   printf (_("    Offset   Begin    End      Expression\n"));
 
@@ -3549,9 +3607,23 @@ display_debug_loc (struct dwarf_section *section, void *file)
       cu_offset = debug_information [i].cu_offset;
       offset_size = debug_information [i].offset_size;
       dwarf_version = debug_information [i].dwarf_version;
-
-      for (j = 0; j < debug_information [i].num_loc_offsets; j++)
+      if (!locs_sorted)
 	{
+	  for (k = 0; k < debug_information [i].num_loc_offsets; k++)
+	    array[k] = k;
+	  loc_offsets = debug_information [i].loc_offsets;
+	  qsort (array, debug_information [i].num_loc_offsets,
+		 sizeof (*array), loc_offsets_compar);
+	}
+
+      for (k = 0; k < debug_information [i].num_loc_offsets; k++)
+	{
+	  j = locs_sorted ? k : array[k];
+	  if (k
+	      && debug_information [i].loc_offsets [locs_sorted
+						    ? k - 1 : array [k - 1]]
+		 == debug_information [i].loc_offsets [j])
+	    continue;
 	  has_frame_base = debug_information [i].have_frame_base [j];
 	  /* DWARF sections under Mach-O have non-zero addresses.  */
 	  offset = debug_information [i].loc_offsets [j] - section->address;
@@ -3665,6 +3737,7 @@ display_debug_loc (struct dwarf_section *section, void *file)
     warn (_("There are %ld unused bytes at the end of section %s\n"),
 	  (long) (section_end - start), section->name);
   putchar ('\n');
+  free (array);
   return 1;
 }
 

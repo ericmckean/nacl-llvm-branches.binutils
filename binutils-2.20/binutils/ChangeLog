@@ -1,3 +1,60 @@
+2011-05-25  Jakub Jelinek  <jakub@redhat.com>
+
+	* dwarf.c (loc_offsets): New variable.
+	(loc_offsets_compar): New routine.
+	(display_debug_loc): Handle loc_offsets not being in ascending order
+	and also a single .debug_loc entry being used multiple times.
+
+2011-05-18  Nick Clifton  <nickc@redhat.com>
+
+	PR binutils/12753
+	* nm.c (filter_symbols): Treat unique symbols as global symbols.
+	* doc/binutils.texi (nm): Mention that some lowercase letters
+	actually indicate global symbols.
+
+2011-05-15  Tristan Gingold  <gingold@adacore.com>
+
+	* od-xcoff.c: New file.
+	* objdump.h: New file.
+	* objdump.c: Include objdump.h
+	(dump_private_options, objdump_private_vectors): New variables.
+	(usage): Mention -P/--private.  Display handled options.
+	(long_options): Add -P/--private.
+	(dump_target_specific): New function.
+	(dump_bfd): Handle dump_private_options.
+	(main): Handle -P.
+	* doc/binutils.texi (objdump): Document -P/--private.
+	* configure.in (OBJDUMP_PRIVATE_VECTORS, OBJDUMP_PRIVATE_OFILES):
+	New variables, compute them.
+	(od_vectors): Add vectors for private dumpers. Make them uniq.
+	(OBJDUMP_DEFS): Add OBJDUMP_PRIVATE_VECTORS.
+	* Makefile.am (HFILES): Add objdump.h
+	(CFILES): Add od-xcoff.c
+	(OBJDUMP_PRIVATE_OFILES): New variable.
+	(objdump_DEPENDENCIES): Append OBJDUMP_PRIVATE_OFILES.
+	(objdump_LDADD): Ditto.
+	(EXTRA_objdump_SOURCES): Define.
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+
+2011-05-10  Tristan Gingold  <gingold@adacore.com>
+
+	* dwarf.c (process_extended_line_op): Dump unknown records.
+
+2011-05-07  Alan Modra  <amodra@gmail.com>
+
+	PR binutils/12632
+	* objcopy.c (copy_archive): Check bfd_openw result in unknown object
+	case.  Rewrite without goto.
+
+2011-05-03  Jakub Jelinek  <jakub@redhat.com>
+
+	* dwarf.c (decode_location_expression): Handle DW_OP_GNU_const_type,
+	DW_OP_GNU_regval_type, DW_OP_GNU_deref_type, DW_OP_GNU_convert
+	and DW_OP_GNU_reinterpret.
+
+	* MAINTAINERS: Add myself as DWARF2 maintainer.
+
 2011-05-02  Alan Modra  <amodra@gmail.com>
 
 	PR binutils/12720

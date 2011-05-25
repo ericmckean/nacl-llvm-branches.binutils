@@ -1,3 +1,144 @@
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* gas/s390/esa-g5.d: Fix fp register pair operands.
+	* gas/s390/esa-g5.s: Likewise.
+	* gas/s390/zarch-z196.d: Likewise.
+	* gas/s390/zarch-z196.s: Likewise.
+	* gas/s390/zarch-z9-109.d: Likewise.
+	* gas/s390/zarch-z9-109.s: Likewise.
+	* gas/s390/zarch-z9-ec.d: Likewise.
+	* gas/s390/zarch-z9-ec.s: Likewise.
+
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* gas/s390/esa-g5.d: Fix register pair operands.
+	* gas/s390/esa-g5.s: Likewise.
+	* gas/s390/esa-z9-109.d: Likewise.
+	* gas/s390/esa-z9-109.s: Likewise.
+	* gas/s390/zarch-z196.d: Likewise.
+	* gas/s390/zarch-z196.s: Likewise.
+	* gas/s390/zarch-z9-109.d: Likewise.
+	* gas/s390/zarch-z9-109.s: Likewise.
+	* gas/s390/zarch-z900.d: Likewise.
+	* gas/s390/zarch-z900.s: Likewise.
+	* gas/s390/zarch-z990.d: Likewise.
+	* gas/s390/zarch-z990.s: Likewise.
+
+2011-05-20  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* gas/tic6x/pcr-relocs.d: New test.
+	* gas/tic6x/pcr-relocs.s: New test.
+	* gas/tic6x/pcr-relocs-undef.d: New test.
+	* gas/tic6x/pcr-relocs-undef.s: New test.
+	* gas/tic6x/reloc-bad-2.s: Update for pcr_offset.
+	* gas/tic6x/reloc-bad-2.l: Update for pcr_offset.
+
+2011-05-18  Nick Clifton  <nickc@redhat.com>
+
+	* gas/arm/req.l: Updated expected warning message.
+
+2011-05-18  Tristan Gingold  <gingold@adacore.com>
+
+	* gas/ppc/xcoff-dwsect-1-32.d: New test.
+	* gas/ppc/xcoff-dwsect-1-64.d: Ditto.
+	* gas/ppc/xcoff-dwsect-1.s: New file.
+	* gas/ppc/aix.exp (do_align_test): Add tests.
+
+2011-05-16  Hans-Peter Nilsson  <hp@axis.com>
+
+	* gas/cris/rd-brokw-pic-1.d, gas/cris/rd-brokw-pic-2.d,
+	gas/cris/rd-fragtest-pic.d: Gate on targets cris-*-*elf* and
+	cris-*-linux-gnu.
+	* gas/cris/pic-err-2.s, gas/cris/pic-err-3.s: New tests.
+
+2011-05-14  Alan Modra  <amodra@gmail.com>
+
+	* gas/all/gas.exp: Fix typo last change.
+
+2011-05-13  Alan Modra  <amodra@gmail.com>
+
+	* gas/all/gas.exp: Remove some xfails on redef2 and redef3 tests.
+	Update comments.
+	* gas/hppa/unsorted/unsorted.exp: Run globalbug test on appropriate
+	targets rather than xfailing.
+
+2011-05-12  Matthew Gretton-Dann  <matthew.gretton-dann@arm.com>
+
+	PR gas/12715
+	* gas/arm/neon-const.s: Add testcase for 64-bit Neon constants.
+	* gas/arm/neon-const.d: Likewise.
+
+2011-05-11  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* gas/mips/24k-branch-delay-1.d: Allow 64-bit addresses.  Stub out
+	function names.
+	* gas/mips/24k-triple-stores-1.d: Likewise.
+	* gas/mips/24k-triple-stores-2.d: Likewise.
+	* gas/mips/24k-triple-stores-3.d: Likewise.
+	* gas/mips/24k-triple-stores-4.d: Likewise.
+	* gas/mips/24k-triple-stores-5.d: Likewise.
+	* gas/mips/24k-triple-stores-7.d: Likewise.
+	* gas/mips/24k-triple-stores-8.d: Likewise.
+	* gas/mips/24k-triple-stores-9.d: Likewise.
+	* gas/mips/24k-triple-stores-10.d: Likewise.
+	* gas/mips/24k-triple-stores-11.d: Likewise.
+	* gas/mips/24k-triple-stores-6.d: Likewise.  Add -EB.
+	* gas/mips/mips.exp: Only run 24k-triple-stores-11.d on ELF targets.
+
+2011-05-11  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* gas/mips/24k-branch-delay-1.d: Add -32 to assembler options.
+	* gas/mips/24k-triple-stores-1.d: Likewise.
+	* gas/mips/24k-triple-stores-2.d: Likewise.
+	* gas/mips/24k-triple-stores-3.d: Likewise.
+	* gas/mips/24k-triple-stores-4.d: Likewise.
+	* gas/mips/24k-triple-stores-5.d: Likewise.
+	* gas/mips/24k-triple-stores-6.d: Likewise.
+	* gas/mips/24k-triple-stores-7.d: Likewise.
+	* gas/mips/24k-triple-stores-8.d: Likewise.
+	* gas/mips/24k-triple-stores-9.d: Likewise.
+	* gas/mips/24k-triple-stores-10.d: Likewise.
+	* gas/mips/24k-triple-stores-11.d: Likewise.
+
+2011-05-11  Tejas Belagod  <tejas.belagod@arm.com>
+
+	* gas/arm/ld-sp-warn-cortex-m3.d: New test.
+	* gas/arm/ld-sp-warn-cortex-m3.l: New test.
+	* gas/arm/ld-sp-warn-cortex-m4.d: New test.
+	* gas/arm/ld-sp-warn-cortex-m4.l: New test.
+	* gas/arm/ld-sp-warn-v7.d: New test.
+	* gas/arm/ld-sp-warn-v7.l: New test.
+	* gas/arm/ld-sp-warn-v7a.d: New test.
+	* gas/arm/ld-sp-warn-v7a.l: New test.
+	* gas/arm/ld-sp-warn-v7e-m.l: New test.
+	* gas/arm/ld-sp-warn-v7em.d: New test.
+	* gas/arm/ld-sp-warn-v7m.d: New test.
+	* gas/arm/ld-sp-warn-v7m.l: New test.
+	* gas/arm/ld-sp-warn-v7r.d: New test.
+	* gas/arm/ld-sp-warn-v7r.l: New test.
+	* gas/arm/ld-sp-warn.s: New test.
+
+2010-05-10  Quentin Neill  <quentin.neill@amd.com>
+
+	* gas/i386/i386.exp: Add new bdver2 test cases.
+	* gas/i386/nops-1-bdver2.d: New.
+	* gas/i386/x86-64-nops-1-bdver2.d: New.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* gas/tic6x/unwind-1.d: New test.
+	* gas/tic6x/unwind-1.s: New test.
+	* gas/tic6x/unwind-2.d: New test.
+	* gas/tic6x/unwind-2.s: New test.
+	* gas/tic6x/unwind-3.d: New test.
+	* gas/tic6x/unwind-3.s: New test.
+	* gas/tic6x/unwind-bad-1.d: New test.
+	* gas/tic6x/unwind-bad-1.s: New test.
+	* gas/tic6x/unwind-bad-1.l: New test.
+	* gas/tic6x/unwind-bad-2.d: New test.
+	* gas/tic6x/unwind-bad-2.s: New test.
+	* gas/tic6x/unwind-bad-2.l: New test.
+
 2011-04-29  Hans-Peter Nilsson  <hp@axis.com>
 
 	* gas/elf/dwarf2-1.d, gas/elf/dwarf2-2.d: Adjust for change in
@@ -491,7 +632,7 @@
 2011-01-06  Paul Koning  <ni1d@arrl.net>
 
 	* gas/pdp11/pdp11.exp: Add run of absreloc.
-	
+
 2011-01-06  Paul Koning  <ni1d@arrl.net>
 
 	* gas/pdp11/absreloc.s: New.

@@ -204,11 +204,7 @@ queue_initial_tasks(const General_options& options,
       if (parameters->incremental_update())
 	{
 	  Output_file* of = new Output_file(options.output_file_name());
-	  if (!of->open_for_modification())
-	    gold_info(_("incremental update not possible: "
-			"cannot open %s"),
-		      options.output_file_name());
-	  else
+	  if (of->open_base_file(options.incremental_base(), true))
 	    {
 	      ibase = open_incremental_binary(of);
 	      if (ibase != NULL
@@ -505,11 +501,7 @@ queue_middle_tasks(const General_options& options,
   if (parameters->options().gc_sections())
     {
       // Find the start symbol if any.
-      Symbol* start_sym;
-      if (parameters->options().entry())
-        start_sym = symtab->lookup(parameters->options().entry());
-      else
-        start_sym = symtab->lookup("_start");
+      Symbol* start_sym = symtab->lookup(parameters->entry());
       if (start_sym != NULL)
         {
           bool is_ordinary;
@@ -628,6 +620,13 @@ queue_middle_tasks(const General_options& options,
 			   (*p)->name().c_str());
 	    }
 	}
+    }
+
+  // For incremental updates, record the existing GOT and PLT entries.
+  if (parameters->incremental_update())
+    {
+      Incremental_binary* ibase = layout->incremental_base();
+      ibase->process_got_plt(symtab, layout);
     }
 
   if (is_debugging_enabled(DEBUG_SCRIPT))

@@ -1,11 +1,11 @@
 #objdump: -dr
-#as: -mfix-24k
+#as: -mfix-24k -32
 #name: 24K: Triple Store (Mix byte/half/word size check)
 
 .*: +file format .*mips.*
 
 Disassembly of section .text:
-00000000 <.text>:
+0+ <.*>:
    0:	a5020007 	sh	v0,7\(t0\)
    4:	00000000 	nop
    8:	a1030000 	sb	v1,0\(t0\)

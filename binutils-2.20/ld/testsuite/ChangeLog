@@ -1,3 +1,177 @@
+2011-05-24  Hans-Peter Nilsson  <hp@axis.com>
+
+	* ld-cris/tls-e-tpoffcomm1.d: Adjust for second PR12763 change,
+	setting TLS file offset.
+
+2011-05-23  Nick Clifton  <nickc@redhat.com>
+
+	* ld-elf/shared.exp: Revert previous delta.  Do not build
+	libraries in a non-native environment.
+
+2011-05-23  Alan Modra  <amodra@gmail.com>
+
+	PR 12763
+	* ld-elf/binutils.exp: Don't run tdata3 for hppa64.
+
+2011-05-21  Hans-Peter Nilsson  <hp@axis.com>
+
+	* ld-cris/tls-e-tpoffcomm1.d: Adjust for PR12763 change removing
+	empty program header.
+
+2011-05-21  Alan Modra  <amodra@gmail.com>
+
+	PR 12763
+	* ld-elf/tdata3.s: New test.
+	* ld-elf/tbss3.s: New test.
+	* ld-elf/binutils.exp: Consolidate tbss and tdata tests.
+
+2011-05-20  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* ld-tic6x/pcr-reloc.d: New test.
+	* ld-tic6x/pcr-reloc.s: New test.
+
+2011-05-18  Nick Clifton  <nickc@redhat.com>
+
+	PR ld/12761
+	* lib/ld-lib.exp (run_cc_link_tests): Add an optional 8th
+	parameter - an expected warning message from the linker.
+	* ld-elf/shared.exp (build_tests): Expect a warning message when
+	building the libbarw.so library.
+
+	* ld-elf/shared.exp: Run library building tests even when not
+	building a native toolchain.
+
+2011-05-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* ld-scripts/phdrs.exp: Replace --private with
+	--private-headers for objdump.
+	* ld-scripts/phdrs2.exp: Likewise.
+
+2011-05-15  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* lib/ld-lib.exp (run_ld_link_tests): Simplify pass/fail logic.
+	Fail if the link command fails and if no test rules are defined.
+	* ld-mips-elf/reloc-6a.s, ld-mips-elf/reloc-6b.s: New tests.
+	* ld-mips-elf/mips-elf.exp: Run them.
+
+2011-05-13  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* ld-tic6x/dsbt.ld (OUTPUT_FORMAT): Add.
+	* ld-tic6x/tic6x.exp: Add OSABI tests.
+
+2011-05-13  Alan Modra  <amodra@gmail.com>
+
+	* ld-elf/flags1.d: Don't xfail tic6x.
+	* ld-scripts/weak.exp: Correct comments.  Don't xfail sh-pe.  Remove
+	redundant xfail.
+	* ld-selective/sel-dump.exp: Don't xfail alpha.
+	* ld-selective/selective.exp: Run for alpha.
+	* ld-undefined/weak-undef.exp: Don't xfail hppa64.
+
+2011-05-12  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* config/default.exp (ld_assemble): Pass flags parameter to
+	default_ld_assemble.
+	(ld_assemble_flags): New function.
+	* ld-elf/frame.exp: Pass -mpic and -mpid flags to the assembler on
+	tic6x.
+	* ld-elf/exclude.exp: Likewise.
+	* lib/ld-lib.exp (default_ld_assemble): Take extra argument in_flags
+	and pass it to the assembler.
+
+2011-05-11  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* ld-mips-elf/mips-elf.exp: Add missing $has_newabi tests.
+
+2011-05-09  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* ld-elf/elf.exp (array_tests): Remove "pr12730".
+	(array_tests_pie): Remove "PIE pr12730".
+	(array_tests_static): Remove "static pr12730".
+
+	* ld-elf/pr12730.cc: Removed.
+	* ld-elf/pr12730.out: Likewise.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* ld-tic6x/discard-unwind.ld: New.
+	* ld-tic6x/unwind.ld: New.
+	* ld-tic6x/unwind-1.d: New test.
+	* ld-tic6x/unwind-1.s: New test.
+	* ld-tic6x/unwind-2.d: New test.
+	* ld-tic6x/unwind-2.s: New test.
+	* ld-tic6x/unwind-3.d: New test.
+	* ld-tic6x/unwind-3.s: New test.
+	* ld-tic6x/unwind-4.d: New test.
+	* ld-tic6x/unwind-4.s: New test.
+	* ld-tic6x/unwind-5.d: New test.
+	* ld-tic6x/unwind-5.s: New test.
+	* ld-tic6x/unwind-6.d: New test.
+
+2011-05-07  Dave Korn  <dave.korn.cygwin@gmail.com>
+
+	PR ld/12365
+	* ld-plugin/plugin-7.d: Allow underscore in error message.
+	* ld-plugin/plugin-8.d: Likewise.
+
+2011-05-07  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR ld/12730
+	* ld-elf/elf.exp (array_tests): Add "pr12730".
+	(array_tests_pie): New.
+	(array_tests_static): Add -static for "static init array mixed".
+	Add "static pr12730".  Run array_tests_pie for Linux.
+
+	* ld-elf/init-mixed.c (ctor1007): Renamed to ...
+	(ctor1007a): This.
+	(ctor1007b): New.
+	(ctors1007): Remove ctor1007.  Add ctor1007b and ctor1007a.
+	(dtor1007): Renamed to ...
+	(dtor1007a): This.
+	(dtor1007b): New.
+	(dtors1007): Remove dtor1007.  Add dtor1007b and dtor1007a.
+	(ctor65535): Renamed to ...
+	(ctor65535a): This.
+	(ctor65535b): New.
+	(ctors65535): Remove ctor65535.  Add ctor65535b and ctor65535a.
+	(dtor65535): Renamed to ...
+	(dtor65535a): This.
+	(dtor65535b): New.
+	(dtors65535): Remove dtor65535.  Add dtor65535b and dtor65535a.
+
+	* ld-elf/pr12730.cc: New.
+	* ld-elf/pr12730.out: Likewise.
+
+2011-05-06  Richard Sandiford  <richard.sandiford@linaro.org>
+
+	* ld-arm/cortex-a8-fix-b-plt.s, ld-arm/cortex-a8-fix-b-plt.d,
+	ld-arm/cortex-a8-fix-bcc-plt.s, ld-arm/cortex-a8-fix-bcc-plt.d,
+	ld-arm/cortex-a8-fix-bl-plt.s, ld-arm/cortex-a8-fix-bl-plt.d,
+	ld-arm/cortex-a8-fix-blx-plt.s, ld-arm/cortex-a8-fix-blx-plt.d,
+	ld-arm/cortex-a8-fix-plt.ld: New tests.
+	* ld-arm/arm-elf.exp: Run them.
+
+2011-05-05  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* ld-tic6x/shared-nopic.d: New test.
+	* ld-tic6x/shared-nopid.d: New test.
+	* ld-tic6x/attr-pid-21.d: Don't expect a warning; check readelf
+	output instead.
+	* ld-tic6x/attr-pid-12.d: Likewise.
+	* ld-tic6x/attr-pic-01.d: Likewise.
+	* ld-tic6x/attr-pic-10.d: Likewise.
+	* ld-tic6x/attr-pid-01.d: Likewise.
+	* ld-tic6x/attr-pid-10.d: Likewise.
+	* ld-tic6x/attr-pid-02.d: Likewise.
+	* ld-tic6x/attr-pid-20.d: Likewise.
+	* ld-tic6x/got-reloc-inrange.d: Pass -mpic and -mpid options to gas.
+
+2011-05-03  Paul Brook  <paul@codesourcery.com>
+
+	* ld-tic6x/ehtype-reloc-1-rel.d: New test.
+	* ld-tic6x/ehtype-reloc-1.d: New test.
+	* ld-tic6x/ehtype-reloc-1.s: New test.
+
 2011-05-01  H.J. Lu  <hongjiu.lu@intel.com>
 
 	PR ld/12718

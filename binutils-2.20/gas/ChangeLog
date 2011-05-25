@@ -1,3 +1,184 @@
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config/tc-s390.c (md_gather_operands): Fix check for floating
+	register pair operands.
+
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config/tc-s390.c (md_gather_operands): Emit an error for odd
+	numbered registers used as register pair operand.
+
+2011-05-23  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-v850.h (TC_FX_SIZE_SLACK): Define.
+
+2011-05-20  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* config/tc-tic6x.c (tic6x_operators): Add "pcr_offset".
+	(tic6x_parse_name): Handle it.
+	(tic6x_fix_new_exp): Handle O_pcr_offset.
+	(tic6x_fix_adjustable): Return 0 for the new relocs.
+	(md_apply_fix): Handle them.
+	(tc_gen_reloc): Likewise.
+	* config/tc-tic6x.h (tic6x_fix_info): Add a fix_subsy member.
+
+2011-05-18  Nick Clifton  <nickc@redhat.com>
+
+	PR gas/12754
+	* config/tc-tic30.c (ordinal_names): Allow translation of the
+	ordinal names.
+
+2011-05-18  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-arm.c (s_unreq): Reword warning message to make it
+	easier to translate.
+	* config/tc-ia64.c (md_show_usage): Add note for translators.
+	* configure.in (ALL_LINGUAS): Add "fi".
+	* configure: Regenerate.
+
+2011-05-18  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-ppc.h (ppc_tc_sy): Reorder fields.
+	Put size into an union with dw.
+	(OBJ_COPY_SYMBOL_ATTRIBUTES): Adjust.
+	(ppc_xcoff_end): Declare.
+	(md_end): Define.
+	* config/tc-ppc.c: Add includes for xcoff.
+	(ppc_dwsect): New function.
+	(md_pseudo_table): Add dwsect.
+	(struct dw_subsection): New.
+	(dw_sections): New.
+	(ppc_change_debug_section): New function.
+	(ppc_xcoff_end): Ditto.
+	(ppc_function): Adjust for ppc_tc_sy.
+	(ppc_symbol_new_hook): Ditto.
+	(ppc_frob_symbol): Ditto.
+	(ppc_frob_section): Do not set vma for debug sections.
+	(ppc_fix_adjustable): Return true for debug sections.
+	* config/obj-coff.c: Add includes for xcoff.
+	(coff_frob_section): Handle dwarf section.
+
+2011-05-17  Nick Clifton  <nickc@redhat.com>
+
+	* po/fi.po: New Finnish translation.
+	* po/fr.po: Updated French translation.
+
+	* config/tc-m32r.c (md_show_usage): Fix typos in descriptions.
+	* config/tc-mt.c (md_assemble): Fix typos in warning messages.
+	* cond.c (s_else): Fix typos in error messages.
+	* config/tc-pj.c (md_assemble): Fix typo in error message.
+
+2011-05-16  Hans-Peter Nilsson  <hp@axis.com>
+
+	* config/tc-cris.c (md_parse_option) <OPTION_PIC>: Error if not
+	emitting ELF object.
+	(md_show_usage): Only mention --pic if the assembler can generate
+	ELF objects.
+	* doc/c-cris.texi (CRIS-Opt): Mention that generating ELF is a
+	prerequisite for --pic being a valid option.
+
+2011-05-13  Frederic Marchal  <fmarchal@perso.be>
+
+	PR gas/12755
+	* config/tc-v850.c (parse_register_list): Correct error string.
+
+2011-05-12  Quentin Neill  <quentin.neill@amd.com>
+
+	* config/tc-i386.c (cpu_arch): Rename PROCESSOR_BDVER1 to PROCESSOR_BD.
+	(i386_align_code): Ditto
+
+2011-05-12  Matthew Gretton-Dann  <matthew.gretton-dann@arm.com>
+
+	PR gas/12715
+	* config/tc-arm.c (parse_big_immediate):  Fix parsing of 64-bit
+	immediates on 32-bit hosts.
+
+2011-05-10  Quentin Neill  <quentin.neill@amd.com>
+
+	* config/tc-i386.c (cpu_arch): Add bdver2 and rename
+	PROCESSOR_BDVER1 to PROCESSOR_BDVER.
+	(i386_align_code): Rename PROCESSOR_BDVER1.
+	(processor_type): Ditto.
+	* doc/c-i386.texi: Add bdver2.
+
+2011-05-10  Alan Modra  <amodra@gmail.com>
+
+	* dw2gencfi.c (tc_cfi_endproc): Avoid "set but not used" error.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* config/tc-tic6x.c (streq): Define.
+	(tic6x_get_unwind): New.
+	(s_tic6x_cantunwind, s_tic6x_handlerdata, s_tic6x_endp,
+	s_tic6x_personalityindex, s_tic6x_personality): New functions.
+	(md_pseudo_table): Add "endp", "handlerdata", "personalityindex",
+	"personality" and "cantunwind".
+	(tic6x_regname_to_dw2regnum, tic6x_frame_initial_instructions,
+	tic6x_start_unwind_section, tic6x_unwind_frame_regs,
+	tic6x_pop_rts_offset_little, tic6x_pop_rts_offset_big,
+	tic6x_unwind_reg_from_dwarf, tic6x_flush_unwind_word,
+	tic6x_unwind_byte, tic6x_unwind_2byte, tic6x_unwind_uleb,
+	tic6x_cfi_startproc, output_exidx_entry, tic6x_output_unwinding,
+	tic6x_cfi_endproc): New.
+	* config/tc-tic6x.h (TIC6X_NUM_UNWIND_REGS): Define.
+	(tic6x_unwind_info): New.
+	(tic6x_segment_info_type): Add marked_pr_dependency, unwind and
+	text_unwind.
+	(TARGET_USE_CFIPOP, tc_regname_to_dw2regnum,
+	tc_cfi_frame_initial_instructions, DWARF2_DEFAULT_RETURN_COLUMN,
+	DWARF2_CIE_DATA_ALIGNMENT, tc_cfi_startproc, tc_cfi_endproc,
+	tc_cfi_section_name): Define.
+	* doc/c-tic6x.texi: Document new unwinding directives.
+	* dw2gencfi.c (tc_cfi_startproc, tc_cfi_endproc): Add default
+	definitions.
+	(cfi_insn_data, fde_entry, CFI_adjust_cfa_offset, CFI_return_column,
+	CFI_rel_offset, CFI_escape, CFI_signal_frame, CFI_val_encoded_addr):
+	Move to dw2gencfi.h.
+	(CFI_EMIT_target): Define.
+	(dot_cfi_sections): Check tc_cfi_section_name.
+	(dot_cfi_startproc): Use tc_cfi_startproc.
+	(dot_cfi_endproc): Use tc_cfi_endproc.
+	* dw2gencfi.h (cfi_insn_data, fde_entry, CFI_adjust_cfa_offset,
+	CFI_return_column, CFI_rel_offset, CFI_escape, CFI_signal_frame,
+	CFI_val_encoded_addr):  Move to here from dw2gencfi.c.
+
+2011-05-07  Alan Modra  <amodra@gmail.com>
+
+	* dw2gencfi.c (CUR_SEG, SET_CUR_SEG, HANDLED, SET_HANDLED): Define.
+	Use throughout in place of #if SUPPORT_FRAME_LINKONCE.
+	(struct fde_entry): Rename cseg to cur_seg.
+	(cfi_change_reg_numbers): Remove ATTRIBUTE_UNUSED.
+	(get_cfi_seg): Likewise.  Use if (SUPPORT_FRAME_LINKONCE) rather
+	that #if SUPPORT_FRAME_LINKONCE.
+	(cfi_finish): Likewise.
+
+2011-05-06  Tristan Gingold  <gingold@adacore.com>
+
+	* read.c (s_comm_internal): Remove code for OBJ_VMS.
+	(s_data): Ditto.
+	(s_text): Ditto.
+	* write.c (write_object_file): Ditto.
+	* symbols.c (define_sym_at_dot): Ditto.
+	(colon): Ditto.
+
+2011-05-05  Alan Modra  <amodra@gmail.com>
+
+	* dw2gencfi.c (SUPPORT_FRAME_LINKONCE): Define.  Use throughout
+	file to conditionally compile code added 2011-04-26.
+	(cfi_change_reg_numbers): Add ATTRIBUTE_UNUSED on params only used
+	when SUPPORT_FRAME_LINKONCE.
+	(get_cfi_seg): Likewise.  Reintroduce old code for when not
+	SUPPORT_FRAME_LINKONCE.
+	(cfi_finish): Move get_cfi_seg calls out of loop when not
+	SUPPORT_FRAME_LINKONCE.  Avoid unused var warning.
+
+2011-05-03  Paul Brook  <paul@codesourcery.com>
+
+	* config/tc-tic6x.c (s_ehtype): New function.
+	(md_pseudo_table): Add "ehtype".
+	(tic6x_fix_adjustable, md_apply_fix): BFD_RELOC_C6000_EHTYPE.
+	* doc/c-tic6x.texi: Document .ehtype directive.
+
 2011-04-26  Kai Tietz  <ktietz@redhat.com>
 
 	* dw2gencfi.c (dwcfi_seg_list): New struct.

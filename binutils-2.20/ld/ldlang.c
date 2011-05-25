@@ -1579,8 +1579,14 @@ lang_output_section_find_by_flags (const asection *sec,
 	    }
 	  flags ^= sec->flags;
 	  if (!(flags & (SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD
-			 | SEC_READONLY))
-	      && !(look->flags & (SEC_SMALL_DATA | SEC_THREAD_LOCAL)))
+			 | SEC_READONLY | SEC_SMALL_DATA))
+	      || (!(flags & (SEC_HAS_CONTENTS | SEC_ALLOC | SEC_LOAD
+			     | SEC_READONLY))
+		  && !(look->flags & SEC_SMALL_DATA))
+	      || (!(flags & (SEC_THREAD_LOCAL | SEC_ALLOC))
+		  && (look->flags & SEC_THREAD_LOCAL)
+		  && (!(flags & SEC_LOAD)
+		      || (look->flags & SEC_LOAD))))
 	    found = look;
 	}
     }
@@ -4048,9 +4054,8 @@ print_assignment (lang_assignment_statement_type *assignment,
 	  if (h)
 	    {
 	      value = h->u.def.value;
-
-	      if (expld.result.section != NULL)
-		value += expld.result.section->vma;
+	      value += h->u.def.section->output_section->vma;
+	      value += h->u.def.section->output_offset;
 
 	      minfo ("[0x%V]", value);
 	    }
@@ -5606,8 +5611,9 @@ lang_do_assignments_1 (lang_statement_union_type *s,
 }
 
 void
-lang_do_assignments (void)
+lang_do_assignments (lang_phase_type phase)
 {
+  expld.phase = phase;
   lang_statement_iteration++;
   lang_do_assignments_1 (statement_list.head, abs_output_section, NULL, 0);
 }
@@ -6403,7 +6409,7 @@ lang_relax_sections (bfd_boolean need_layout)
 
 	      /* Do all the assignments with our current guesses as to
 		 section sizes.  */
-	      lang_do_assignments ();
+	      lang_do_assignments (lang_assigning_phase_enum);
 
 	      /* We must do this after lang_do_assignments, because it uses
 		 size.  */
@@ -6424,7 +6430,7 @@ lang_relax_sections (bfd_boolean need_layout)
   if (need_layout)
     {
       /* Final extra sizing to report errors.  */
-      lang_do_assignments ();
+      lang_do_assignments (lang_assigning_phase_enum);
       lang_reset_memory_regions ();
       lang_size_sections (NULL, TRUE);
     }
@@ -6666,8 +6672,7 @@ lang_process (void)
 
   /* Do all the assignments, now that we know the final resting places
      of all the symbols.  */
-  expld.phase = lang_final_phase_enum;
-  lang_do_assignments ();
+  lang_do_assignments (lang_final_phase_enum);
 
   ldemul_finish ();
 
@@ -6912,11 +6917,13 @@ lang_leave_output_section_statement (fill_type *fill, const char *memspec,
 		    current_section->load_base != NULL,
 		    current_section->addr_tree != NULL);
 
-  /* If this section has no load region or base, but has the same
+  /* If this section has no load region or base, but uses the same
      region as the previous section, then propagate the previous
      section's load region.  */
 
-  if (!current_section->lma_region && !current_section->load_base
+  if (current_section->lma_region == NULL
+      && current_section->load_base == NULL
+      && current_section->addr_tree == NULL
       && current_section->region == current_section->prev->region)
     current_section->lma_region = current_section->prev->lma_region;
 

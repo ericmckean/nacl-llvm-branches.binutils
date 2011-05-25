@@ -40,6 +40,7 @@ class Input_argument;
 class Incremental_inputs_checker;
 class Incremental_script_entry;
 class Incremental_object_entry;
+class Incremental_dynobj_entry;
 class Incremental_archive_entry;
 class Incremental_inputs;
 class Incremental_binary;
@@ -63,7 +64,8 @@ enum Incremental_input_type
 
 enum Incremental_input_flags
 {
-  INCREMENTAL_INPUT_IN_SYSTEM_DIR = 0x0800
+  INCREMENTAL_INPUT_IN_SYSTEM_DIR = 0x8000,
+  INCREMENTAL_INPUT_AS_NEEDED = 0x4000
 };
 
 // Create an Incremental_binary object for FILE. Returns NULL is this is not
@@ -79,8 +81,9 @@ class Incremental_input_entry
  public:
   Incremental_input_entry(Stringpool::Key filename_key, unsigned int arg_serial,
 			  Timespec mtime)
-    : filename_key_(filename_key), offset_(0), info_offset_(0),
-      arg_serial_(arg_serial), mtime_(mtime), is_in_system_directory_(false)
+    : filename_key_(filename_key), file_index_(0), offset_(0), info_offset_(0),
+      arg_serial_(arg_serial), mtime_(mtime), is_in_system_directory_(false),
+      as_needed_(false)
   { }
 
   virtual
@@ -92,15 +95,23 @@ class Incremental_input_entry
   type() const
   { return this->do_type(); }
 
-  // Set the section offset of this input file entry.
+  // Set the index and section offset of this input file entry.
   void
-  set_offset(unsigned int offset)
-  { this->offset_ = offset; }
+  set_offset(unsigned int file_index, unsigned int offset)
+  {
+    this->file_index_ = file_index;
+    this->offset_ = offset;
+  }
 
   // Set the section offset of the supplemental information for this entry.
   void
   set_info_offset(unsigned int info_offset)
   { this->info_offset_ = info_offset; }
+
+  // Get the index of this input file entry.
+  unsigned int
+  get_file_index() const
+  { return this->file_index_; }
 
   // Get the section offset of this input file entry.
   unsigned int
@@ -137,6 +148,16 @@ class Incremental_input_entry
   is_in_system_directory() const
   { return this->is_in_system_directory_; }
 
+  // Record that the file was linked with --as-needed.
+  void
+  set_as_needed()
+  { this->as_needed_ = true; }
+
+  // Return TRUE if the file was linked with --as-needed.
+  bool
+  as_needed() const
+  { return this->as_needed_; }
+
   // Return a pointer to the derived Incremental_script_entry object.
   // Return NULL for input entries that are not script files.
   Incremental_script_entry*
@@ -148,6 +169,12 @@ class Incremental_input_entry
   Incremental_object_entry*
   object_entry()
   { return this->do_object_entry(); }
+
+  // Return a pointer to the derived Incremental_dynobj_entry object.
+  // Return NULL for input entries that are not shared object files.
+  Incremental_dynobj_entry*
+  dynobj_entry()
+  { return this->do_dynobj_entry(); }
 
   // Return a pointer to the derived Incremental_archive_entry object.
   // Return NULL for input entries that are not archive files.
@@ -172,6 +199,12 @@ class Incremental_input_entry
   do_object_entry()
   { return NULL; }
 
+  // Return a pointer to the derived Incremental_dynobj_entry object.
+  // Return NULL for input entries that are not shared object files.
+  virtual Incremental_dynobj_entry*
+  do_dynobj_entry()
+  { return NULL; }
+
   // Return a pointer to the derived Incremental_archive_entry object.
   // Return NULL for input entries that are not archive files.
   virtual Incremental_archive_entry*
@@ -181,6 +214,9 @@ class Incremental_input_entry
  private:
   // Key of the filename string in the section stringtable.
   Stringpool::Key filename_key_;
+
+  // Index of the entry in the output section.
+  unsigned int file_index_;
 
   // Offset of the entry in the output section.
   unsigned int offset_;
@@ -196,6 +232,9 @@ class Incremental_input_entry
 
   // TRUE if the file was found in a system directory.
   bool is_in_system_directory_;
+
+  // TRUE if the file was linked with --as-needed.
+  bool as_needed_;
 };
 
 // Information about a script input that will persist during the whole linker
@@ -287,10 +326,7 @@ class Incremental_object_entry : public Incremental_input_entry
 			   unsigned int arg_serial, Timespec mtime)
     : Incremental_input_entry(filename_key, arg_serial, mtime), obj_(obj),
       is_member_(false), sections_()
-  {
-    if (!obj_->is_dynamic())
-      this->sections_.reserve(obj->shnum());
-  }
+  { this->sections_.reserve(obj->shnum()); }
 
   // Get the object.
   Object*
@@ -338,9 +374,7 @@ class Incremental_object_entry : public Incremental_input_entry
   {
     return (this->is_member_
 	    ? INCREMENTAL_INPUT_ARCHIVE_MEMBER
-	    : (this->obj_->is_dynamic()
-	       ? INCREMENTAL_INPUT_SHARED_LIBRARY
-	       : INCREMENTAL_INPUT_OBJECT));
+	    : INCREMENTAL_INPUT_OBJECT);
   }
 
   // Return a pointer to the derived Incremental_object_entry object.
@@ -366,6 +400,46 @@ class Incremental_object_entry : public Incremental_input_entry
     off_t sh_size_;
   };
   std::vector<Input_section> sections_;
+};
+
+// Class for recording shared library input files.
+
+class Incremental_dynobj_entry : public Incremental_input_entry
+{
+ public:
+  Incremental_dynobj_entry(Stringpool::Key filename_key,
+  			   Stringpool::Key soname_key, Object* obj,
+			   unsigned int arg_serial, Timespec mtime)
+    : Incremental_input_entry(filename_key, arg_serial, mtime),
+      soname_key_(soname_key), obj_(obj)
+  { }
+
+  // Get the object.
+  Object*
+  object() const
+  { return this->obj_; }
+
+  // Get the stringpool key for the soname.
+  Stringpool::Key
+  get_soname_key() const
+  { return this->soname_key_; }
+
+ protected:
+  virtual Incremental_input_type
+  do_type() const
+  { return INCREMENTAL_INPUT_SHARED_LIBRARY; }
+
+  // Return a pointer to the derived Incremental_dynobj_entry object.
+  virtual Incremental_dynobj_entry*
+  do_dynobj_entry()
+  { return this; }
+
+ private:
+  // Key of the soname string in the section stringtable.
+  Stringpool::Key soname_key_;
+
+  // The object file itself.
+  Object* obj_;
 };
 
 // Class for recording archive library input files.
@@ -707,6 +781,11 @@ class Incremental_inputs_reader
     is_in_system_directory() const
     { return (this->flags_ & INCREMENTAL_INPUT_IN_SYSTEM_DIR) != 0; }
 
+    // Return TRUE if the file was linked with --as-needed.
+    bool
+    as_needed() const
+    { return (this->flags_ & INCREMENTAL_INPUT_AS_NEEDED) != 0; }
+
     // Return the input section count -- for objects only.
     unsigned int
     get_input_section_count() const
@@ -714,6 +793,16 @@ class Incremental_inputs_reader
       gold_assert(this->type() == INCREMENTAL_INPUT_OBJECT
 		  || this->type() == INCREMENTAL_INPUT_ARCHIVE_MEMBER);
       return Swap32::readval(this->inputs_->p_ + this->info_offset_);
+    }
+
+    // Return the soname -- for shared libraries only.
+    const char*
+    get_soname() const
+    {
+      gold_assert(this->type() == INCREMENTAL_INPUT_SHARED_LIBRARY);
+      unsigned int offset = Swap32::readval(this->inputs_->p_
+					    + this->info_offset_);
+      return this->inputs_->get_string(offset);
     }
 
     // Return the offset of the supplemental info for symbol SYMNDX --
@@ -725,7 +814,7 @@ class Incremental_inputs_reader
 		  || this->type() == INCREMENTAL_INPUT_ARCHIVE_MEMBER);
 
       unsigned int section_count = this->get_input_section_count();
-      return (this->info_offset_ + 16
+      return (this->info_offset_ + 24
 	      + section_count * input_section_entry_size
 	      + symndx * 20);
     }
@@ -734,16 +823,10 @@ class Incremental_inputs_reader
     unsigned int
     get_global_symbol_count() const
     {
-      switch (this->type())
-	{
-	case INCREMENTAL_INPUT_OBJECT:
-	case INCREMENTAL_INPUT_ARCHIVE_MEMBER:
-	  return Swap32::readval(this->inputs_->p_ + this->info_offset_ + 4);
-	case INCREMENTAL_INPUT_SHARED_LIBRARY:
-	  return Swap32::readval(this->inputs_->p_ + this->info_offset_);
-	default:
-	  gold_unreachable();
-	}
+      gold_assert(this->type() == INCREMENTAL_INPUT_OBJECT
+		  || this->type() == INCREMENTAL_INPUT_ARCHIVE_MEMBER
+		  || this->type() == INCREMENTAL_INPUT_SHARED_LIBRARY);
+      return Swap32::readval(this->inputs_->p_ + this->info_offset_ + 4);
     }
 
     // Return the offset of the first local symbol -- for objects only.
@@ -764,6 +847,26 @@ class Incremental_inputs_reader
 		  || this->type() == INCREMENTAL_INPUT_ARCHIVE_MEMBER);
 
       return Swap32::readval(this->inputs_->p_ + this->info_offset_ + 12);
+    }
+
+    // Return the index of the first dynamic relocation -- for objects only.
+    unsigned int
+    get_first_dyn_reloc() const
+    {
+      gold_assert(this->type() == INCREMENTAL_INPUT_OBJECT
+		  || this->type() == INCREMENTAL_INPUT_ARCHIVE_MEMBER);
+
+      return Swap32::readval(this->inputs_->p_ + this->info_offset_ + 16);
+    }
+
+    // Return the dynamic relocation count -- for objects only.
+    unsigned int
+    get_dyn_reloc_count() const
+    {
+      gold_assert(this->type() == INCREMENTAL_INPUT_OBJECT
+		  || this->type() == INCREMENTAL_INPUT_ARCHIVE_MEMBER);
+
+      return Swap32::readval(this->inputs_->p_ + this->info_offset_ + 20);
     }
 
     // Return the object count -- for scripts only.
@@ -836,7 +939,7 @@ class Incremental_inputs_reader
     {
       Input_section_info info;
       const unsigned char* p = (this->inputs_->p_
-				+ this->info_offset_ + 16
+				+ this->info_offset_ + 24
 				+ n * input_section_entry_size);
       unsigned int name_offset = Swap32::readval(p);
       info.name = this->inputs_->get_string(name_offset);
@@ -854,7 +957,7 @@ class Incremental_inputs_reader
 		  || this->type() == INCREMENTAL_INPUT_ARCHIVE_MEMBER);
       unsigned int section_count = this->get_input_section_count();
       const unsigned char* p = (this->inputs_->p_
-				+ this->info_offset_ + 16
+				+ this->info_offset_ + 24
 				+ section_count * input_section_entry_size
 				+ n * 20);
       return Incremental_global_symbol_reader<big_endian>(p);
@@ -868,7 +971,7 @@ class Incremental_inputs_reader
     {
       gold_assert(this->type() == INCREMENTAL_INPUT_SHARED_LIBRARY);
       const unsigned char* p = (this->inputs_->p_
-				+ this->info_offset_ + 4
+				+ this->info_offset_ + 8
 				+ n * 4);
       unsigned int output_symndx = Swap32::readval(p);
       *is_def = (output_symndx & (1U << 31)) != 0;
@@ -1053,7 +1156,7 @@ class Incremental_got_plt_reader
   {
     this->got_count_ = elfcpp::Swap<32, big_endian>::readval(p);
     this->got_desc_p_ = p + 8 + ((this->got_count_ + 3) & ~3);
-    this->plt_desc_p_ = this->got_desc_p_ + this->got_count_ * 4;
+    this->plt_desc_p_ = this->got_desc_p_ + this->got_count_ * 8;
   }
 
   // Return the GOT entry count.
@@ -1077,11 +1180,18 @@ class Incremental_got_plt_reader
     return this->p_[8 + n];
   }
 
-  // Return the GOT descriptor for GOT entry N.
+  // Return the symbol index for GOT entry N.
   unsigned int
-  get_got_desc(unsigned int n)
+  get_got_symndx(unsigned int n)
   {
-    return elfcpp::Swap<32, big_endian>::readval(this->got_desc_p_ + n * 4);
+    return elfcpp::Swap<32, big_endian>::readval(this->got_desc_p_ + n * 8);
+  }
+
+  // Return the input file index for GOT entry N.
+  unsigned int
+  get_got_input_index(unsigned int n)
+  {
+    return elfcpp::Swap<32, big_endian>::readval(this->got_desc_p_ + n * 8 + 4);
   }
 
   // Return the PLT descriptor for PLT entry N.
@@ -1235,6 +1345,11 @@ class Incremental_binary
   reserve_layout(unsigned int input_file_index)
   { this->do_reserve_layout(input_file_index); }
 
+  // Process the GOT and PLT entries from the existing output file.
+  void
+  process_got_plt(Symbol_table* symtab, Layout* layout)
+  { this->do_process_got_plt(symtab, layout); }
+
   // Apply incremental relocations for symbols whose values have changed.
   void
   apply_incremental_relocs(const Symbol_table* symtab, Layout* layout,
@@ -1313,6 +1428,10 @@ class Incremental_binary
   virtual void
   do_reserve_layout(unsigned int input_file_index) = 0;
 
+  // Process the GOT and PLT entries from the existing output file.
+  virtual void
+  do_process_got_plt(Symbol_table* symtab, Layout* layout) = 0;
+
   // Apply incremental relocations for symbols whose values have changed.
   virtual void
   do_apply_incremental_relocs(const Symbol_table*, Layout*, Output_file*) = 0;
@@ -1338,6 +1457,9 @@ class Incremental_binary
 };
 
 template<int size, bool big_endian>
+class Sized_relobj_incr;
+
+template<int size, bool big_endian>
 class Sized_incremental_binary : public Incremental_binary
 {
  public:
@@ -1345,8 +1467,9 @@ class Sized_incremental_binary : public Incremental_binary
                            const elfcpp::Ehdr<size, big_endian>& ehdr,
                            Target* target)
     : Incremental_binary(output, target), elf_file_(this, ehdr),
-      section_map_(), symbol_map_(), has_incremental_info_(false),
-      inputs_reader_(), symtab_reader_(), relocs_reader_(), got_plt_reader_(),
+      input_objects_(), section_map_(), symbol_map_(), main_symtab_loc_(),
+      main_strtab_loc_(), has_incremental_info_(false), inputs_reader_(),
+      symtab_reader_(), relocs_reader_(), got_plt_reader_(),
       input_entry_readers_()
   { this->setup_readers(); }
 
@@ -1355,19 +1478,33 @@ class Sized_incremental_binary : public Incremental_binary
   has_incremental_info() const
   { return this->has_incremental_info_; }
 
+  // Record a pointer to the object for input file N.
+  void
+  set_input_object(unsigned int n,
+		   Sized_relobj_incr<size, big_endian>* obj)
+  { this->input_objects_[n] = obj; }
+
+  // Return a pointer to the object for input file N.
+  Sized_relobj_incr<size, big_endian>*
+  input_object(unsigned int n) const
+  {
+    gold_assert(n < this->input_objects_.size());
+    return this->input_objects_[n];
+  }
+
   // Return the Output_section for section index SHNDX.
   Output_section*
   output_section(unsigned int shndx)
   { return this->section_map_[shndx]; }
 
-  // Map a symbol table entry from the input file to the output symbol table.
+  // Map a symbol table entry from the base file to the output symbol table.
   // SYMNDX is relative to the first forced-local or global symbol in the
   // input file symbol table.
   void
   add_global_symbol(unsigned int symndx, Symbol* gsym)
   { this->symbol_map_[symndx] = gsym; }
 
-  // Map a symbol table entry from the input file to the output symbol table.
+  // Map a symbol table entry from the base file to the output symbol table.
   // SYMNDX is relative to the first forced-local or global symbol in the
   // input file symbol table.
   Symbol*
@@ -1417,6 +1554,10 @@ class Sized_incremental_binary : public Incremental_binary
   // Mark regions of the input file that must be kept unchanged.
   virtual void
   do_reserve_layout(unsigned int input_file_index);
+
+  // Process the GOT and PLT entries from the existing output file.
+  virtual void
+  do_process_got_plt(Symbol_table* symtab, Layout* layout);
 
   // Apply incremental relocations for symbols whose values have changed.
   virtual void
@@ -1489,11 +1630,19 @@ class Sized_incremental_binary : public Incremental_binary
   // Output as an ELF file.
   elfcpp::Elf_file<size, big_endian, Incremental_binary> elf_file_;
 
+  // Vector of pointers to the input objects for the unchanged files.
+  // For replaced files, the corresponding pointer is NULL.
+  std::vector<Sized_relobj_incr<size, big_endian>*> input_objects_;
+
   // Map section index to an Output_section in the updated layout.
   std::vector<Output_section*> section_map_;
 
   // Map global symbols from the input file to the symbol table.
   std::vector<Symbol*> symbol_map_;
+
+  // Locations of the main symbol table and symbol string table.
+  Location main_symtab_loc_;
+  Location main_strtab_loc_;
 
   // Readers for the incremental info sections.
   bool has_incremental_info_;
@@ -1509,44 +1658,22 @@ class Sized_incremental_binary : public Incremental_binary
 // can be used directly from the base file.
 
 template<int size, bool big_endian>
-class Sized_incr_relobj : public Sized_relobj_base<size, big_endian>
+class Sized_relobj_incr : public Sized_relobj<size, big_endian>
 {
  public:
   typedef typename elfcpp::Elf_types<size>::Elf_Addr Address;
-  typedef typename Sized_relobj_base<size, big_endian>::Symbols Symbols;
+  typedef typename Sized_relobj<size, big_endian>::Symbols Symbols;
 
-  static const Address invalid_address = static_cast<Address>(0) - 1;
-
-  Sized_incr_relobj(const std::string& name,
+  Sized_relobj_incr(const std::string& name,
 		    Sized_incremental_binary<size, big_endian>* ibase,
 		    unsigned int input_file_index);
 
-  // Checks if the offset of input section SHNDX within its output
-  // section is invalid.
-  bool
-  is_output_section_offset_invalid(unsigned int shndx) const
-  { return this->section_offsets_[shndx] == invalid_address; }
-
-  // Get the offset of input section SHNDX within its output section.
-  // This is -1 if the input section requires a special mapping, such
-  // as a merge section.  The output section can be found in the
-  // output_sections_ field of the parent class Incrobj.
-  uint64_t
-  do_output_section_offset(unsigned int shndx) const
-  {
-    gold_assert(shndx < this->section_offsets_.size());
-    Address off = this->section_offsets_[shndx];
-    if (off == invalid_address)
-      return -1ULL;
-    return off;
-  }
-
  private:
   // For convenience.
-  typedef Sized_incr_relobj<size, big_endian> This;
+  typedef Sized_relobj_incr<size, big_endian> This;
   static const int sym_size = elfcpp::Elf_sizes<size>::sym_size;
 
-  typedef typename Sized_relobj_base<size, big_endian>::Output_sections
+  typedef typename Sized_relobj<size, big_endian>::Output_sections
       Output_sections;
   typedef Incremental_inputs_reader<size, big_endian> Inputs_reader;
   typedef typename Inputs_reader::Incremental_input_entry_reader
@@ -1613,11 +1740,6 @@ class Sized_incr_relobj : public Sized_relobj_base<size, big_endian>
   void
   do_for_all_global_symbols(Read_symbols_data* sd,
 			    Library_base::Symbol_visitor_base* v);
-
-  // Iterate over local symbols, calling a visitor class V for each GOT offset
-  // associated with a local symbol.
-  void
-  do_for_all_local_got_entries(Got_offset_list::Visitor* v) const;
 
   // Get the size of a section.
   uint64_t
@@ -1744,10 +1866,6 @@ class Sized_incr_relobj : public Sized_relobj_base<size, big_endian>
   unsigned int local_dynsym_offset_;
   // The entries in the symbol table for the external symbols.
   Symbols symbols_;
-  // For each input section, the offset of the input section in its
-  // output section.  This is INVALID_ADDRESS if the input section requires a
-  // special mapping.
-  std::vector<Address> section_offsets_;
   // The offset of the first incremental relocation for this object.
   unsigned int incr_reloc_offset_;
   // The number of incremental relocations for this object.

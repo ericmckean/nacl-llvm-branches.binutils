@@ -1,3 +1,28 @@
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* opcode/s390.h: Replace S390_OPERAND_REG_EVEN with
+	S390_OPERAND_REG_PAIR.
+
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* opcode/s390.h: Add S390_OPCODE_REG_EVEN flag.
+
+2011-05-17  Alan Modra  <amodra@gmail.com>
+
+	PR ld/12760
+	* bfdlink.h (struct bfd_link_callbacks <notice>): Add "flags" and
+	"string" param.
+
+2011-05-16  Alan Modra  <amodra@gmail.com>
+
+	* bfdlink.h (struct bfd_link_hash_entry): Remove u.undef.weak field.
+
+2011-05-09  Paul Brook  <paul@codesourcery.com>
+
+	* elf/tic6x.h (ELF_STRING_C6000_unwind,
+	ELF_STRING_C6000_unwind_info, ELF_STRING_C6000_unwind_once,
+	ELF_STRING_C6000_unwind_info_once): Define.
+
 2011-04-30  Jakub Jelinek  <jakub@redhat.com>
 
 	* dwarf2.h (DW_OP_GNU_const_type, DW_OP_GNU_regval_type,
