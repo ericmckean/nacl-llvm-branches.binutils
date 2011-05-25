@@ -6213,7 +6213,8 @@ insert_sp_adjust_sandbox_code (offsetT insn_start_off)
 
 static void
 insert_xp_sandbox_code(unsigned int regN, unsigned int cmd_2reg,
-		       unsigned int cmd_imm, offsetT insn_start_off)
+		       unsigned int cmd_imm, offsetT insn_start_off,
+		       int gen_imm_prefix)
 {
   char *p;
   unsigned int need_rex = !!(i.rex & (REX_B | REX_X));
@@ -6268,12 +6269,20 @@ insert_xp_sandbox_code(unsigned int regN, unsigned int cmd_2reg,
     }
   else
     {
-      p = frag_more (2);
-      if (imm_size (0) == 1)
-	p[0] = 0x83; // CMD imm8, %regN(ExP)
+      if (gen_imm_prefix)
+	{
+	  p = frag_more (2);
+	  if (imm_size (0) == 1)
+	    p[0] = 0x83; // CMD imm8, %regN(ExP)
+	  else
+	    p[0] = 0x81; // CMD imm32, %regX(ExP)
+	  p[1] = cmd_imm;
+	}
       else
-	p[0] = 0x81; // CMD imm32, %regX(ExP)
-      p[1] = cmd_imm;
+	{
+	  p = frag_more (1);
+	  p[0] = cmd_imm;
+	}
       output_imm (frag_now, insn_start_off);
       // Second operand is regN(ExP)
       i.rm.regmem = regN/*ExP*/;
@@ -6391,26 +6400,26 @@ check_prefix:
 	  if (!strcmp(i.tm.name, "naclasp"))
 	    /*                    esp   add   add
 				        reg   imm  */
-	    insert_xp_sandbox_code (4, 0x01, 0xc4, insn_start_off);
+	    insert_xp_sandbox_code (4, 0x01, 0xc4, insn_start_off, 1);
 	  else if (!strcmp(i.tm.name, "naclssp"))
 	    /*                    esp   sub   sub
 				        reg   imm  */
-	    insert_xp_sandbox_code (4, 0x29, 0xec, insn_start_off);
+	    insert_xp_sandbox_code (4, 0x29, 0xec, insn_start_off, 1);
 	  else if (!strcmp(i.tm.name, "naclspadj"))
 	    insert_sp_adjust_sandbox_code (insn_start_off);
 	  else if (!strcmp(i.tm.name, "naclrestbp"))
 	    /*                    ebp   mov   mov
 				        reg   imm  */
-	    insert_xp_sandbox_code (5, 0x89, 0xbc, insn_start_off);
+	    insert_xp_sandbox_code (5, 0x89, 0xbd, insn_start_off, 0);
 	  else if (!strcmp(i.tm.name, "naclrestsp"))
 	    /*                    esp   mov   mov
 				        reg   imm  */
-	    insert_xp_sandbox_code (4, 0x89, 0xbc, insn_start_off);
+	    insert_xp_sandbox_code (4, 0x89, 0xbc, insn_start_off, 0);
 	  else if (!strcmp(i.tm.name, "naclrestsp_noflags")) {
 	    /*                    esp   mov   mov
 				        reg   imm  */
 	    // Generate the mov from src into esp first.
-	    insert_xp_sandbox_code (4, 0x89, 0xbc, insn_start_off);
+	    insert_xp_sandbox_code (4, 0x89, 0xbc, insn_start_off, 0);
 	    // Now set it up to restore rsp with lea (%rsp,%r15,1), %rsp --
 	    // overriding the add instruction that insert_xp_sandbox_code
 	    // set up to restore rsp.
@@ -9240,6 +9249,25 @@ md_undefined_symbol (name)
 
 /* Round up a section size to the appropriate boundary.  */
 
+#ifdef TC_NACL_C
+valueT
+md_section_align (segment, size)
+     segT segment;
+     valueT size;
+{
+  if (bfd_get_section_flags (stdoutput, segment) & SEC_CODE)
+    {
+      /* For NaCl, force the code section size to be aligned. This implies
+	 padding with NOPs that is required for validation.  */
+      int align;
+
+      align = bfd_get_section_alignment (stdoutput, segment);
+      size = ((size + (1 << align) - 1) & ((valueT) -1 << align));
+    }
+
+  return size;
+}
+#else
 valueT
 md_section_align (segment, size)
      segT segment ATTRIBUTE_UNUSED;
@@ -9262,6 +9290,7 @@ md_section_align (segment, size)
 
   return size;
 }
+#endif
 
 /* On the i386, PC-relative offsets are relative to the start of the
    next instruction.  That is, the address of the offset, plus its
