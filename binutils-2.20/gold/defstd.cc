@@ -256,6 +256,7 @@ const Define_symbol_in_segment in_segment[] =
 
 const int in_segment_count = sizeof in_segment / sizeof in_segment[0];
 
+// @LOCALMOD-BEGIN
 const Define_symbol_in_segment in_segment_nacl[] =
 {
   {
@@ -299,11 +300,29 @@ const Define_symbol_in_segment in_segment_nacl[] =
     0,				// nonvis
     Symbol::SEGMENT_BSS,	// offset_from_base
     true			// only_if_ref
+  },
+  // This is just here for undefined symbol checking during bitcode linking
+  // The actual __tls_template_align is defined in our linker scripts, but
+  // gold cannot use our linker scripts correctly.
+  {
+    "__tls_template_align",	// name
+    elfcpp::PT_TLS,		// segment_type
+    elfcpp::PF_R,		// segment_flags_set
+    elfcpp::PF(0),		// segment_flags_clear
+    0,				// value
+    0,				// size
+    elfcpp::STT_NOTYPE,		// type
+    elfcpp::STB_GLOBAL,		// binding
+    elfcpp::STV_DEFAULT,	// visibility
+    0,				// nonvis
+    Symbol::SEGMENT_BSS,	// offset_from_base
+    true			// only_if_ref
   }
 };
 
 const int in_segment_count_nacl = sizeof in_segment_nacl
                                   / sizeof in_segment_nacl[0];
+// @LOCALMOD-END
 
 } // End anonymous namespace.
 
