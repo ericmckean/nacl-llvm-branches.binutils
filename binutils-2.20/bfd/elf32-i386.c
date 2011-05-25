@@ -577,11 +577,11 @@ static const bfd_byte elf_i386_plt_entry[PLT_ENTRY_SIZE] =
   0x8b, 0x09,		    /* mov (%ecx), %ecx */
   0x83, 0xe1, 0xe0,	    /* andl %ecx, NACLMASK */
   0xff, 0xe1,		    /* jmp *%ecx */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
 #define elf_i386_plt_entry_offset2 32
   0x68,			    /* pushl immediate */
 #define elf_i386_plt_entry_offset3 33
@@ -590,12 +590,12 @@ static const bfd_byte elf_i386_plt_entry[PLT_ENTRY_SIZE] =
 #define elf_i386_plt_entry_offset4 38
   0, 0, 0, 0,		    /* replaced with offset to start of .plt.  */
 #define elf_i386_plt_entry_offset5 42
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4		    /* fill with hlt instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90		    /* fill with nop instructions. */
 };
 #else
 static const bfd_byte elf_i386_plt_entry[PLT_ENTRY_SIZE] =
@@ -624,7 +624,7 @@ static const bfd_byte elf_i386_pic_plt0_entry[12] =
   0x8b, 0x4b, 0x08,		/* mov 0x8(%ebx), %ecx */
   0x83, 0xe1, 0xe0,		/* and $NACLMASK, %ecx */
   0xff, 0xe1,			/* jmp *%ecx */
-  0xf4				/* fill with hlt instructions. */
+  0x90				/* fill with nop instructions. */
 #else
   0xff, 0xb3, 4, 0, 0, 0,	/* pushl 4(%ebx) */
   0xff, 0xa3, 8, 0, 0, 0	/* jmp *8(%ebx) */
@@ -640,21 +640,22 @@ static const bfd_byte elf_i386_pic_plt_entry[PLT_ENTRY_SIZE] =
   0, 0, 0, 0,		    /* replaced with offset of this symbol in .got.*/
   0x83, 0xe1, 0xe0,	    /* andl %ecx, NACLMASK */
   0xff, 0xe1,		    /* jmp *%ecx */
-  0xf4,                     /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90,                     /* fill with nop instructions. */
   0x68,			    /* pushl immediate */
   0, 0, 0, 0,		    /* replaced with offset into relocation table.  */
   0xe9,			    /* jmp relative */
   0, 0, 0, 0,		    /* replaced with offset to start of .plt.  */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4                /* fill with hlt instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90                /* fill with nop instructions. */
 };
 #else
 static const bfd_byte elf_i386_pic_plt_entry[PLT_ENTRY_SIZE] =
@@ -921,7 +922,7 @@ elf_i386_link_hash_table_create (bfd *abfd)
   ret->is_vxworks = 0;
   ret->srelplt2 = NULL;
 #ifdef ELF32_NACL_C
-  ret->plt0_pad_byte = 0xf4;
+  ret->plt0_pad_byte = 0x90;
 #else
   ret->plt0_pad_byte = 0;
 #endif
@@ -1333,6 +1334,14 @@ elf_i386_tls_transition (struct bfd_link_info *info, bfd *abfd,
   /* Return TRUE if there is no transition.  */
   if (from_type == to_type)
     return TRUE;
+
+#ifdef ELF32_NACL_C
+  /* Don't attempt to rewrite code sequences with call in the middle,
+     because the NaCl assembler will put no-ops before the call,
+     which we can't handle yet.  */
+  if (from_type == R_386_TLS_GD || from_type == R_386_TLS_LDM)
+    return TRUE;
+#endif
 
   /* Check if the transition can be performed.  */
   if (check

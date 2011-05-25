@@ -406,20 +406,20 @@ static const bfd_byte elf_x86_64_plt0_entry[PLT_ENTRY_SIZE] =
   0x4c, 0x8b, 0x1d, 16, 0, 0, 0,/* movq GOT+16(%rip), %r11 */
 #define elf_x86_64_plt0_entry_offset2 9
 #define elf_x86_64_plt0_entry_instsize2 7
-  0x4d, 0x8b, 0x1b,		/* mov (%r11), %r11 */
-  0x49, 0x83, 0xe3, 0xe0,	/* andq NACLMASK, %r11 */
-  0x41, 0xff, 0xe3,		/* jmp *%r11 */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,	/* fill with hlt instructions. */
-  0xf4				/* fill with hlt instructions. */
+  0x45, 0x89, 0xdb,             /* mov  %r11d, %r11d */
+  0x41, 0x83, 0xe3, 0xe0,       /* and  NACLMASK,%r11d */
+  0x4d, 0x01, 0xfb,             /* add  %r15, %r11 */
+  0x41, 0xff, 0xe3,	        /* jmpq *%r11 */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,	/* fill with nop instructions. */
+  0x90, 0x90             	/* fill with nop instructions. */
 };
 #else
 static const bfd_byte elf_x86_64_plt0_entry[PLT_ENTRY_SIZE] =
@@ -443,13 +443,13 @@ static const bfd_byte elf_x86_64_plt_entry[PLT_ENTRY_SIZE] =
 #define elf_x86_64_plt_entry_offset1 3
 #define elf_x86_64_plt_entry_instsize1 7
   0, 0, 0, 0,		    /* replaced with offset to this symbol in .got.  */
-  0x4d, 0x8b, 0x1b,	    /* mov (%r11), %r11 */
-  0x49, 0x83, 0xe3, 0xe0,   /* andq NACLMASK, %r11 */
-  0x41, 0xff, 0xe3,	    /* jmp *%r11 */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4,	    /* fill with hlt instructions. */
+  0x45, 0x89, 0xdb,         /* mov  %r11d, %r11d */
+  0x41, 0x83, 0xe3, 0xe0,   /* and  NACLMASK,%r11d */
+  0x4d, 0x01, 0xfb,         /* add  %r15, %r11 */
+  0x41, 0xff, 0xe3,	    /* jmpq *%r11 */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
 #define elf_x86_64_plt_entry_offset2 32
   0x68,			    /* pushq immediate */
 #define elf_x86_64_plt_entry_offset3 33
@@ -458,12 +458,12 @@ static const bfd_byte elf_x86_64_plt_entry[PLT_ENTRY_SIZE] =
 #define elf_x86_64_plt_entry_offset4 38
   0, 0, 0, 0,		    /* replaced with offset to start of .plt0.  */
 #define elf_x86_64_plt_entry_offset5 42
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4, 0xf4, 0xf4,   /* fill with hlt instructions. */
-  0xf4, 0xf4		    /* fill with hlt instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90, 0x90, 0x90,   /* fill with nop instructions. */
+  0x90, 0x90		    /* fill with nop instructions. */
 };
 #else
 {
@@ -1008,6 +1008,17 @@ elf_x86_64_check_tls_transition (bfd *abfd,
 			   "__tls_get_addr", 14) == 0));
 
     case R_X86_64_GOTTPOFF:
+#ifdef ELF64_NACL_C
+      /* Check transition from IE access model:
+		movl foo@gottpoff(%rip), %reg
+		addl foo@gottpoff(%rip), %reg
+	 The encoding is similar to x86_64 but with 0x44 REX prefix if writing
+	 to %r9d-%r15d or without REX prefix otherwise. We can't distinguish
+	 cases with/without the prefix, thus disabling the prefix check :-(  */
+
+      if (offset < 2 || (offset + 4) > sec->size)
+	return FALSE;
+#else
       /* Check transition from IE access model:
 		mov foo@gottpoff(%rip), %reg
 		add foo@gottpoff(%rip), %reg
@@ -1036,6 +1047,7 @@ elf_x86_64_check_tls_transition (bfd *abfd,
       val = bfd_get_8 (abfd, contents + offset - 2);
       if (val != 0x8b && val != 0x03)
 	return FALSE;
+#endif
 
       val = bfd_get_8 (abfd, contents + offset - 1);
       return (val & 0xc7) == 5;
@@ -1159,6 +1171,14 @@ elf_x86_64_tls_transition (struct bfd_link_info *info, bfd *abfd,
   /* Return TRUE if there is no transition.  */
   if (from_type == to_type)
     return TRUE;
+
+#ifdef ELF64_NACL_C
+  /* Don't attempt to rewrite code sequences with call in the middle,
+     because the NaCl assembler will put no-ops before the call,
+     which we can't handle yet.  */
+  if (from_type == R_X86_64_TLSGD || from_type == R_X86_64_TLSLD)
+    return TRUE;
+#endif
 
   /* Check if the transition can be performed.  */
   if (check
@@ -3495,10 +3515,18 @@ elf_x86_64_relocate_section (bfd *output_bfd,
 			  sindx = elf_section_data (osec)->dynindx;
 			  if (sindx == 0)
 			    {
-			      asection *oi = htab->elf.text_index_section;
-			      sindx = elf_section_data (oi)->dynindx;
+			      osec = htab->elf.text_index_section;
+			      sindx = elf_section_data (osec)->dynindx;
 			    }
 			  BFD_ASSERT (sindx != 0);
+#ifdef ELF64_NACL_C
+			  /* For NaCl, R_X86_64_32 comes in place of
+			     R_X86_64_64. We don't have R_X86_32_RELATIVE to
+			     make a rewrite similar to one above, so just make
+			     a non-buggy relocation against section symbol.  */
+			  if (r_type == R_X86_64_32)
+			    relocation -= osec->vma;
+#endif
 			}
 
 		      outrel.r_info = htab->r_info (sindx, r_type);
@@ -4747,12 +4775,13 @@ static const struct bfd_elf_special_section
 #define ELF_ARCH			    bfd_arch_i386
 #define ELF_TARGET_ID			    X86_64_ELF_DATA
 #define ELF_MACHINE_CODE		    EM_X86_64
-#define ELF_MAXPAGESIZE			    0x200000
 
 #ifdef ELF64_NACL_C
+#define ELF_MAXPAGESIZE			    0x10000
 #define ELF_MINPAGESIZE			    0x10000
 #define ELF_COMMONPAGESIZE		    0x10000
 #else
+#define ELF_MAXPAGESIZE			    0x200000
 #define ELF_MINPAGESIZE			    0x1000
 #define ELF_COMMONPAGESIZE		    0x1000
 #endif
