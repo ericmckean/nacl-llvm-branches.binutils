@@ -175,6 +175,7 @@ enum option_values
   OPTION_PLUGIN_OPT,
 #endif /* ENABLE_PLUGINS */
   OPTION_DEFAULT_SCRIPT,
+  OPTION_ADD_EXTRA_DT_NEEDED,   /* @LOCALMOD */
 };
 
 /* The long options.  This structure is used for both the option
@@ -609,6 +610,11 @@ static const struct ld_option ld_options[] =
     TWO_DASHES },
   { {"wrap", required_argument, NULL, OPTION_WRAP},
     '\0', N_("SYMBOL"), N_("Use wrapper functions for SYMBOL"), TWO_DASHES },
+  /* @LOCALMOD-BEGIN */
+  { {"add-extra-dt-needed", required_argument, NULL,
+     OPTION_ADD_EXTRA_DT_NEEDED},
+    '\0', N_("SONAME"), N_("Add DT_NEEDED entry for SONAME to image"), TWO_DASHES },
+  /* @LOCALMOD-END */
 };
 
 #define OPTION_COUNT ARRAY_SIZE (ld_options)
@@ -1535,6 +1541,14 @@ parse_args (unsigned argc, char **argv)
               einfo (_("%P%X: --hash-size needs a numeric argument\n"));
           }
           break;
+          /* @LOCALMOD-BEGIN */
+         case OPTION_ADD_EXTRA_DT_NEEDED:
+          {
+            extern void pnacl_register_extra_dt_needed(const char *soname);
+            pnacl_register_extra_dt_needed(optarg);
+          }
+          break;
+          /* @LOCALMOD-END */
 	}
     }
 

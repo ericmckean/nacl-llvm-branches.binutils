@@ -3078,7 +3078,10 @@ _bfd_elf_add_dynamic_entry (struct bfd_link_info *info,
    otherwise just check whether one already exists.  Returns -1 on error,
    1 if a DT_NEEDED tag already exists, and 0 on success.  */
 
-static int
+
+/* @LOCALMOD: (was static): make this function accessible
+   from ld/ldlang.c so that pnacl can inject sonames */
+int
 elf_add_dt_needed_tag (bfd *abfd,
 		       struct bfd_link_info *info,
 		       const char *soname,

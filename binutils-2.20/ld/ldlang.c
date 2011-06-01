@@ -6502,6 +6502,52 @@ lang_list_remove_tail (lang_statement_list_type *destlist,
 }
 #endif /* ENABLE_PLUGINS */
 
+/* @LOCALMOD-BEGIN */
+
+#define MAX_SONAMES 128
+/* note: zero initialized */
+static const char* extra_sonames[MAX_SONAMES];
+
+/* called from lexsub.c */
+void pnacl_register_extra_dt_needed(const char *soname)
+{
+  int i;
+  for ( i=0; i< MAX_SONAMES; ++i)
+    {
+      if (extra_sonames[i] == NULL)
+        {
+          extra_sonames[i] = strdup(soname);
+          return;
+        }
+    }
+  einfo (_("%P%F: too many DT_NEEDED names specified\n"));
+}
+
+
+void pnacl_inject_all_extra_dt_needed()
+{
+  /* this function was made non-static via pnacl patch: */
+  extern int
+    elf_add_dt_needed_tag (bfd *abfd,
+                           struct bfd_link_info *info,
+                           const char *soname,
+                           bfd_boolean do_it);
+
+  int i;
+  for ( i=0; i< MAX_SONAMES; ++i)
+    {
+      if (extra_sonames[i] == NULL)  continue;
+      if (0 > elf_add_dt_needed_tag(link_info.output_bfd,
+                                    &link_info,
+                                    extra_sonames[i],
+                                    1)) {
+        einfo (_("%P%F: failed to add DT_NEEDED tag '%s'\n"), extra_sonames[i]);
+      }
+    }
+}
+/* @LOCALMOD-END */
+
+  
 void
 lang_process (void)
 {
@@ -6527,6 +6573,8 @@ lang_process (void)
   current_target = default_target;
   open_input_bfds (statement_list.head, OPEN_BFD_NORMAL);
 
+  pnacl_inject_all_extra_dt_needed(); /* @LOCALMOD */
+  
 #ifdef ENABLE_PLUGINS
   if (plugin_active_plugins_p ())
     {
