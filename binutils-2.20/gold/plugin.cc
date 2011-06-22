@@ -76,6 +76,17 @@ get_view(const void *handle, const void **viewp);
 static enum ld_plugin_status
 release_input_file(const void *handle);
 
+// @LOCALMOD-BEGIN
+static const char*
+get_soname(void);
+
+static const char*
+get_needed(unsigned int index);
+
+static unsigned int
+get_num_needed(void);
+// @LOCALMOD-END
+
 static enum ld_plugin_status
 get_symbols(const void *handle, int nsyms, struct ld_plugin_symbol *syms);
 
@@ -135,7 +146,7 @@ Plugin::load()
   sscanf(ver, "%d.%d", &major, &minor);
 
   // Allocate and populate a transfer vector.
-  const int tv_fixed_size = 17;
+  const int tv_fixed_size = 20;
   int tv_size = this->args_.size() + tv_fixed_size;
   ld_plugin_tv* tv = new ld_plugin_tv[tv_size];
 
@@ -204,6 +215,20 @@ Plugin::load()
   ++i;
   tv[i].tv_tag = LDPT_GET_SYMBOLS;
   tv[i].tv_u.tv_get_symbols = get_symbols;
+
+  // @LOCALMOD-BEGIN
+  ++i;
+  tv[i].tv_tag = LDPT_GET_SONAME;
+  tv[i].tv_u.tv_get_soname = get_soname;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_NEEDED;
+  tv[i].tv_u.tv_get_needed = get_needed;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_NUM_NEEDED;
+  tv[i].tv_u.tv_get_num_needed = get_num_needed;
+  // @LOCALMOD-END
 
   ++i;
   tv[i].tv_tag = LDPT_ADD_INPUT_FILE;
@@ -417,6 +442,22 @@ Plugin_manager::all_symbols_read(Workqueue* workqueue, Task* task,
   this->dirpath_ = dirpath;
   this->mapfile_ = mapfile;
   this->this_blocker_ = NULL;
+
+  // @LOCALMOD-BEGIN
+  if (parameters->options().soname())
+    this->soname_ = parameters->options().soname();
+  else
+    this->soname_ = "";
+
+  // This ignores the --as-needed directive and simply lists
+  // every dynamic object in the link. To do this correctly requires
+  // looping over the symbol table and identifying uses.
+  // TODO(pdox): Fix this when adding version info, since these
+  // pieces of info are generated in the same place
+  // (Symbol_table::set_dynsym_indexes).
+  this->needed_.clear();
+  input_objects->get_sonames(this->needed_);
+  // @LOCALMOD-END
 
   for (this->current_ = this->plugins_.begin();
        this->current_ != this->plugins_.end();
@@ -1394,6 +1435,30 @@ set_extra_library_path(const char* path)
   gold_assert(parameters->options().has_plugins());
   return parameters->options().plugins()->set_extra_library_path(path);
 }
+
+// @LOCALMOD-BEGIN
+static const char *
+get_soname(void)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_soname();
+}
+
+static const char *
+get_needed(unsigned int index)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_needed(index);
+}
+
+static unsigned int
+get_num_needed(void)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_num_needed();
+}
+// @LOCALMOD-END
+
 
 // Issue a diagnostic message from a plugin.
 

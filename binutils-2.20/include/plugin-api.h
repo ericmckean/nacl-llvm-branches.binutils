@@ -195,6 +195,31 @@ enum ld_plugin_status
 (*ld_plugin_add_symbols) (void *handle, int nsyms,
                           const struct ld_plugin_symbol *syms);
 
+// @LOCALMOD-BEGIN
+
+/* The linker's interface for getting the soname of the link output. */
+
+typedef
+const char *
+(*ld_plugin_get_soname) (void);
+
+/* The linker's interface for getting the i'th needed
+ * soname of the link output.
+ * Returns NULL if index >= num_needed
+ */
+
+typedef
+const char *
+(*ld_plugin_get_needed) (unsigned int index);
+
+/* The linker's interface for getting the number of needed
+ * sonames of the link output. */
+typedef
+unsigned int
+(*ld_plugin_get_num_needed) (void);
+
+// @LOCALMOD-END
+
 /* The linker's interface for getting the input file information with
    an open (possibly re-opened) file descriptor.  */
 
@@ -266,6 +291,11 @@ enum ld_plugin_tag
   LDPT_REGISTER_CLEANUP_HOOK,
   LDPT_ADD_SYMBOLS,
   LDPT_GET_SYMBOLS,
+  // @LOCALMOD-BEGIN
+  LDPT_GET_SONAME,
+  LDPT_GET_NEEDED,
+  LDPT_GET_NUM_NEEDED,
+  // @LOCALMOD-END
   LDPT_ADD_INPUT_FILE,
   LDPT_MESSAGE,
   LDPT_GET_INPUT_FILE,
@@ -291,6 +321,11 @@ struct ld_plugin_tv
     ld_plugin_register_cleanup tv_register_cleanup;
     ld_plugin_add_symbols tv_add_symbols;
     ld_plugin_get_symbols tv_get_symbols;
+    // @LOCALMOD-BEGIN
+    ld_plugin_get_soname tv_get_soname;
+    ld_plugin_get_needed tv_get_needed;
+    ld_plugin_get_num_needed tv_get_num_needed;
+    // @LOCALMOD-END
     ld_plugin_add_input_file tv_add_input_file;
     ld_plugin_message tv_message;
     ld_plugin_get_input_file tv_get_input_file;

@@ -596,12 +596,6 @@ class General_options
 	      N_("Not supported"),
 	      N_("Do not copy DT_NEEDED tags from shared libraries"));
 
-// @LOCALMOD-BEGIN
-  DEFINE_bool(add_needed_sonames, options::TWO_DASHES, '\0', false,
-              N_("Add all transitive needed sonames to printed sonames file."),
-              NULL);
-
-// @LOCALMOD-END
   DEFINE_bool_alias(allow_multiple_definition, muldefs, options::TWO_DASHES,
 		    '\0', N_("Allow multiple definitions of symbols"),
 		    N_("Do not allow multiple definitions"), false);
@@ -932,13 +926,6 @@ class General_options
 
   DEFINE_special(section_start, options::TWO_DASHES, '\0',
 		 N_("Set address of section"), N_("SECTION=ADDRESS"));
-
- // @LOCALMOD-BEGIN
-  DEFINE_string(sonames, options::TWO_DASHES, '\0', NULL,
-                N_("Save needed sonames found while linking, "
-                   "and save in file."),
-                N_("FILENAME"));
-// @LOCALMOD-END
 
   DEFINE_optional_string(sort_common, options::TWO_DASHES, '\0', NULL,
 			 N_("Sort common symbols by alignment"),
