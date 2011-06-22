@@ -265,6 +265,22 @@ class Plugin_manager
   in_replacement_phase() const
   { return this->in_replacement_phase_; }
 
+  // @LOCALMOD-BEGIN
+  const char *get_soname() const {
+    return soname_.c_str();
+  }
+
+  const char *get_needed(unsigned int index) const {
+    if (index < needed_.size())
+      return needed_[index].c_str();
+    return NULL;
+  }
+
+  unsigned int get_num_needed() const {
+    return needed_.size();
+  }
+  // @LOCALMOD-END
+
  private:
   Plugin_manager(const Plugin_manager&);
   Plugin_manager& operator=(const Plugin_manager&);
@@ -349,6 +365,12 @@ class Plugin_manager
   Dirsearch* dirpath_;
   Mapfile* mapfile_;
   Task_token* this_blocker_;
+
+  // @LOCALMOD-BEGIN
+  // These are computed in all_symbols_read().
+  std::string soname_; // soname of the linker output
+  std::vector<std::string> needed_; // List of needed dynamic libraries
+  // @LOCALMOD-END
 
   // An extra directory to seach for the libraries passed by
   // add_input_library.
