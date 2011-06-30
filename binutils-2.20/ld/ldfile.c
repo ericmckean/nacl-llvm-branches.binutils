@@ -40,6 +40,8 @@
 #include "plugin.h"
 #endif /* ENABLE_PLUGINS */
 
+#include "nacl_file_hooks.h"  /* @LOCALMOD hijack fopen, etc. */
+
 const char * ldfile_input_filename;
 bfd_boolean  ldfile_assumed_script = FALSE;
 const char * ldfile_output_machine_name = "";

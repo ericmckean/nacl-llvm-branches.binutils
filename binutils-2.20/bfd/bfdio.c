@@ -28,6 +28,8 @@
 #include "bfd.h"
 #include "libbfd.h"
 
+#include "../ld/nacl_file_hooks.h"  /* @LOCALMOD hijack fopen, etc. */
+
 #ifndef S_IXUSR
 #define S_IXUSR 0100    /* Execute by owner.  */
 #endif
@@ -71,7 +73,6 @@ real_fseek (FILE *file, file_ptr offset, int whence)
 static FILE *
 close_on_exec (FILE *file)
 {
-#if !defined(__native_client__)
 #if defined (HAVE_FILENO) && defined (F_GETFD)
   if (file)
     {
@@ -80,7 +81,6 @@ close_on_exec (FILE *file)
       if (old >= 0)
 	fcntl (fd, F_SETFD, old | FD_CLOEXEC);
     }
-#endif
 #endif
   return file;
 }
