@@ -28,6 +28,8 @@
 #include "libbfd.h"
 #include "libiberty.h"
 
+#include "../ld/nacl_file_hooks.h"  /* @LOCALMOD hijack fopen, etc. */
+
 #ifndef S_IXUSR
 #define S_IXUSR 0100	/* Execute by owner.  */
 #endif

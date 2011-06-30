@@ -110,8 +110,7 @@ CCLD = $(CC)
 ifeq ($(NACL_SRPC),1)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
-	$(LDFLAGS) -Xlinker --wrap=open -Xlinker --wrap=read \
-        -Xlinker --wrap=write -Xlinker --wrap=close -Xlinker --wrap=lseek \
+	$(LDFLAGS) \
 	-lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread -lm -o $@
 else
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \

@@ -46,6 +46,8 @@
 #include "libbfd.h"
 #endif /* ENABLE_PLUGINS */
 
+#include "nacl_file_hooks.h" /* @LOCALMOD hijack fopen, etc. */
+
 /* Somewhere above, sys/stat.h got included.  */
 #if !defined(S_ISDIR) && defined(S_IFDIR)
 #define	S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
@@ -66,17 +68,23 @@ extern void *sbrk ();
 /* EXPORTS */
 
 #if defined(__native_client__) && defined(NACL_SRPC)
-
-#include <fcntl.h>
-#include <sys/nacl_syscalls.h>
-#include <sys/stat.h>
 #include <nacl/nacl_srpc.h>
+#define UNREFERENCED_PARAMETER(P) do { (void) P; } while (0)
 
-/* TODO(robertm): get a real header file for nacl_file */
-extern int get_real_fd_by_name(char* pathname);
-extern int NaClFile_fd(char *pathname, int fd,
-                       int has_real_size, size_t real_size_opt);
-extern int NaClFile_new(char *pathname);
+void NaClSetFileDebugLevel(int level);
+int NaClMapFileForReading(const char *pathname,
+                          NaClSrpcImcDescType shmem_fd,
+                          int size);
+int NaClLoadFileForReading(const char *pathname,
+                           NaClSrpcImcDescType shmem_fd);
+/*
+ * Allocates a shared memory region and copies the contents
+ * of the file named "filename" into the region.
+ * Returns a handle for region and the filesize in "shm_fd" and "size".
+ */
+int NaClMakeFileAvailableViaShmem(const char* filename,
+                                  NaClSrpcImcDescType* shm_fd,
+                                  int32_t* size);
 #endif
 
 FILE *saved_script_handle = NULL;
@@ -602,30 +610,31 @@ static void WrapRetcodeAsSrpcResult(int ret,
 
 /** Add a mapping to our internal file_system so that opening a file
     with name in_args[0] will result in using the handle from in_args[1]. */
-void
+static void
 add_file(NaClSrpcRpc *rpc,
          NaClSrpcArg **in_args,
          NaClSrpcArg **out_args,
          NaClSrpcClosure *done) {
-  /* These are urlAsNaClDesc'ed files, and have an accurate size from fstat */
-  int ret = NaClFile_fd(in_args[0]->arrays.str, in_args[1]->u.hval, 0, 0);
+  UNREFERENCED_PARAMETER(out_args);
+  int ret = NaClLoadFileForReading(in_args[0]->arrays.str,
+                                   in_args[1]->u.hval);
   WrapRetcodeAsSrpcResult(ret, rpc, done);
 }
 
 /** Add a mapping to our internal file_system so that opening a file
     with name in_args[0] will result in using the handle from in_args[1].
     The file size is initialized to in_args[2] (overriding fstat). */
-void
+static void
 add_file_with_size(NaClSrpcRpc *rpc,
                    NaClSrpcArg **in_args,
                    NaClSrpcArg **out_args,
                    NaClSrpcClosure *done) {
+  UNREFERENCED_PARAMETER(out_args);
   /* These are intermediate shm files with file size supplied externally
    * (fstat will not give you an accurate size) */
-  int ret = NaClFile_fd(in_args[0]->arrays.str,
-                        in_args[1]->u.hval,
-                        1,
-                        in_args[2]->u.ival);
+  int ret = NaClMapFileForReading(in_args[0]->arrays.str,
+                                  in_args[1]->u.hval,
+                                  in_args[2]->u.ival);
   WrapRetcodeAsSrpcResult(ret, rpc, done);
 }
 
@@ -635,7 +644,7 @@ static char *ld_argv[MAX_LD_ARGS] = { "ld" };
 static int ld_argc = BUILTIN_LD_ARGS;
 
 /** Free old args when not using standard static args */
-static void reset_arg_array() {
+static void reset_arg_array(void) {
   int i;
   for (i = BUILTIN_LD_ARGS; i < ld_argc; ++i) {
     free(ld_argv[i]);
@@ -644,10 +653,12 @@ static void reset_arg_array() {
 }
 
 /** Supply a commandline argument via in_args[0]. */
-static void add_ld_arg(NaClSrpcRpc *rpc,
-                       NaClSrpcArg **in_args,
-                       NaClSrpcArg **out_args,
-                       NaClSrpcClosure *done) {
+static void
+add_ld_arg(NaClSrpcRpc *rpc,
+           NaClSrpcArg **in_args,
+           NaClSrpcArg **out_args,
+           NaClSrpcClosure *done) {
+  UNREFERENCED_PARAMETER(out_args);
   int ret = 0;
   if (ld_argc >= MAX_LD_ARGS) {
     einfo("Can't AddArg #(%d) beyond MAX_LD_ARGS(%d)\n",
@@ -669,22 +680,20 @@ done:
 }
 
 /** Run the link returning a file handle for the result along with file size. */
-void
+static void
 ldlink(NaClSrpcRpc *rpc,
        NaClSrpcArg **in_args,
        NaClSrpcArg **out_args,
        NaClSrpcClosure *done) {
+  UNREFERENCED_PARAMETER(in_args);
   int ret = 0;
-  /* Define output file. */
-  NaClFile_new("a.out");
-
   ret = ldmain(ld_argc, ld_argv);
   reset_arg_array();
 
   /* Save nexe fd for return. */
-  out_args[0]->u.hval = get_real_fd_by_name("a.out");
-  out_args[1]->u.ival = get_real_size_by_name("a.out");
-
+  NaClMakeFileAvailableViaShmem("a.out", 
+                                &out_args[0]->u.hval,
+                                &out_args[1]->u.ival);
   /* TODO(abetul): Close all open fd's */
 
   /* Unfortunately, if ld uses xexit(non_zero) it could terminate our
