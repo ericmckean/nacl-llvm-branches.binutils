@@ -15289,6 +15289,15 @@ const struct elf_size_info elf32_arm_size_info =
 #endif
 #define ELF_MINPAGESIZE			0x1000
 #define ELF_COMMONPAGESIZE		0x1000
+/* @LOCALMOD-BEGIN */
+/* This file will #include "elf32-target.h" multiple times, with these
+   #defines set to different values. Normally, only ELF_MAXPAGESIZE is
+   overridden. NaCl uses 64k pages, so it needs to also override
+   MINPAGESIZE and COMMONPAGESIZE. To reset the values before processing
+   other targets, we keep track of the original values specified above. */
+#define ELF_MINPAGESIZE_OLD     0x1000
+#define ELF_COMMONPAGESIZE_OLD  0x1000
+/* @LOCALMOD-END */
 
 #define bfd_elf32_mkobject		        elf32_arm_mkobject
 
@@ -15392,9 +15401,24 @@ elf32_arm_nacl_final_write_processing (bfd *abfd, bfd_boolean linker)
 #define elf_backend_final_write_processing	elf32_arm_nacl_final_write_processing
 
 #undef  ELF_MAXPAGESIZE
-#define ELF_MAXPAGESIZE			0x10000
+#define ELF_MAXPAGESIZE         0x10000
+#undef  ELF_MINPAGESIZE
+#define ELF_MINPAGESIZE         0x10000
+#undef  ELF_COMMONPAGESIZE
+#define ELF_COMMONPAGESIZE      0x10000
 
 #include "elf32-target.h"
+
+/* @LOCALMOD-BEGIN
+   Reset the values of MINPAGESIZE and COMMONPAGESIZE, right after
+   #include "elf32-target.h" and before processing other targets.
+   Normally, only MAXPAGESIZE is overridden. */
+#undef  ELF_MINPAGESIZE
+#define ELF_MINPAGESIZE    ELF_MINPAGESIZE_OLD
+#undef  ELF_COMMONPAGESIZE
+#define ELF_COMMONPAGESIZE ELF_COMMONPAGESIZE_OLD
+/* @LOCALMOD-END */
+
 
 /* VxWorks Targets.  */
 
