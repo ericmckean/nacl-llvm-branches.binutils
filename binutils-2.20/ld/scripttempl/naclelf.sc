@@ -416,6 +416,7 @@ cat <<EOF
   ${RELOCATING+PROVIDE (_${ETEXT_NAME} = .);}
   ${RELOCATING+PROVIDE (${ETEXT_NAME} = .);}
   . = . + 32; /* reserve space for HLTs */
+  . = DEFINED(__nacl_rodata_start) ? __nacl_rodata_start : .;
   . = ALIGN(CONSTANT (COMMONPAGESIZE)); /* nacl wants page alignment */
   ${WRITABLE_RODATA-${RODATA}} :rodata
   .rodata1      ${RELOCATING-0} : { *(.rodata1) }
@@ -424,7 +425,20 @@ cat <<EOF
   ${CREATE_SHLIB-${SBSS2}}
   ${OTHER_READONLY_SECTIONS}
   .eh_frame_hdr : { *(.eh_frame_hdr) }
-  .eh_frame     ${RELOCATING-0} : ONLY_IF_RO { KEEP (*(.eh_frame)) }
+  /* @LOCALMOD-BEGIN
+     This is copied from the hand-written PNaCl linker scripts. 
+     The rationale of having .eh_frame begin/end marked by two new sections,
+     is to avoid needing native bookends objects.
+     See: native_client/src/untrusted/startup/nacl_startup.c
+     TODO(jvoung): See if this is really necessary.
+  */
+  .eh_frame     ${RELOCATING-0} : ONLY_IF_RO
+  {
+    KEEP (*(.eh_frame_prolog))
+    KEEP (*(.eh_frame))
+    KEEP (*(.eh_frame_epilog))
+  }
+  /* @LOCALMOD-END */
   .gcc_except_table ${RELOCATING-0} : ONLY_IF_RO { *(.gcc_except_table .gcc_except_table.*) }
 
   /* Adjust the address for the data segment.  We want to adjust up to
