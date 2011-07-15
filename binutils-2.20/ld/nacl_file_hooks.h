@@ -3,10 +3,17 @@
  * found in the LICENSE file.
  */
 
-#if defined(__native_client__) || defined(TEST_NACL_FILE_HOOKS)
+#if defined(__native_client__) && !defined(NACL_SRPC)
+ /* In the non-SRPC case, we don't have fcntl but bfdio.c uses it under 
+    HAVE_FILENO instead of HAVE_FCNTL */
+#undef HAVE_FILENO
+#endif
+
+#if (defined(__native_client__) && defined(NACL_SRPC)) \
+    || defined(TEST_NACL_FILE_HOOKS)
 
 /*
- * Just to be safe: undefine some macros for undesirable code parths
+ * Just to be safe: undefine some macros for undesirable code paths
  * mostly in bfd/bfdio.h
  */
 #undef HAVE_FDOPEN
