@@ -43,19 +43,6 @@
 #include "dw2gencfi.h"
 #include "bfdver.h"
 
-#if defined(__native_client__) && defined(NACL_SRPC)
-#include <fcntl.h>
-#include <sys/nacl_syscalls.h>
-#include <sys/stat.h>
-#include <nacl/nacl_srpc.h>
-
-extern int get_real_fd_by_name(char* pathname);
-extern size_t get_real_size_by_name(char* pathname);
-extern int NaClFile_fd(char *pathname, int fd,
-                       int has_real_size, size_t real_size_opt);
-extern int NaClFile_new(char *pathname);
-#endif
-
 #ifdef HAVE_ITBL_CPU
 #include "itbl-ops.h"
 #else
@@ -1135,7 +1122,7 @@ create_obj_attrs_section (void)
 
 
 int
-as_main (int argc, char ** argv)
+main (int argc, char ** argv)
 {
   char ** argv_orig = argv;
 
@@ -1315,58 +1302,6 @@ as_main (int argc, char ** argv)
 
   /* Only generate dependency file if assembler was successful.  */
   print_dependencies ();
-}
 
-
-#if !defined(NACL_SRPC)
-int
-main (int argc, char **argv) {
-  as_main(argc, argv);
   xexit (EXIT_SUCCESS);
 }
-#elif defined(__native_client__)
-
-/* Assemble */
-void
-assemble(NaClSrpcRpc *rpc,
-         NaClSrpcArg **in_args,
-         NaClSrpcArg **out_args,
-         NaClSrpcClosure *done) {
-  char *argv[] = {"as", "--64", "--nacl-align", "5",
-                  "-n", "-mtune=core2", "asm_combined",
-                  "-o", "obj_combined"};
-  int kArgvLength = sizeof argv / sizeof argv[0];
-  /* Input asm file. */
-  NaClFile_fd("asm_combined", in_args[0]->u.hval, 1, in_args[1]->u.ival);
-
-  /* Define output file. */
-  NaClFile_new("obj_combined");
-
-  /* Call main. */
-  as_main(kArgvLength, argv);
-
-  /* Save obj fd for return. */
-  out_args[0]->u.hval = get_real_fd_by_name("obj_combined");
-  out_args[1]->u.ival = get_real_size_by_name("obj_combined");
-
-  rpc->result = NACL_SRPC_RESULT_OK;
-  done->Run(done);
-}
-
-const struct NaClSrpcHandlerDesc srpc_methods[] = {
-  { "Assemble:hi:hi", assemble },
-  { NULL, NULL },
-};
-
-int
-main() {
-  if (!NaClSrpcModuleInit()) {
-    return 1;
-  }
-  if (!NaClSrpcAcceptClientConnection(srpc_methods)) {
-    return 1;
-  }
-  NaClSrpcModuleFini();
-  return 0;
-}
-#endif
