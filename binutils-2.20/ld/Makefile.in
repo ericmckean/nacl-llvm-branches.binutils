@@ -111,7 +111,8 @@ ifeq ($(NACL_SRPC),1)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) \
-	-lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread -lm -o $@
+	-lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread -lstdc++ -lm \
+        -o $@
 else
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
