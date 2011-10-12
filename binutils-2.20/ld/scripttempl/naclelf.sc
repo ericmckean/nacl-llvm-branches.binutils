@@ -458,13 +458,13 @@ cat <<EOF
   /* The total size of the TLS template area must be a multiple of 0x20,
    * but it's size calculation is hardcoded in bfd_elf_final_link function
    * so the only thing we can do is align segments here properly */
-  .tdata	${RELOCATING+ALIGN(0x20)}${RELOCATING-0} : {
+  .tdata	: ${RELOCATING+ALIGN(0x20)} {
     ${RELOCATING+PROVIDE (__tls_template_start = .);}
     *(.tdata${RELOCATING+ .tdata.* .gnu.linkonce.td.*})
     ${RELOCATING+. = ALIGN(0x20);}
     ${RELOCATING+PROVIDE (__tls_template_tdata_end = .);}
   }
-  .tbss		${RELOCATING+ALIGN(0x20)}${RELOCATING-0} : {
+  .tbss		: ${RELOCATING+ALIGN(0x20)} {
     *(.tbss${RELOCATING+ .tbss.* .gnu.linkonce.tb.*})${RELOCATING+ *(.tcommon)}
     ${RELOCATING+. = ALIGN(0x20);}
   }
