@@ -2727,6 +2727,7 @@ Symbol_table::assert_no_undefined_symbols(
     {
       Symbol *sym = p->second;
       if (sym->is_undefined() &&
+          sym->in_reg() &&
           sym->binding() != elfcpp::STB_WEAK &&
           exceptions.count(sym->name()) == 0 &&
           // @TODO(pdox): If --wrap is to be a supported user-visible feature,
