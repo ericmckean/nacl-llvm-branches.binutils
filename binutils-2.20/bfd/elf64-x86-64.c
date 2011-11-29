@@ -3658,7 +3658,7 @@ elf_x86_64_relocate_section (bfd *output_bfd,
 		  bfd_put_8 (output_bfd, 0x90, contents + roff - 2);
 		  bfd_put_8 (output_bfd, 0xbf, contents + roff - 1);
 		  bfd_put_32 (output_bfd,
-		              elf64_x86_64_tpoff (info, relocation),
+		              elf_x86_64_tpoff (info, relocation),
 		              contents + roff);
 
 		  /* Call __nacl_add_tp instead of __tls_get_addr.  */
