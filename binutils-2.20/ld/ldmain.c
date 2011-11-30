@@ -656,6 +656,12 @@ static void start_lookup_service(NaClSrpcRpc *rpc,
   done->Run(done);
 }
 
+/*
+ * The fictitious filename for the output.  This name is used to get the
+ * file descriptor for the linked executable.
+ */
+static const char kNexeFilename[] = "a.out";
+
 static int DoLink(char *command_line_string,
                   size_t command_line_string_len,
                   int is_shared_library,
@@ -665,19 +671,26 @@ static int DoLink(char *command_line_string,
   UNREFERENCED_PARAMETER(soname);
   UNREFERENCED_PARAMETER(shared_lib_dependencies);
 
+  static const char *kAdditionalArgv[] = { "-o", kNexeFilename, NULL };
+  const size_t kAdditionalArgc =
+      sizeof kAdditionalArgv / sizeof kAdditionalArgv[0];
+  size_t i;
   int ret = -1;
   size_t argc = argz_count(command_line_string, command_line_string_len);
-  char **argv = (char**) malloc((argc + 1) * sizeof *argv);
+  char **argv = (char**) malloc((argc + kAdditionalArgc) * sizeof *argv);
   if (argv == 0) {
     nacl_fatal("No command line arguments.\n");
   }
   argz_extract(command_line_string, command_line_string_len, argv);
+  for (i = 0; i < kAdditionalArgc - 1; ++i) {
+    argv[argc] = kAdditionalArgv[i];
+    ++argc;
+  }
+  argv[argc] = NULL;
   ret = ldmain(argc, argv);
   free(argv);
   return ret;
 }
-
-static const char kNexeFilename[] = "a.out";
 
 /** Run the link. */
 static void
@@ -728,10 +741,7 @@ static size_t g_ld_command_line_len = 0;
 
 static void reset_command_line(char **command_line_string,
                                size_t *command_line_string_len) {
-  static const char *kBakedInCommandLine[] = { "ld",
-                                               "-o",
-                                               kNexeFilename,
-                                               NULL };
+  static const char *kBakedInCommandLine[] = { "ld", NULL };
   if (*command_line_string != NULL) {
     free(*command_line_string);
     *command_line_string = NULL;
