@@ -21,6 +21,7 @@
    Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
    MA 02110-1301, USA.  */
 
+#include <argz.h>
 #include "sysdep.h"
 #include "bfd.h"
 #include "safe-ctype.h"
@@ -56,6 +57,8 @@
 #include <string.h>
 
 #ifdef HAVE_SBRK
+/* Used below in error printing. */
+extern char **environ;
 #if !HAVE_DECL_SBRK
 extern void *sbrk ();
 #endif
@@ -85,6 +88,10 @@ int NaClLoadFileForReading(const char *pathname,
 int NaClMakeFileAvailableViaShmem(const char* filename,
                                   NaClSrpcImcDescType* shm_fd,
                                   int32_t* size);
+/*
+ * Writes the buffered contents of "filename" into "fd".
+ */
+int NaClFlushFileToFd(const char* filename, NaClSrpcImcDescType fd);
 #endif
 
 FILE *saved_script_handle = NULL;
@@ -601,11 +608,161 @@ main (int argc, char **argv) {
 /***********************************************************************/
 /* NaCl RPCs                                                           */
 
+static NaClSrpcChannel* g_reverse_channel;
+
 static void WrapRetcodeAsSrpcResult(int ret,
                                     NaClSrpcRpc *rpc,
                                     NaClSrpcClosure *done) {
   rpc->result = ret ? NACL_SRPC_RESULT_INTERNAL : NACL_SRPC_RESULT_OK;
   done->Run(done);
+}
+
+static void nacl_fatal(const char *message) {
+  einfo(message);
+  exit(1);
+}
+
+/*
+ * The coordinator invokes this to set up a file name lookup service that
+ * ld can use.  The lookup service is used to get file descriptors for the
+ * filenames passed on the command line:
+ * 1) the temporary file used for the object file produced by llc, and
+ * 2) the native libraries.
+ * Once this is set up we can use NaClLookupFileByName below.
+ */
+static void start_lookup_service(NaClSrpcRpc *rpc,
+                                 NaClSrpcArg **in_args,
+                                 NaClSrpcArg **out_args,
+                                 NaClSrpcClosure *done) {
+  UNREFERENCED_PARAMETER(out_args);
+  rpc->result = NACL_SRPC_RESULT_APP_ERROR;
+  NaClSrpcService* service = (NaClSrpcService*)malloc(sizeof *service);
+  if (service == NULL) {
+    nacl_fatal("Could not allocate lookup service.\n");
+  }
+  char* service_str = strdup(in_args[0]->arrays.str);
+  if (service_str == NULL) {
+    free(service);
+    nacl_fatal("Could not allocate lookup service string.\n");
+  }
+  if (!NaClSrpcServiceStringCtor(service, service_str)) {
+    free(service_str);
+    free(service);
+    nacl_fatal("Could not construct lookup service.\n");
+  }
+  rpc->channel->client = service;
+  g_reverse_channel = rpc->channel;
+  rpc->result = NACL_SRPC_RESULT_OK;
+  done->Run(done);
+}
+
+static int DoLink(char *command_line_string,
+                  size_t command_line_string_len,
+                  int is_shared_library,
+                  const char *soname,
+                  const char *shared_lib_dependencies) {
+  UNREFERENCED_PARAMETER(is_shared_library);
+  UNREFERENCED_PARAMETER(soname);
+  UNREFERENCED_PARAMETER(shared_lib_dependencies);
+
+  int ret = -1;
+  size_t argc = argz_count(command_line_string, command_line_string_len);
+  char **argv = (char**) malloc((argc + 1) * sizeof *argv);
+  if (argv == 0) {
+    nacl_fatal("No command line arguments.\n");
+  }
+  argz_extract(command_line_string, command_line_string_len, argv);
+  ret = ldmain(argc, argv);
+  free(argv);
+  return ret;
+}
+
+static const char kNexeFilename[] = "a.out";
+
+/** Run the link. */
+static void
+run(NaClSrpcRpc *rpc,
+    NaClSrpcArg **in_args,
+    NaClSrpcArg **out_args,
+    NaClSrpcClosure *done) {
+  UNREFERENCED_PARAMETER(out_args);
+  char* command_line_string = in_args[0]->arrays.carr;
+  size_t command_line_string_len = (size_t) in_args[0]->u.count;
+  int nexe_fd = in_args[1]->u.hval;
+  int is_shared_library = in_args[2]->u.ival;
+  char* soname = in_args[3]->arrays.str;
+  char* shared_library_dependencies = in_args[4]->arrays.str;
+  int ret = DoLink(command_line_string,
+                   command_line_string_len,
+                   is_shared_library,
+                   soname,
+                   shared_library_dependencies);
+  NaClFlushFileToFd(kNexeFilename, nexe_fd);
+  WrapRetcodeAsSrpcResult(ret, rpc, done);
+}
+
+int NaClLookupFileByName(const char *filename) {
+  static const int kUnknownFd = -1;
+  int fd = kUnknownFd;
+  // TODO(sehr): remove this error once reverse channel is always used.
+  if (g_reverse_channel == NULL) {
+    nacl_fatal("g_reverse_channel was not set up.\n");
+  }
+  NaClSrpcError error =
+      NaClSrpcInvokeBySignature(g_reverse_channel,
+                                "LookupInputFile:s:h",
+                                (char*)filename,
+                                &fd);
+  if (error != NACL_SRPC_RESULT_OK) {
+    nacl_fatal("Lookup failed.\n");
+  }
+  return fd;
+}
+
+/*
+ * TODO(sehr): remove this command line setup when the coordinator
+ * passes the command line.
+ */
+static char* g_ld_command_line = NULL;
+static size_t g_ld_command_line_len = 0;
+
+static void reset_command_line(char **command_line_string,
+                               size_t *command_line_string_len) {
+  static const char *kBakedInCommandLine[] = { "ld",
+                                               "-o",
+                                               kNexeFilename,
+                                               NULL };
+  if (*command_line_string != NULL) {
+    free(*command_line_string);
+    *command_line_string = NULL;
+    *command_line_string_len = 0;
+  }
+  if (argz_create(kBakedInCommandLine,
+                  command_line_string,
+                  command_line_string_len) != 0) {
+    nacl_fatal("Out of memory for copying arg string\n");
+  }
+}
+
+/** Supply a commandline argument via in_args[0]. */
+static void add_arg_string(NaClSrpcRpc *rpc,
+                           NaClSrpcArg **in_args,
+                           NaClSrpcArg **out_args,
+                           NaClSrpcClosure *done) {
+  int ret = 0;
+  UNREFERENCED_PARAMETER(out_args);
+  if (g_reverse_channel != NULL) {
+    nacl_fatal("Can't call AddArg when using g_reverse_channel\n");
+  }
+  if (g_ld_command_line == NULL) {
+    reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
+  }
+  if (argz_add(&g_ld_command_line,
+               &g_ld_command_line_len,
+               in_args[0]->arrays.str) != 0) {
+    nacl_fatal("argz_add failed.\n");
+  }
+  WrapRetcodeAsSrpcResult(ret, rpc, done);
 }
 
 /** Add a mapping to our internal file_system so that opening a file
@@ -638,47 +795,6 @@ add_file_with_size(NaClSrpcRpc *rpc,
   WrapRetcodeAsSrpcResult(ret, rpc, done);
 }
 
-#define MAX_LD_ARGS 128
-#define BUILTIN_LD_ARGS 1
-static char *ld_argv[MAX_LD_ARGS] = { "ld" };
-static int ld_argc = BUILTIN_LD_ARGS;
-
-/** Free old args when not using standard static args */
-static void reset_arg_array(void) {
-  int i;
-  for (i = BUILTIN_LD_ARGS; i < ld_argc; ++i) {
-    free(ld_argv[i]);
-  }
-  ld_argc = BUILTIN_LD_ARGS;
-}
-
-/** Supply a commandline argument via in_args[0]. */
-static void
-add_ld_arg(NaClSrpcRpc *rpc,
-           NaClSrpcArg **in_args,
-           NaClSrpcArg **out_args,
-           NaClSrpcClosure *done) {
-  UNREFERENCED_PARAMETER(out_args);
-  int ret = 0;
-  if (ld_argc >= MAX_LD_ARGS) {
-    einfo("Can't AddArg #(%d) beyond MAX_LD_ARGS(%d)\n",
-          ld_argc, MAX_LD_ARGS);
-    ret = 1;
-    goto done;
-  }
-
-  ld_argv[ld_argc] = strdup(in_args[0]->arrays.str);
-  if (NULL == ld_argv[ld_argc]) {
-    einfo("Out of memory for copying arg string\n");
-    ret = 1;
-    goto done;
-  }
-  ld_argc++;
-
-done:
-  WrapRetcodeAsSrpcResult(ret, rpc, done);
-}
-
 /** Run the link returning a file handle for the result along with file size. */
 static void
 ldlink(NaClSrpcRpc *rpc,
@@ -687,11 +803,14 @@ ldlink(NaClSrpcRpc *rpc,
        NaClSrpcClosure *done) {
   UNREFERENCED_PARAMETER(in_args);
   int ret = 0;
-  ret = ldmain(ld_argc, ld_argv);
-  reset_arg_array();
+  if (g_ld_command_line == NULL) {
+    reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
+  }
+  ret = DoLink(g_ld_command_line, g_ld_command_line_len, 0, NULL, NULL);
+  reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
 
   /* Save nexe fd for return. */
-  NaClMakeFileAvailableViaShmem("a.out", 
+  NaClMakeFileAvailableViaShmem(kNexeFilename,
                                 &out_args[0]->u.hval,
                                 &out_args[1]->u.ival);
   /* TODO(abetul): Close all open fd's */
@@ -703,17 +822,21 @@ ldlink(NaClSrpcRpc *rpc,
   WrapRetcodeAsSrpcResult(ret, rpc, done);
 }
 
-/*
- * Protocol as a regex: (AddFile|AddFileWithSize|AddArg)* Link
- * Link is likely not re-entrant. In any case, if you wish to try to run
- * another Link, note that the effects of AddArg are reset after the Link,
- * while the effects of AddFile|AddFileWithSize are not.
- */
 const struct NaClSrpcHandlerDesc srpc_methods[] = {
+  /* TODO(sehr): remove these obsolete interfaces. */
+  /*
+   * Protocol as a regex: (AddFile|AddFileWithSize|AddArg)* Link
+   * Link is likely not re-entrant. In any case, if you wish to try to run
+   * another Link, note that the effects of AddArg are reset after the Link,
+   * while the effects of AddFile|AddFileWithSize are not.
+   */
   { "AddFile:sh:", add_file },
   { "AddFileWithSize:shi:", add_file_with_size },
-  { "AddArg:s:", add_ld_arg },
+  { "AddArg:s:", add_arg_string },
   { "Link::hi", ldlink },
+  /* New interfaces start here. */
+  { "StartLookupService:s:", start_lookup_service },
+  { "Run:Chiss:", run },
   { NULL, NULL },
 };
 
