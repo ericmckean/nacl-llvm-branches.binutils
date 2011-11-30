@@ -123,6 +123,11 @@ static NACL_FILE* find_descriptor_by_name(const char* filename) {
   return NULL;
 }
 
+extern int NaClLookupFileByName(const char* filename);
+int NaClMapFileForReading(const char* filename,
+                          NaClSrpcImcDescType shmem_fd,
+                          int size);
+int NaClLoadFileForReading(const char* filename, NaClSrpcImcDescType fd);
 
 FILE* nacl_fopen(const char* filename, const char* mode) {
   debug(1, "@@nacl_fopen(%s,%s)\n", filename, mode);
@@ -130,8 +135,17 @@ FILE* nacl_fopen(const char* filename, const char* mode) {
   if (mode[0] == 'r') {
     NACL_FILE* nf = find_descriptor_by_name(filename);
     if (nf == NULL) {
-      debug(1, "cannot find preloaded %s\n", filename);
-      return NULL;
+      /* Ask the coordinator for the descriptor/size for filename. */
+      int fd = NaClLookupFileByName(filename);
+      if (fd == -1) {
+        debug(1, "cannot find preloaded %s\n", filename);
+        return NULL;
+      }
+      if (0 != NaClLoadFileForReading(filename, fd)) {
+        debug(1, "cannot load file %s\n", filename);
+        return NULL;
+      }
+      nf = find_descriptor_by_name(filename);
     }
     return (FILE*)nf;
   }
@@ -302,10 +316,8 @@ int nacl_fflush(FILE* stream) {
 
 #if defined(NACL_SRPC)
 
-int NaClMapFileForReading(const char* filename,
-                          NaClSrpcImcDescType shmem_fd,
-                          int size) {
-  debug(1, "@@ reading file (shmem) %s size: %d\n", filename, size);
+static NACL_FILE* find_nacl_read_file(const char* filename,
+                                      size_t size) {
   NACL_FILE* nf = find_unused_descriptor();
   nf->filename = strdup(filename);
   nf->mode = "r";
@@ -314,30 +326,33 @@ int NaClMapFileForReading(const char* filename,
   nf->size = size;
   nf->alloc_size = size;
   nf->pos = 0;
+  nf->data = NULL;
+  return nf;
+}
+
+int NaClMapFileForReading(const char* filename,
+                          NaClSrpcImcDescType shmem_fd,
+                          int size) {
+  debug(1, "@@ reading file (shmem) %s size: %d\n", filename, size);
+  NACL_FILE* nf = find_nacl_read_file(filename, size);
   const int count_up = roundToNextPageSize(size);
   nf->data = (char *) mmap(NULL, count_up, PROT_READ, MAP_SHARED, shmem_fd, 0);
   return 0;
 }
 
 int NaClLoadFileForReading(const char* filename, NaClSrpcImcDescType fd) {
-   struct stat stb;
+  struct stat stb;
+  size_t size;
 
-   if (0 != fstat(fd, &stb)) {
-     fatal("cannot fstat %s\n", filename);
-   }
-   const size_t size = stb.st_size;
-   debug(1, "@@ reading file (file) %s size: %uz\n", filename, size);
-   NACL_FILE* nf = find_unused_descriptor();
-   nf->filename = strdup(filename);
-   nf->mode = "r";
-   nf->magic = NACL_FILE_MAGIC;
-   nf->pos = 0;
-   nf->size = size;
-   nf->alloc_size = size;
-   nf->pos = 0;
-   nf->data = malloc(size);
-   read(fd, nf->data, size);
-   return 0;
+  if (0 != fstat(fd, &stb)) {
+    fatal("cannot fstat %s\n", filename);
+  }
+  size = stb.st_size;
+  debug(1, "@@ reading file (file) %s size: %uz\n", filename, size);
+  NACL_FILE* nf = find_nacl_read_file(filename, size);
+  nf->data = malloc(size);
+  read(fd, nf->data, size);
+  return 0;
 }
 
 
@@ -357,12 +372,7 @@ int NaClMakeFileAvailableViaShmem(const char* filename,
     fatal("imc_mem_obj_create failed\n");
   }
 
-  char* buf = (char*) mmap(NULL,
-                           count_up,
-                           PROT_WRITE,
-                           MAP_SHARED,
-                           fd,
-                            0);
+  char* buf = (char*) mmap(NULL, count_up, PROT_WRITE, MAP_SHARED, fd, 0);
   if (NULL == buf) {
     fatal("ERROR: cannot map shm for write\n");
   }
@@ -371,6 +381,32 @@ int NaClMakeFileAvailableViaShmem(const char* filename,
   munmap(buf, count_up);
   *shmem_fd = fd;
   *size = nf->size;
+  return 0;
+}
+
+int NaClFlushFileToFd(const char* filename, NaClSrpcImcDescType fd) {
+  NACL_FILE* nf = find_descriptor_by_name(filename);
+  if (nf == NULL) {
+    fatal("cannot find %s\n", filename);
+  }
+
+  debug(1, "@@ writing file %s size: %d\n", filename, nf->size);
+
+  if (fd < 0) {
+    fatal("invalid fd\n");
+  }
+
+  size_t bytes_to_write = nf->size;
+  const char* buf = nf->data;
+  while (bytes_to_write > 0) {
+    ssize_t bytes_written = write(fd, (const void*) buf, bytes_to_write);
+    if (bytes_written < 0) {
+      fatal("write failed\n");
+    }
+    buf += bytes_written;
+    bytes_to_write -= (size_t) bytes_written;
+  }
+
   return 0;
 }
 
