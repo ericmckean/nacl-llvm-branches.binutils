@@ -21,7 +21,9 @@
    Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
    MA 02110-1301, USA.  */
 
+#if defined(__native_client__) && defined(NACL_SRPC)
 #include <argz.h>
+#endif  /* defined(__native_client__) && defined(NACL_SRPC) */
 #include "sysdep.h"
 #include "bfd.h"
 #include "safe-ctype.h"
