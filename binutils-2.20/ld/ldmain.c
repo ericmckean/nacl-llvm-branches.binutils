@@ -24,6 +24,7 @@
 #if defined(__native_client__) && defined(NACL_SRPC)
 #include <argz.h>
 #endif  /* defined(__native_client__) && defined(NACL_SRPC) */
+#include <stdarg.h>
 #include "sysdep.h"
 #include "bfd.h"
 #include "safe-ctype.h"
@@ -74,7 +75,9 @@ extern void *sbrk ();
 
 #if defined(__native_client__) && defined(NACL_SRPC)
 #include <nacl/nacl_srpc.h>
+#include <nacl/pnacl.h>
 #define UNREFERENCED_PARAMETER(P) do { (void) P; } while (0)
+#define ARRAY_SIZE(array)  (sizeof array / sizeof array[0])
 
 void NaClSetFileDebugLevel(int level);
 int NaClMapFileForReading(const char *pathname,
@@ -619,8 +622,13 @@ static void WrapRetcodeAsSrpcResult(int ret,
   done->Run(done);
 }
 
-static void nacl_fatal(const char *message) {
-  einfo(message);
+static void nacl_fatal(const char *format, ...) {
+  char buf[256];
+  va_list ap;
+  va_start(ap, format);
+  vsnprintf(buf, sizeof buf, format, ap);
+  va_end(ap);
+  einfo(buf);
   exit(1);
 }
 
@@ -632,30 +640,27 @@ static void nacl_fatal(const char *message) {
  * 2) the native libraries.
  * Once this is set up we can use NaClLookupFileByName below.
  */
-static void start_lookup_service(NaClSrpcRpc *rpc,
-                                 NaClSrpcArg **in_args,
-                                 NaClSrpcArg **out_args,
-                                 NaClSrpcClosure *done) {
-  UNREFERENCED_PARAMETER(out_args);
-  rpc->result = NACL_SRPC_RESULT_APP_ERROR;
+int DidInstallLookupService(const char *service_string, NaClSrpcRpc *rpc) {
   NaClSrpcService* service = (NaClSrpcService*)malloc(sizeof *service);
   if (service == NULL) {
     nacl_fatal("Could not allocate lookup service.\n");
+    return 0;
   }
-  char* service_str = strdup(in_args[0]->arrays.str);
+  char* service_str = strdup(service_string);
   if (service_str == NULL) {
     free(service);
     nacl_fatal("Could not allocate lookup service string.\n");
+    return 0;
   }
   if (!NaClSrpcServiceStringCtor(service, service_str)) {
     free(service_str);
     free(service);
     nacl_fatal("Could not construct lookup service.\n");
+    return 0;
   }
   rpc->channel->client = service;
   g_reverse_channel = rpc->channel;
-  rpc->result = NACL_SRPC_RESULT_OK;
-  done->Run(done);
+  return 1;
 }
 
 /*
@@ -664,8 +669,30 @@ static void start_lookup_service(NaClSrpcRpc *rpc,
  */
 static const char kNexeFilename[] = "a.out";
 
-static int DoLink(char *command_line_string,
-                  size_t command_line_string_len,
+static char **CommandLineFromArgz(char *command_line_string,
+                                  size_t command_line_string_len,
+                                  size_t *argc) {
+  static const char *kAdditionalArgv[] = { "-o", kNexeFilename, NULL };
+  const size_t kAdditionalArgc =
+      sizeof kAdditionalArgv / sizeof kAdditionalArgv[0];
+  size_t i;
+  char **argv;
+  *argc = argz_count(command_line_string, command_line_string_len);
+  argv = (char**) malloc((*argc + kAdditionalArgc) * sizeof *argv);
+  if (argv == 0) {
+    nacl_fatal("No command line arguments.\n");
+  }
+  argz_extract(command_line_string, command_line_string_len, argv);
+  for (i = 0; i < kAdditionalArgc - 1; ++i) {
+    argv[*argc] = kAdditionalArgv[i];
+    ++*argc;
+  }
+  argv[*argc] = NULL;
+  return argv;
+}
+
+static int DoLink(size_t argc,
+                  char **argv,
                   int is_shared_library,
                   const char *soname,
                   const char *shared_lib_dependencies) {
@@ -673,24 +700,8 @@ static int DoLink(char *command_line_string,
   UNREFERENCED_PARAMETER(soname);
   UNREFERENCED_PARAMETER(shared_lib_dependencies);
 
-  static const char *kAdditionalArgv[] = { "-o", kNexeFilename, NULL };
-  const size_t kAdditionalArgc =
-      sizeof kAdditionalArgv / sizeof kAdditionalArgv[0];
-  size_t i;
-  int ret = -1;
-  size_t argc = argz_count(command_line_string, command_line_string_len);
-  char **argv = (char**) malloc((argc + kAdditionalArgc) * sizeof *argv);
-  if (argv == 0) {
-    nacl_fatal("No command line arguments.\n");
-  }
-  argz_extract(command_line_string, command_line_string_len, argv);
-  for (i = 0; i < kAdditionalArgc - 1; ++i) {
-    argv[argc] = kAdditionalArgv[i];
-    ++argc;
-  }
-  argv[argc] = NULL;
+  int ret;
   ret = ldmain(argc, argv);
-  free(argv);
   return ret;
 }
 
@@ -701,17 +712,140 @@ run(NaClSrpcRpc *rpc,
     NaClSrpcArg **out_args,
     NaClSrpcClosure *done) {
   UNREFERENCED_PARAMETER(out_args);
-  char* command_line_string = in_args[0]->arrays.carr;
-  size_t command_line_string_len = (size_t) in_args[0]->u.count;
+  char* service_string = in_args[0]->arrays.str;
   int nexe_fd = in_args[1]->u.hval;
   int is_shared_library = in_args[2]->u.ival;
   char* soname = in_args[3]->arrays.str;
   char* shared_library_dependencies = in_args[4]->arrays.str;
-  int ret = DoLink(command_line_string,
-                   command_line_string_len,
+  char* command_line_string = in_args[5]->arrays.carr;
+  size_t command_line_string_len = (size_t) in_args[5]->u.count;
+  size_t argc;
+  char **argv = CommandLineFromArgz(command_line_string,
+                                    command_line_string_len,
+                                    &argc);
+  if (!DidInstallLookupService(service_string, rpc)) {
+    nacl_fatal("Could not install lookup service.\n");
+  }
+  int ret = DoLink(argc,
+                   argv,
                    is_shared_library,
                    soname,
                    shared_library_dependencies);
+  free(argv);
+  NaClFlushFileToFd(kNexeFilename, nexe_fd);
+  WrapRetcodeAsSrpcResult(ret, rpc, done);
+}
+
+static char **GetDefaultCommandLine(int is_shared_library,
+                                    const char *soname,
+                                    const char *shared_lib_dependencies,
+                                    size_t *argc) {
+  UNREFERENCED_PARAMETER(is_shared_library);
+  UNREFERENCED_PARAMETER(soname);
+  UNREFERENCED_PARAMETER(shared_lib_dependencies);
+  char **argv;
+  char *command_line = NULL;
+  size_t command_line_len = 0;
+  size_t i;
+  const char *common_args[] = { "-nostdlib" };
+  const char *static_objs[] = { "crtbegin.o",
+                                "--start-group",
+                                /*
+                                 * ___PNACL_GENERATED is part of the contract
+                                 * with the coordinator.
+                                 */
+                                "___PNACL_GENERATED",
+                                "libgcc_eh.a",
+                                "libgcc.a",
+                                "--end-group",
+                                "libcrt_platform.a",
+                                "crtend.o" };
+  /* Add the common args */
+  for (i = 0; i < ARRAY_SIZE(common_args); ++i) {
+    if (argz_add(&command_line, &command_line_len, common_args[i]) != 0) {
+      nacl_fatal("Could not append common_arg.\n");
+    }
+  }
+  /* Add the architecture specific args */
+  switch (__builtin_nacl_target_arch()) {
+    case PnaclTargetArchitectureX86_32: {
+      static const char *ld_args_x8632[] = { "-m", "elf_nacl" };
+      for (i = 0; i < ARRAY_SIZE(ld_args_x8632); ++i) {
+        if (argz_add(&command_line, &command_line_len, ld_args_x8632[i]) != 0) {
+          nacl_fatal("Could not append arch specific arg for x86-32.\n");
+        }
+      }
+    }
+    break;
+
+    case PnaclTargetArchitectureX86_64: {
+      static const char *ld_args_x8664[] = { "-m",
+                                             "elf64_nacl",
+                                             "-entry=_pnacl_wrapper_start",
+                                             "libpnacl_irt_shim.a" };
+      for (i = 0; i < ARRAY_SIZE(ld_args_x8664); ++i) {
+        if (argz_add(&command_line, &command_line_len, ld_args_x8664[i]) != 0) {
+          nacl_fatal("Could not append arch specific arg for x86-64.\n");
+        }
+      }
+    }
+    break;
+
+    case PnaclTargetArchitectureARM_32: {
+      static const char *ld_args_arm[] = { "-m", "armelf_nacl" };
+      for (i = 0; i < ARRAY_SIZE(common_args); ++i) {
+        if (argz_add(&command_line, &command_line_len, ld_args_arm[i]) != 0) {
+          nacl_fatal("Could not append arch specific arg for arm.\n");
+        }
+      }
+    }
+    break;
+
+    default:
+      nacl_fatal("Target architecture %d was not recognized.\n",
+                 __builtin_nacl_target_arch());
+      break;
+  }
+  /* Add the object file and library args */
+  for (i = 0; i < ARRAY_SIZE(static_objs); ++i) {
+    if (argz_add(&command_line, &command_line_len, static_objs[i]) != 0) {
+      nacl_fatal("Could not append object file.\n");
+    }
+  }
+  /* Build the argc/argv from command_line. */
+  *argc = argz_count(command_line, command_line_len);
+  argv = (char **) malloc((*argc + 1) * sizeof *argv);
+  argz_extract(command_line, command_line_len, argv);
+  return argv;
+}
+
+static void
+run_with_default_command_line(NaClSrpcRpc *rpc,
+                              NaClSrpcArg **in_args,
+                              NaClSrpcArg **out_args,
+                              NaClSrpcClosure *done) {
+  UNREFERENCED_PARAMETER(out_args);
+  char* service_string = in_args[0]->arrays.str;
+  int nexe_fd = in_args[1]->u.hval;
+  int is_shared_library = in_args[2]->u.ival;
+  char* soname = in_args[3]->arrays.str;
+  char* shared_library_dependencies = in_args[4]->arrays.str;
+  size_t argc;
+  char **argv = GetDefaultCommandLine(is_shared_library,
+                                      soname,
+                                      shared_library_dependencies,
+                                      &argc);
+  if (!DidInstallLookupService(service_string, rpc)) {
+    nacl_fatal("Could not install lookup service.\n");
+  }
+  int ret = DoLink(argc,
+                   argv,
+                   is_shared_library,
+                   soname,
+                   shared_library_dependencies);
+  /* Free the argz containing the strings pointed to by argv. */
+  free(argv[0]);
+  free(argv);
   NaClFlushFileToFd(kNexeFilename, nexe_fd);
   WrapRetcodeAsSrpcResult(ret, rpc, done);
 }
@@ -729,7 +863,7 @@ int NaClLookupFileByName(const char *filename) {
                                 (char*)filename,
                                 &fd);
   if (error != NACL_SRPC_RESULT_OK) {
-    nacl_fatal("Lookup failed.\n");
+    nacl_fatal("Lookup (%s) failed.\n", filename);
   }
   return fd;
 }
@@ -814,11 +948,17 @@ ldlink(NaClSrpcRpc *rpc,
        NaClSrpcArg **out_args,
        NaClSrpcClosure *done) {
   UNREFERENCED_PARAMETER(in_args);
+  size_t argc;
+  char **argv;
   int ret = 0;
   if (g_ld_command_line == NULL) {
     reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
   }
-  ret = DoLink(g_ld_command_line, g_ld_command_line_len, 0, NULL, NULL);
+  argv = CommandLineFromArgz(g_ld_command_line,
+                             g_ld_command_line_len,
+                             &argc);
+  ret = DoLink(argc, argv, 0, NULL, NULL);
+  free(argv);
   reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
 
   /* Save nexe fd for return. */
@@ -847,8 +987,8 @@ const struct NaClSrpcHandlerDesc srpc_methods[] = {
   { "AddArg:s:", add_arg_string },
   { "Link::hi", ldlink },
   /* New interfaces start here. */
-  { "StartLookupService:s:", start_lookup_service },
-  { "Run:Chiss:", run },
+  { "Run:shissC:", run },
+  { "RunWithDefaultCommandLine:shiss:", run_with_default_command_line },
   { NULL, NULL },
 };
 
