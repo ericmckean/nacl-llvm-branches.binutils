@@ -74,8 +74,10 @@ extern void *sbrk ();
 /* EXPORTS */
 
 #if defined(__native_client__) && defined(NACL_SRPC)
+#include <sys/nacl_syscalls.h>
 #include <nacl/nacl_srpc.h>
 #include <nacl/pnacl.h>
+#include <sys/nacl_name_service.h>
 #define UNREFERENCED_PARAMETER(P) do { (void) P; } while (0)
 #define ARRAY_SIZE(array)  (sizeof array / sizeof array[0])
 
@@ -633,41 +635,20 @@ static void nacl_fatal(const char *format, ...) {
 }
 
 /*
- * The coordinator invokes this to set up a file name lookup service that
- * ld can use.  The lookup service is used to get file descriptors for the
- * filenames passed on the command line:
- * 1) the temporary file used for the object file produced by llc, and
- * 2) the native libraries.
- * Once this is set up we can use NaClLookupFileByName below.
+ * The fictitious filename for the input object.  This name is used to get the
+ * file descriptor for the input object file.  It is part of the contract
+ * with the coordinator.
  */
-int DidInstallLookupService(const char *service_string, NaClSrpcRpc *rpc) {
-  NaClSrpcService* service = (NaClSrpcService*)malloc(sizeof *service);
-  if (service == NULL) {
-    nacl_fatal("Could not allocate lookup service.\n");
-    return 0;
-  }
-  char* service_str = strdup(service_string);
-  if (service_str == NULL) {
-    free(service);
-    nacl_fatal("Could not allocate lookup service string.\n");
-    return 0;
-  }
-  if (!NaClSrpcServiceStringCtor(service, service_str)) {
-    free(service_str);
-    free(service);
-    nacl_fatal("Could not construct lookup service.\n");
-    return 0;
-  }
-  rpc->channel->client = service;
-  g_reverse_channel = rpc->channel;
-  return 1;
-}
+static const char kObjFilename[] = "___PNACL_GENERATED";
 
 /*
  * The fictitious filename for the output.  This name is used to get the
  * file descriptor for the linked executable.
  */
 static const char kNexeFilename[] = "a.out";
+
+static NaClSrpcChannel g_nacl_manifest_channel;
+static int g_nacl_object_fd = -1;
 
 static char **CommandLineFromArgz(char *command_line_string,
                                   size_t command_line_string_len,
@@ -712,20 +693,16 @@ run(NaClSrpcRpc *rpc,
     NaClSrpcArg **out_args,
     NaClSrpcClosure *done) {
   UNREFERENCED_PARAMETER(out_args);
-  char* service_string = in_args[0]->arrays.str;
-  int nexe_fd = in_args[1]->u.hval;
-  int is_shared_library = in_args[2]->u.ival;
-  char* soname = in_args[3]->arrays.str;
-  char* shared_library_dependencies = in_args[4]->arrays.str;
-  char* command_line_string = in_args[5]->arrays.carr;
-  size_t command_line_string_len = (size_t) in_args[5]->u.count;
+  int nexe_fd = in_args[0]->u.hval;
+  int is_shared_library = in_args[1]->u.ival;
+  char* soname = in_args[2]->arrays.str;
+  char* shared_library_dependencies = in_args[3]->arrays.str;
+  char* command_line_string = in_args[4]->arrays.carr;
+  size_t command_line_string_len = (size_t) in_args[4]->u.count;
   size_t argc;
   char **argv = CommandLineFromArgz(command_line_string,
                                     command_line_string_len,
                                     &argc);
-  if (!DidInstallLookupService(service_string, rpc)) {
-    nacl_fatal("Could not install lookup service.\n");
-  }
   int ret = DoLink(argc,
                    argv,
                    is_shared_library,
@@ -750,11 +727,7 @@ static char **GetDefaultCommandLine(int is_shared_library,
   const char *common_args[] = { "-nostdlib" };
   const char *static_objs[] = { "crtbegin.o",
                                 "--start-group",
-                                /*
-                                 * ___PNACL_GENERATED is part of the contract
-                                 * with the coordinator.
-                                 */
-                                "___PNACL_GENERATED",
+                                kObjFilename,
                                 "libgcc_eh.a",
                                 "libgcc.a",
                                 "--end-group",
@@ -825,19 +798,17 @@ run_with_default_command_line(NaClSrpcRpc *rpc,
                               NaClSrpcArg **out_args,
                               NaClSrpcClosure *done) {
   UNREFERENCED_PARAMETER(out_args);
-  char* service_string = in_args[0]->arrays.str;
+  int obj_fd = in_args[0]->u.hval;
   int nexe_fd = in_args[1]->u.hval;
   int is_shared_library = in_args[2]->u.ival;
   char* soname = in_args[3]->arrays.str;
   char* shared_library_dependencies = in_args[4]->arrays.str;
   size_t argc;
+  g_nacl_object_fd = obj_fd;
   char **argv = GetDefaultCommandLine(is_shared_library,
                                       soname,
                                       shared_library_dependencies,
                                       &argc);
-  if (!DidInstallLookupService(service_string, rpc)) {
-    nacl_fatal("Could not install lookup service.\n");
-  }
   int ret = DoLink(argc,
                    argv,
                    is_shared_library,
@@ -853,19 +824,81 @@ run_with_default_command_line(NaClSrpcRpc *rpc,
 int NaClLookupFileByName(const char *filename) {
   static const int kUnknownFd = -1;
   int fd = kUnknownFd;
-  // TODO(sehr): remove this error once reverse channel is always used.
-  if (g_reverse_channel == NULL) {
-    nacl_fatal("g_reverse_channel was not set up.\n");
+  int status;
+  const char kPrefix[] = "files/";
+  const size_t kPrefixLen = sizeof kPrefix - 1;
+  size_t filename_len = strlen(filename) + 1;
+  char* path;
+  if (0 == strcmp(filename, kObjFilename)) {
+    return g_nacl_object_fd;
   }
+  path = malloc(kPrefixLen + filename_len);
+  strncpy(path, kPrefix, kPrefixLen);
+  strncpy(path + kPrefixLen, filename, filename_len);
   NaClSrpcError error =
-      NaClSrpcInvokeBySignature(g_reverse_channel,
-                                "LookupInputFile:s:h",
-                                (char*)filename,
+      NaClSrpcInvokeBySignature(&g_nacl_manifest_channel,
+                                NACL_NAME_SERVICE_LOOKUP,
+                                path,
+                                O_RDONLY,
+                                &status,
                                 &fd);
+  free(path);
   if (error != NACL_SRPC_RESULT_OK) {
     nacl_fatal("Lookup (%s) failed.\n", filename);
   }
   return fd;
+}
+
+static int NaClManifestLookupInit() {
+  int nameservice_address = -1;
+  int nameservice_fd = -1;
+  int manifest_address = -1;
+  int manifest_fd = -1;
+  int status;
+  NaClSrpcChannel nameservice_channel;
+
+  /* Attach to the reverse service for doing manifest file queries. */
+  nacl_nameservice(&nameservice_address);
+  if (nameservice_address == -1) {
+    fprintf(stderr, "nacl_nameservice failed\n");
+    return 0;
+  }
+  nameservice_fd = imc_connect(nameservice_address);
+  close(nameservice_address);
+  if (nameservice_fd == -1) {
+    fprintf(stderr, "name service connect failed\n");
+    return 0;
+  }
+  if (!NaClSrpcClientCtor(&nameservice_channel, nameservice_fd)) {
+    fprintf(stderr, "name service channel ctor failed\n");
+    return 0;
+  }
+  if (NACL_SRPC_RESULT_OK !=
+      NaClSrpcInvokeBySignature(&nameservice_channel, NACL_NAME_SERVICE_LOOKUP,
+                                "ManifestNameService", O_RDWR,
+                                &status, &manifest_address)) {
+    fprintf(stderr, "ManifestNameService SRPC failed, status %d\n", status);
+  }
+  NaClSrpcDtor(&nameservice_channel);
+  if (manifest_address == -1) {
+    fprintf(stderr, "manifest name service address is -1\n");
+    return 0;
+  }
+  manifest_fd = imc_connect(manifest_address);
+  close(manifest_address);
+  if (manifest_fd == -1) {
+    fprintf(stderr, "manifest name service connect failed\n");
+    return 0;
+  }
+  if (!NaClSrpcClientCtor(&g_nacl_manifest_channel, manifest_fd)) {
+    fprintf(stderr, "manifest channel ctor failed\n");
+    return 0;
+  }
+  return 1;
+}
+
+static void NaClManifestLookupFini() {
+  NaClSrpcDtor(&g_nacl_manifest_channel);
 }
 
 /*
@@ -987,8 +1020,8 @@ const struct NaClSrpcHandlerDesc srpc_methods[] = {
   { "AddArg:s:", add_arg_string },
   { "Link::hi", ldlink },
   /* New interfaces start here. */
-  { "Run:shissC:", run },
-  { "RunWithDefaultCommandLine:shiss:", run_with_default_command_line },
+  { "Run:hissC:", run },
+  { "RunWithDefaultCommandLine:hhiss:", run_with_default_command_line },
   { NULL, NULL },
 };
 
@@ -997,9 +1030,13 @@ main() {
   if (!NaClSrpcModuleInit()) {
     return 1;
   }
+  if (!NaClManifestLookupInit()) {
+    return 1;
+  }
   if (!NaClSrpcAcceptClientConnection(srpc_methods)) {
     return 1;
   }
+  NaClManifestLookupFini();
   NaClSrpcModuleFini();
   return 0;
 }
