@@ -697,9 +697,14 @@ run(NaClSrpcRpc *rpc,
   int is_shared_library = in_args[1]->u.ival;
   char* soname = in_args[2]->arrays.str;
   char* shared_library_dependencies = in_args[3]->arrays.str;
-  char* command_line_string = in_args[4]->arrays.carr;
   size_t command_line_string_len = (size_t) in_args[4]->u.count;
+  char* command_line_string = malloc(command_line_string_len);
   size_t argc;
+  /*
+   * Copy the command line string to avoid a double free, as SRPC will
+   * also free in_args contents.
+   */
+  memcpy(command_line_string, in_args[4]->arrays.carr, command_line_string_len);
   char **argv = CommandLineFromArgz(command_line_string,
                                     command_line_string_len,
                                     &argc);
@@ -901,125 +906,7 @@ static void NaClManifestLookupFini() {
   NaClSrpcDtor(&g_nacl_manifest_channel);
 }
 
-/*
- * TODO(sehr): remove this command line setup when the coordinator
- * passes the command line.
- */
-static char* g_ld_command_line = NULL;
-static size_t g_ld_command_line_len = 0;
-
-static void reset_command_line(char **command_line_string,
-                               size_t *command_line_string_len) {
-  static const char *kBakedInCommandLine[] = { "ld", NULL };
-  if (*command_line_string != NULL) {
-    free(*command_line_string);
-    *command_line_string = NULL;
-    *command_line_string_len = 0;
-  }
-  if (argz_create(kBakedInCommandLine,
-                  command_line_string,
-                  command_line_string_len) != 0) {
-    nacl_fatal("Out of memory for copying arg string\n");
-  }
-}
-
-/** Supply a commandline argument via in_args[0]. */
-static void add_arg_string(NaClSrpcRpc *rpc,
-                           NaClSrpcArg **in_args,
-                           NaClSrpcArg **out_args,
-                           NaClSrpcClosure *done) {
-  int ret = 0;
-  UNREFERENCED_PARAMETER(out_args);
-  if (g_reverse_channel != NULL) {
-    nacl_fatal("Can't call AddArg when using g_reverse_channel\n");
-  }
-  if (g_ld_command_line == NULL) {
-    reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
-  }
-  if (argz_add(&g_ld_command_line,
-               &g_ld_command_line_len,
-               in_args[0]->arrays.str) != 0) {
-    nacl_fatal("argz_add failed.\n");
-  }
-  WrapRetcodeAsSrpcResult(ret, rpc, done);
-}
-
-/** Add a mapping to our internal file_system so that opening a file
-    with name in_args[0] will result in using the handle from in_args[1]. */
-static void
-add_file(NaClSrpcRpc *rpc,
-         NaClSrpcArg **in_args,
-         NaClSrpcArg **out_args,
-         NaClSrpcClosure *done) {
-  UNREFERENCED_PARAMETER(out_args);
-  int ret = NaClLoadFileForReading(in_args[0]->arrays.str,
-                                   in_args[1]->u.hval);
-  WrapRetcodeAsSrpcResult(ret, rpc, done);
-}
-
-/** Add a mapping to our internal file_system so that opening a file
-    with name in_args[0] will result in using the handle from in_args[1].
-    The file size is initialized to in_args[2] (overriding fstat). */
-static void
-add_file_with_size(NaClSrpcRpc *rpc,
-                   NaClSrpcArg **in_args,
-                   NaClSrpcArg **out_args,
-                   NaClSrpcClosure *done) {
-  UNREFERENCED_PARAMETER(out_args);
-  /* These are intermediate shm files with file size supplied externally
-   * (fstat will not give you an accurate size) */
-  int ret = NaClMapFileForReading(in_args[0]->arrays.str,
-                                  in_args[1]->u.hval,
-                                  in_args[2]->u.ival);
-  WrapRetcodeAsSrpcResult(ret, rpc, done);
-}
-
-/** Run the link returning a file handle for the result along with file size. */
-static void
-ldlink(NaClSrpcRpc *rpc,
-       NaClSrpcArg **in_args,
-       NaClSrpcArg **out_args,
-       NaClSrpcClosure *done) {
-  UNREFERENCED_PARAMETER(in_args);
-  size_t argc;
-  char **argv;
-  int ret = 0;
-  if (g_ld_command_line == NULL) {
-    reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
-  }
-  argv = CommandLineFromArgz(g_ld_command_line,
-                             g_ld_command_line_len,
-                             &argc);
-  ret = DoLink(argc, argv, 0, NULL, NULL);
-  free(argv);
-  reset_command_line(&g_ld_command_line, &g_ld_command_line_len);
-
-  /* Save nexe fd for return. */
-  NaClMakeFileAvailableViaShmem(kNexeFilename,
-                                &out_args[0]->u.hval,
-                                &out_args[1]->u.ival);
-  /* TODO(abetul): Close all open fd's */
-
-  /* Unfortunately, if ld uses xexit(non_zero) it could terminate our
-     RPC loop instead of returning from this RPC with an error code.
-     Maybe we could do some setjmp/longjmp + xatexit() hack to have
-     more control over how this ends. */
-  WrapRetcodeAsSrpcResult(ret, rpc, done);
-}
-
 const struct NaClSrpcHandlerDesc srpc_methods[] = {
-  /* TODO(sehr): remove these obsolete interfaces. */
-  /*
-   * Protocol as a regex: (AddFile|AddFileWithSize|AddArg)* Link
-   * Link is likely not re-entrant. In any case, if you wish to try to run
-   * another Link, note that the effects of AddArg are reset after the Link,
-   * while the effects of AddFile|AddFileWithSize are not.
-   */
-  { "AddFile:sh:", add_file },
-  { "AddFileWithSize:shi:", add_file_with_size },
-  { "AddArg:s:", add_arg_string },
-  { "Link::hi", ldlink },
-  /* New interfaces start here. */
   { "Run:hissC:", run },
   { "RunWithDefaultCommandLine:hhiss:", run_with_default_command_line },
   { NULL, NULL },
