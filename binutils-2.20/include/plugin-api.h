@@ -207,7 +207,6 @@ const char *
  * soname of the link output.
  * Returns NULL if index >= num_needed
  */
-
 typedef
 const char *
 (*ld_plugin_get_needed) (unsigned int index);
@@ -217,6 +216,21 @@ const char *
 typedef
 unsigned int
 (*ld_plugin_get_num_needed) (void);
+
+/* The linker's interface for getting the i'th wrapped
+ * symbol name.
+ * Returns NULL if index >= num_wrapped
+ */
+typedef
+const char *
+(*ld_plugin_get_wrapped) (unsigned int index);
+
+/* The linker's interface for getting the number of
+ * wrapped symbols
+  */
+typedef
+unsigned int
+(*ld_plugin_get_num_wrapped) (void);
 
 // @LOCALMOD-END
 
@@ -295,6 +309,8 @@ enum ld_plugin_tag
   LDPT_GET_SONAME,
   LDPT_GET_NEEDED,
   LDPT_GET_NUM_NEEDED,
+  LDPT_GET_WRAPPED,
+  LDPT_GET_NUM_WRAPPED,
   // @LOCALMOD-END
   LDPT_ADD_INPUT_FILE,
   LDPT_MESSAGE,
@@ -325,6 +341,8 @@ struct ld_plugin_tv
     ld_plugin_get_soname tv_get_soname;
     ld_plugin_get_needed tv_get_needed;
     ld_plugin_get_num_needed tv_get_num_needed;
+    ld_plugin_get_wrapped tv_get_wrapped;
+    ld_plugin_get_num_wrapped tv_get_num_wrapped;
     // @LOCALMOD-END
     ld_plugin_add_input_file tv_add_input_file;
     ld_plugin_message tv_message;

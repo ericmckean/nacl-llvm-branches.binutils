@@ -85,6 +85,12 @@ get_needed(unsigned int index);
 
 static unsigned int
 get_num_needed(void);
+
+static const char*
+get_wrapped(unsigned int index);
+
+static unsigned int
+get_num_wrapped(void);
 // @LOCALMOD-END
 
 static enum ld_plugin_status
@@ -146,7 +152,7 @@ Plugin::load()
   sscanf(ver, "%d.%d", &major, &minor);
 
   // Allocate and populate a transfer vector.
-  const int tv_fixed_size = 20;
+  const int tv_fixed_size = 22; // @LOCALMOD
   int tv_size = this->args_.size() + tv_fixed_size;
   ld_plugin_tv* tv = new ld_plugin_tv[tv_size];
 
@@ -228,6 +234,14 @@ Plugin::load()
   ++i;
   tv[i].tv_tag = LDPT_GET_NUM_NEEDED;
   tv[i].tv_u.tv_get_num_needed = get_num_needed;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_WRAPPED;
+  tv[i].tv_u.tv_get_wrapped = get_wrapped;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_NUM_WRAPPED;
+  tv[i].tv_u.tv_get_num_wrapped = get_num_wrapped;
   // @LOCALMOD-END
 
   ++i;
@@ -444,6 +458,14 @@ Plugin_manager::all_symbols_read(Workqueue* workqueue, Task* task,
   this->this_blocker_ = NULL;
 
   // @LOCALMOD-BEGIN
+  // Create a list of wrapped symbols to export to the plugin.
+  wrapped_.clear();
+  for (options::String_set::const_iterator
+       it = parameters->options().wrap_begin(),
+       ie = parameters->options().wrap_end(); it != ie; ++it) {
+    wrapped_.push_back(*it);
+  }
+
   if (parameters->options().soname())
     this->soname_ = parameters->options().soname();
   else
@@ -1456,6 +1478,21 @@ get_num_needed(void)
 {
   gold_assert(parameters->options().has_plugins());
   return parameters->options().plugins()->get_num_needed();
+}
+
+static const char *
+get_wrapped(unsigned int index)
+{
+  gold_assert(parameters->options().has_plugins());
+  options::String_set::const_iterator it;
+  return parameters->options().plugins()->get_wrapped(index);
+}
+
+static unsigned int
+get_num_wrapped(void)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_num_wrapped();
 }
 // @LOCALMOD-END
 
