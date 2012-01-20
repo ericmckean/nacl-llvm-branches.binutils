@@ -279,6 +279,16 @@ class Plugin_manager
   unsigned int get_num_needed() const {
     return needed_.size();
   }
+
+  const char *get_wrapped(unsigned int index) const {
+    if (index < wrapped_.size())
+      return wrapped_[index].c_str();
+    return NULL;
+  }
+
+  unsigned int get_num_wrapped() const {
+    return wrapped_.size();
+  }
   // @LOCALMOD-END
 
  private:
@@ -370,6 +380,7 @@ class Plugin_manager
   // These are computed in all_symbols_read().
   std::string soname_; // soname of the linker output
   std::vector<std::string> needed_; // List of needed dynamic libraries
+  std::vector<std::string> wrapped_; // List of wrapped symbols
   // @LOCALMOD-END
 
   // An extra directory to seach for the libraries passed by
