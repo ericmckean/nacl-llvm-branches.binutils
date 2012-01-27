@@ -193,7 +193,8 @@ enum ld_plugin_status
 typedef
 enum ld_plugin_status
 (*ld_plugin_add_symbols) (void *handle, int nsyms,
-                          const struct ld_plugin_symbol *syms);
+                          const struct ld_plugin_symbol *syms,
+                          int is_shared); // @LOCALMOD
 
 // @LOCALMOD-BEGIN
 

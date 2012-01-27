@@ -1329,9 +1329,14 @@ class Symbol_table
   // symbol table.  SYMS is the symbols.  SYM_NAMES is their names.
   // SYM_NAME_SIZE is the size of SYM_NAMES.  The other parameters are
   // symbol version data.
-  template<int size, bool big_endian>
+  //
+  // @LOCALMOD-BEGIN
+  // TODO(pdox): 'add_from_dynobj' has been generalized, and could be
+  //             renamed 'add_from_dynamic'.
+  // @LOCALMOD-END
+  template<int size, bool big_endian, class Sized_BaseType>
   void
-  add_from_dynobj(Sized_dynobj<size, big_endian>* dynobj,
+  add_from_dynobj(Sized_BaseType* dynobj, // @LOCALMOD
 		  const unsigned char* syms, size_t count,
 		  const char* sym_names, size_t sym_name_size,
 		  const unsigned char* versym, size_t versym_size,

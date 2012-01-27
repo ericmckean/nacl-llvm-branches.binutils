@@ -1293,10 +1293,10 @@ Symbol_table::add_from_pluginobj(
 
 // Add all the symbols in a dynamic object to the hash table.
 
-template<int size, bool big_endian>
+template<int size, bool big_endian, class Sized_BaseType> // @LOCALMOD
 void
 Symbol_table::add_from_dynobj(
-    Sized_dynobj<size, big_endian>* dynobj,
+    Sized_BaseType* dynobj, // @LOCALMOD
     const unsigned char* syms,
     size_t count,
     const char* sym_names,
@@ -3422,7 +3422,7 @@ Symbol_table::add_from_pluginobj<64, true>(
 #ifdef HAVE_TARGET_32_LITTLE
 template
 void
-Symbol_table::add_from_dynobj<32, false>(
+Symbol_table::add_from_dynobj<32, false, Sized_dynobj<32, false> >( // @LOCALMOD
     Sized_dynobj<32, false>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3433,12 +3433,27 @@ Symbol_table::add_from_dynobj<32, false>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<32, false>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<32, false, Sized_pluginobj<32, false> >(
+    Sized_pluginobj<32, false>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<32, false>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-END
 #endif
 
 #ifdef HAVE_TARGET_32_BIG
 template
 void
-Symbol_table::add_from_dynobj<32, true>(
+Symbol_table::add_from_dynobj<32, true, Sized_dynobj<32, true> >( // @LOCALMOD
     Sized_dynobj<32, true>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3449,12 +3464,27 @@ Symbol_table::add_from_dynobj<32, true>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<32, true>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<32, true, Sized_pluginobj<32, true> >(
+    Sized_pluginobj<32, true>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<32, true>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-END
 #endif
 
 #ifdef HAVE_TARGET_64_LITTLE
 template
 void
-Symbol_table::add_from_dynobj<64, false>(
+Symbol_table::add_from_dynobj<64, false, Sized_dynobj<64, false> >( // @LOCALMOD
     Sized_dynobj<64, false>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3465,12 +3495,27 @@ Symbol_table::add_from_dynobj<64, false>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<64, false>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<64, false, Sized_pluginobj<64, false> >(
+    Sized_pluginobj<64, false>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<64, false>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-END
 #endif
 
 #ifdef HAVE_TARGET_64_BIG
 template
 void
-Symbol_table::add_from_dynobj<64, true>(
+Symbol_table::add_from_dynobj<64, true, Sized_dynobj<64, true> >( // @LOCALMOD
     Sized_dynobj<64, true>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3481,6 +3526,21 @@ Symbol_table::add_from_dynobj<64, true>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<64, true>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<64, true, Sized_pluginobj<64, true> >(
+    Sized_pluginobj<64, true>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<64, true>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-END
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE

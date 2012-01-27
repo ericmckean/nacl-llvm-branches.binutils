@@ -65,7 +65,8 @@ static enum ld_plugin_status
 register_cleanup(ld_plugin_cleanup_handler handler);
 
 static enum ld_plugin_status
-add_symbols(void *handle, int nsyms, const struct ld_plugin_symbol *syms);
+add_symbols(void *handle, int nsyms, const struct ld_plugin_symbol *syms,
+            int is_shared); // @LOCALMOD
 
 static enum ld_plugin_status
 get_input_file(const void *handle, struct ld_plugin_input_file *file);
@@ -113,7 +114,8 @@ message(int level, const char *format, ...);
 #endif // ENABLE_PLUGINS
 
 static Pluginobj* make_sized_plugin_object(Input_file* input_file,
-                                           off_t offset, off_t filesize);
+                                           off_t offset, off_t filesize,
+                                           bool is_shared); // @LOCALMOD
 
 // Plugin methods.
 
@@ -405,7 +407,7 @@ Plugin_manager::claim_file(Input_file* input_file, off_t offset,
 
           // If the plugin claimed the file but did not call the
           // add_symbols callback, we need to create the Pluginobj now.
-          Pluginobj* obj = this->make_plugin_object(handle);
+          Pluginobj* obj = this->make_plugin_object(handle, false); // @LOCALMOD
           return obj;
         }
     }
@@ -661,7 +663,7 @@ Plugin_manager::cleanup()
 // the add_symbols API.
 
 Pluginobj*
-Plugin_manager::make_plugin_object(unsigned int handle)
+Plugin_manager::make_plugin_object(unsigned int handle, bool is_shared)
 {
   // Make sure we aren't asked to make an object for the same handle twice.
   if (this->objects_.size() != handle)
@@ -669,7 +671,8 @@ Plugin_manager::make_plugin_object(unsigned int handle)
 
   Pluginobj* obj = make_sized_plugin_object(this->input_file_,
                                             this->plugin_input_file_.offset,
-                                            this->plugin_input_file_.filesize);
+                                            this->plugin_input_file_.filesize,
+                                            is_shared); // @LOCALMOD
   this->objects_.push_back(obj);
   return obj;
 }
@@ -784,8 +787,8 @@ Plugin_manager::add_input_file(const char* pathname, bool is_lib)
 // Class Pluginobj.
 
 Pluginobj::Pluginobj(const std::string& name, Input_file* input_file,
-                     off_t offset, off_t filesize)
-  : Object(name, input_file, false, offset),
+                     off_t offset, off_t filesize, bool is_shared) // @LOCALMOD
+  : Object(name, input_file, is_shared, offset), // @LOCALMOD
     nsyms_(0), syms_(NULL), symbols_(), filesize_(filesize), comdat_map_()
 {
 }
@@ -897,8 +900,9 @@ Sized_pluginobj<size, big_endian>::Sized_pluginobj(
     const std::string& name,
     Input_file* input_file,
     off_t offset,
-    off_t filesize)
-  : Pluginobj(name, input_file, offset, filesize)
+    off_t filesize,
+    bool is_shared) // @LOCALMOD
+  : Pluginobj(name, input_file, offset, filesize, is_shared) // @LOCALMOD
 {
 }
 
@@ -937,6 +941,24 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
   typedef typename elfcpp::Elf_types<size>::Elf_WXword Elf_size_type;
 
   this->symbols_.resize(this->nsyms_);
+  // @LOCALMOD-BEGIN
+  // For the call to add_from_dynobj(), we need a
+  // buffer of all symbols and their names.
+  unsigned char *symdata = NULL;
+  char *sym_names = NULL;
+  int sym_names_size = 0;
+  int sym_names_index = 0;
+  int symdata_index = 0;
+  if (this->is_dynamic())
+    {
+      for (int i = 0; i < this->nsyms_; ++i)
+        sym_names_size += strlen(this->syms_[i].name) + 1;
+      symdata = new unsigned char[this->nsyms_ * sym_size];
+      sym_names = new char[sym_names_size];
+      if (!symdata || !sym_names)
+        gold_error(_("buffer allocation failed in plugin"));
+    }
+  // @LOCALMOD-END
 
   for (int i = 0; i < this->nsyms_; ++i)
     {
@@ -1004,16 +1026,49 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
           && !this->include_comdat_group(isym->comdat_key, layout))
         shndx = elfcpp::SHN_UNDEF;
 
-      osym.put_st_name(0);
-      osym.put_st_value(0);
-      osym.put_st_size(static_cast<Elf_size_type>(isym->size));
-      osym.put_st_info(bind, elfcpp::STT_NOTYPE);
-      osym.put_st_other(vis, 0);
-      osym.put_st_shndx(shndx);
+      // @LOCALMOD-BEGIN
+      if (!this->is_dynamic())
+        {
+          osym.put_st_name(0);
+          osym.put_st_value(0);
+          osym.put_st_size(static_cast<Elf_size_type>(isym->size));
+          osym.put_st_info(bind, elfcpp::STT_NOTYPE);
+          osym.put_st_other(vis, 0);
+          osym.put_st_shndx(shndx);
 
-      this->symbols_[i] =
-        symtab->add_from_pluginobj<size, big_endian>(this, name, ver, &sym);
+          this->symbols_[i] =
+            symtab->add_from_pluginobj<size, big_endian>(this, name, ver, &sym);
+        }
+      else
+        {
+          elfcpp::Sym_write<size, big_endian> dsym(symdata + symdata_index);
+          dsym.put_st_name(sym_names_index);
+          dsym.put_st_value(0);
+          dsym.put_st_size(static_cast<Elf_size_type>(isym->size));
+          // TODO(pdox): Set ELF type based on bitcode type.
+          dsym.put_st_info(bind, elfcpp::STT_NOTYPE);
+          dsym.put_st_other(vis, 0);
+          dsym.put_st_shndx(shndx);
+          strcpy(&sym_names[sym_names_index], name);
+          sym_names_index += strlen(name) + 1;
+          symdata_index += sym_size;
+        }
+      // @LOCALMOD-END
     }
+
+  // @LOCALMOD-BEGIN
+  if (this->is_dynamic()) {
+    size_t defined;
+    // TODO(pdox): Handle symbol versions.
+    symtab->add_from_dynobj<size, big_endian>(this, symdata, this->nsyms_,
+                                              sym_names, sym_names_size,
+                                              NULL, 0, NULL, &this->symbols_,
+                                              &defined);
+    delete [] symdata;
+    delete [] sym_names;
+  }
+  // @LOCALMOD-END
+
 }
 
 template<int size, bool big_endian>
@@ -1374,11 +1429,13 @@ register_cleanup(ld_plugin_cleanup_handler handler)
 // Add symbols from a plugin-claimed input file.
 
 static enum ld_plugin_status
-add_symbols(void* handle, int nsyms, const ld_plugin_symbol* syms)
+add_symbols(void* handle, int nsyms, const ld_plugin_symbol* syms,
+            int is_shared) // @LOCALMOD
 {
   gold_assert(parameters->options().has_plugins());
   Pluginobj* obj = parameters->options().plugins()->make_plugin_object(
-      static_cast<unsigned int>(reinterpret_cast<intptr_t>(handle)));
+      static_cast<unsigned int>(reinterpret_cast<intptr_t>(handle)),
+      is_shared ? true : false); // @LOCALMOD
   if (obj == NULL)
     return LDPS_ERR;
   obj->store_incoming_symbols(nsyms, syms);
@@ -1531,7 +1588,8 @@ message(int level, const char* format, ...)
 // Allocate a Pluginobj object of the appropriate size and endianness.
 
 static Pluginobj*
-make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
+make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize,
+                         bool is_shared) // @LOCALMOD
 {
   Pluginobj* obj = NULL;
 
@@ -1543,7 +1601,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       if (target.is_big_endian())
 #ifdef HAVE_TARGET_32_BIG
         obj = new Sized_pluginobj<32, true>(input_file->filename(),
-                                            input_file, offset, filesize);
+                                            input_file, offset, filesize,
+                                            is_shared); // @LOCALMOD
 #else
         gold_error(_("%s: not configured to support "
 		     "32-bit big-endian object"),
@@ -1552,7 +1611,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       else
 #ifdef HAVE_TARGET_32_LITTLE
         obj = new Sized_pluginobj<32, false>(input_file->filename(),
-                                             input_file, offset, filesize);
+                                             input_file, offset, filesize,
+                                             is_shared); // @LOCALMOD
 #else
         gold_error(_("%s: not configured to support "
 		     "32-bit little-endian object"),
@@ -1564,7 +1624,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       if (target.is_big_endian())
 #ifdef HAVE_TARGET_64_BIG
         obj = new Sized_pluginobj<64, true>(input_file->filename(),
-                                            input_file, offset, filesize);
+                                            input_file, offset, filesize,
+                                            is_shared); // @LOCALMOD
 #else
         gold_error(_("%s: not configured to support "
 		     "64-bit big-endian object"),
@@ -1573,7 +1634,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       else
 #ifdef HAVE_TARGET_64_LITTLE
         obj = new Sized_pluginobj<64, false>(input_file->filename(),
-                                             input_file, offset, filesize);
+                                             input_file, offset, filesize,
+                                             is_shared); // @LOCALMOD
 #else
         gold_error(_("%s: not configured to support "
 		     "64-bit little-endian object"),

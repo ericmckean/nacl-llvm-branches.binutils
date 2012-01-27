@@ -216,7 +216,7 @@ class Plugin_manager
   // Make a new Pluginobj object.  This is called when the plugin calls
   // the add_symbols API.
   Pluginobj*
-  make_plugin_object(unsigned int handle);
+  make_plugin_object(unsigned int handle, bool is_shared); // @LOCALMOD
 
   // Return the Pluginobj associated with the given HANDLE.
   Pluginobj*
@@ -399,7 +399,7 @@ class Pluginobj : public Object
   typedef std::vector<Symbol*> Symbols;
 
   Pluginobj(const std::string& name, Input_file* input_file, off_t offset,
-            off_t filesize);
+            off_t filesize, bool is_shared); // @LOCALMOD
 
   // Fill in the symbol resolution status for the given plugin symbols.
   ld_plugin_status
@@ -464,7 +464,7 @@ class Sized_pluginobj : public Pluginobj
 {
  public:
   Sized_pluginobj(const std::string& name, Input_file* input_file,
-                  off_t offset, off_t filesize);
+                  off_t offset, off_t filesize, bool is_shared); // @LOCALMOD
 
   // Read the symbols.
   void
