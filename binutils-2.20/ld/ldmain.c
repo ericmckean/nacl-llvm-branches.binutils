@@ -221,7 +221,7 @@ ld_cleanup (void)
     unlink_if_ordinary (output_filename);
 }
 
-int
+static int
 ldmain (int argc, char **argv)
 {
   char *emulation;
@@ -672,15 +672,7 @@ static char **CommandLineFromArgz(char *command_line_string,
   return argv;
 }
 
-static int DoLink(size_t argc,
-                  char **argv,
-                  int is_shared_library,
-                  const char *soname,
-                  const char *shared_lib_dependencies) {
-  UNREFERENCED_PARAMETER(is_shared_library);
-  UNREFERENCED_PARAMETER(soname);
-  UNREFERENCED_PARAMETER(shared_lib_dependencies);
-
+static int DoLink(size_t argc, char **argv) {
   int ret;
   ret = ldmain(argc, argv);
   return ret;
@@ -694,106 +686,189 @@ run(NaClSrpcRpc *rpc,
     NaClSrpcClosure *done) {
   UNREFERENCED_PARAMETER(out_args);
   int nexe_fd = in_args[0]->u.hval;
-  int is_shared_library = in_args[1]->u.ival;
-  char* soname = in_args[2]->arrays.str;
-  char* shared_library_dependencies = in_args[3]->arrays.str;
-  size_t command_line_string_len = (size_t) in_args[4]->u.count;
+  size_t command_line_string_len = (size_t) in_args[1]->u.count;
   char* command_line_string = malloc(command_line_string_len);
   size_t argc;
   /*
    * Copy the command line string to avoid a double free, as SRPC will
    * also free in_args contents.
    */
-  memcpy(command_line_string, in_args[4]->arrays.carr, command_line_string_len);
+  memcpy(command_line_string, in_args[1]->arrays.carr, command_line_string_len);
   char **argv = CommandLineFromArgz(command_line_string,
                                     command_line_string_len,
                                     &argc);
-  int ret = DoLink(argc,
-                   argv,
-                   is_shared_library,
-                   soname,
-                   shared_library_dependencies);
+  int ret = DoLink(argc, argv);
   free(argv);
   NaClFlushFileToFd(kNexeFilename, nexe_fd);
   WrapRetcodeAsSrpcResult(ret, rpc, done);
+}
+
+static char *GetElfArchName() {
+  /* Add the architecture specific args */
+  switch (__builtin_nacl_target_arch()) {
+    case PnaclTargetArchitectureX86_32:
+      return "elf_nacl";
+    case PnaclTargetArchitectureX86_64:
+      return "elf64_nacl";
+    case PnaclTargetArchitectureARM_32:
+      return "armelf_nacl";
+    default:
+      nacl_fatal("Target architecture %d was not recognized.\n",
+                 __builtin_nacl_target_arch());
+      break;
+  }
+}
+
+static void AddOneArgument(char **argz,
+                           size_t *argz_len,
+                           const char *arg_format,
+                           ...) {
+  char argument[1024];
+  va_list ap;
+  va_start(ap, arg_format);
+  vsnprintf(argument, sizeof argument, arg_format, ap);
+  va_end(ap);
+  if (argz_add(argz, argz_len, argument) != 0) {
+    nacl_fatal("Could not append %s to command line.\n", argument);
+  }
+}
+
+static int StartsWith(const char *str, const char *substr) {
+
+  size_t len_str = strlen(str);
+  size_t len_substr = strlen(substr);
+
+  if (len_substr > len_str) {
+    return 0;
+  }
+
+  return strncmp(str, substr, len_substr) == 0;
 }
 
 static char **GetDefaultCommandLine(int is_shared_library,
                                     const char *soname,
                                     const char *shared_lib_dependencies,
                                     size_t *argc) {
-  UNREFERENCED_PARAMETER(is_shared_library);
-  UNREFERENCED_PARAMETER(soname);
-  UNREFERENCED_PARAMETER(shared_lib_dependencies);
   char **argv;
-  char *command_line = NULL;
-  size_t command_line_len = 0;
+  char *argz = NULL;
+  size_t argz_len = 0;
   size_t i;
-  const char *common_args[] = { "-nostdlib" };
-  const char *static_objs[] = { "crtbegin.o",
-                                "--start-group",
-                                kObjFilename,
-                                "libgcc_eh.a",
-                                "libgcc.a",
-                                "--end-group",
-                                "libcrt_platform.a",
-                                "crtend.o" };
-  /* Add the common args */
-  for (i = 0; i < ARRAY_SIZE(common_args); ++i) {
-    if (argz_add(&command_line, &command_line_len, common_args[i]) != 0) {
-      nacl_fatal("Could not append common_arg.\n");
+  int is_static_exe = 0;
+  int is_dynamic_exe = 0;
+  const char *elf_arch = GetElfArchName();
+
+  if (!is_shared_library) {
+    /* Assume that dynamic executables always have NEEDED entries. */
+    if (strcmp(shared_lib_dependencies, "") == 0) {
+      is_static_exe = 1;
+    } else {
+      is_dynamic_exe = 1;
     }
   }
-  /* Add the architecture specific args */
-  switch (__builtin_nacl_target_arch()) {
-    case PnaclTargetArchitectureX86_32: {
-      static const char *ld_args_x8632[] = { "-m", "elf_nacl" };
-      for (i = 0; i < ARRAY_SIZE(ld_args_x8632); ++i) {
-        if (argz_add(&command_line, &command_line_len, ld_args_x8632[i]) != 0) {
-          nacl_fatal("Could not append arch specific arg for x86-32.\n");
+
+#define NACL_ADD_ARG(arg_string, ...)               \
+  AddOneArgument(&argz, &argz_len, arg_string, ##__VA_ARGS__)
+
+  NACL_ADD_ARG("ld");
+  NACL_ADD_ARG("-nostdlib");
+  NACL_ADD_ARG("-m");
+  NACL_ADD_ARG(elf_arch);
+  NACL_ADD_ARG("--eh-frame-hdr");
+
+  if (is_dynamic_exe || is_shared_library) {
+    NACL_ADD_ARG("-T");
+    NACL_ADD_ARG("%s.x%s", elf_arch, is_shared_library ? "s" : "");
+  }
+  if (is_dynamic_exe)
+    NACL_ADD_ARG("--unresolved-symbols=ignore-all");
+
+  if (is_shared_library) {
+    NACL_ADD_ARG("-shared");
+  } else if (is_static_exe) {
+    NACL_ADD_ARG("-static");
+  } /* else, dynamic executables don't need any extra commandline params */
+
+  char *needed_deps = NULL;
+  size_t needed_deps_len = 0;
+  if (shared_lib_dependencies != "") {
+    /* Mark DT_NEEDED via --add-extra-dt-needed=... */
+    char *lib = NULL;
+    /* The agreed-upon delimiter from llc -> translator -> ld */
+    char kNeededDelim = '\n';
+    if (argz_create_sep(shared_lib_dependencies,
+                        kNeededDelim, &needed_deps, &needed_deps_len) != 0) {
+      nacl_fatal("Could not parse library dependencies %s\n",
+                 shared_lib_dependencies);
+    }
+    while ((lib = argz_next(needed_deps, needed_deps_len, lib)) != NULL) {
+      NACL_ADD_ARG("--add-extra-dt-needed=%s", lib);
+    }
+  }
+
+  if (strcmp(soname, "") != 0) {
+    if (is_shared_library)
+      NACL_ADD_ARG("-soname=%s", soname);
+    else
+      nacl_fatal("Found a soname (%s) for non-shared libraries", soname);
+  }
+
+  if (!is_shared_library &&
+      __builtin_nacl_target_arch() == PnaclTargetArchitectureX86_64) {
+    NACL_ADD_ARG("--entry=_pnacl_wrapper_start");
+    NACL_ADD_ARG("libpnacl_irt_shim.a");
+  }
+
+  NACL_ADD_ARG("crtbegin%s.o", is_shared_library ? "S" : "");
+  NACL_ADD_ARG(kObjFilename);
+
+  if (is_static_exe)
+    NACL_ADD_ARG("--start-group");
+
+  /* ------- HACK --------
+   * Currently need native versions of NEEDED .sos on link line.
+   * BUG= http://code.google.com/p/nativeclient/issues/detail?id=2423
+   */
+  if (is_dynamic_exe || is_shared_library) {
+    const char *special_case[] = {
+      "libppapi_cpp", "libstdc++", "libm", "libc", "libpthread", NULL};
+    for (i=0; special_case[i] != NULL; ++i) {
+      char *lib = NULL;
+      /* Find matching NEEDED .so w/ full version number.
+       * E.g., libm.so.3c8d1f2e. */
+      while ((lib = argz_next(needed_deps, needed_deps_len, lib)) != NULL) {
+        if (StartsWith(lib, special_case[i])) {
+          NACL_ADD_ARG(lib);
+          if (strcmp(special_case[i], "libc") == 0)
+            NACL_ADD_ARG("libc_nonshared.a");
+          if (strcmp(special_case[i], "libpthread") == 0)
+            NACL_ADD_ARG("libpthread_nonshared.a");
+          break;
         }
       }
     }
-    break;
-
-    case PnaclTargetArchitectureX86_64: {
-      static const char *ld_args_x8664[] = { "-m",
-                                             "elf64_nacl",
-                                             "-entry=_pnacl_wrapper_start",
-                                             "libpnacl_irt_shim.a" };
-      for (i = 0; i < ARRAY_SIZE(ld_args_x8664); ++i) {
-        if (argz_add(&command_line, &command_line_len, ld_args_x8664[i]) != 0) {
-          nacl_fatal("Could not append arch specific arg for x86-64.\n");
-        }
-      }
-    }
-    break;
-
-    case PnaclTargetArchitectureARM_32: {
-      static const char *ld_args_arm[] = { "-m", "armelf_nacl" };
-      for (i = 0; i < ARRAY_SIZE(common_args); ++i) {
-        if (argz_add(&command_line, &command_line_len, ld_args_arm[i]) != 0) {
-          nacl_fatal("Could not append arch specific arg for arm.\n");
-        }
-      }
-    }
-    break;
-
-    default:
-      nacl_fatal("Target architecture %d was not recognized.\n",
-                 __builtin_nacl_target_arch());
-      break;
+    NACL_ADD_ARG("ld-2.9.so");
   }
-  /* Add the object file and library args */
-  for (i = 0; i < ARRAY_SIZE(static_objs); ++i) {
-    if (argz_add(&command_line, &command_line_len, static_objs[i]) != 0) {
-      nacl_fatal("Could not append object file.\n");
-    }
+  /* ---- END HACK ---- */
+
+  if (is_static_exe) {
+    NACL_ADD_ARG("libgcc_eh.a");
+  } else {
+    NACL_ADD_ARG("libgcc_s.so");
   }
+  NACL_ADD_ARG("libgcc.a");
+  if (is_static_exe)
+    NACL_ADD_ARG("libcrt_platform.a");
+
+  if (is_static_exe)
+    NACL_ADD_ARG("--end-group");
+
+  NACL_ADD_ARG("crtend%s.o", is_shared_library ? "S" : "");
+#undef NACL_ADD_ARG
+
   /* Build the argc/argv from command_line. */
-  *argc = argz_count(command_line, command_line_len);
+  *argc = argz_count(argz, argz_len);
   argv = (char **) malloc((*argc + 1) * sizeof *argv);
-  argz_extract(command_line, command_line_len, argv);
+  argz_extract(argz, argz_len, argv);
   return argv;
 }
 
@@ -814,11 +889,7 @@ run_with_default_command_line(NaClSrpcRpc *rpc,
                                       soname,
                                       shared_library_dependencies,
                                       &argc);
-  int ret = DoLink(argc,
-                   argv,
-                   is_shared_library,
-                   soname,
-                   shared_library_dependencies);
+  int ret = DoLink(argc, argv);
   /* Free the argz containing the strings pointed to by argv. */
   free(argv[0]);
   free(argv);
@@ -907,7 +978,7 @@ static void NaClManifestLookupFini() {
 }
 
 const struct NaClSrpcHandlerDesc srpc_methods[] = {
-  { "Run:hissC:", run },
+  { "Run:hC:", run },
   { "RunWithDefaultCommandLine:hhiss:", run_with_default_command_line },
   { NULL, NULL },
 };
