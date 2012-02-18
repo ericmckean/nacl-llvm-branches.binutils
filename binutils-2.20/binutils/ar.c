@@ -574,6 +574,19 @@ ranlib_main (int argc, char **argv)
 	case 'V':
 	  show_version = 1;
 	  break;
+// @LOCALMOD-BEGIN
+// Fix for minor upstream bug: Handle --plugin properly in ranlib.
+// This code is copy & pasted from main().
+	case OPTION_PLUGIN:
+#if BFD_SUPPORTS_PLUGINS
+	  plugin_target = "plugin";
+	  bfd_plugin_set_plugin (optarg);
+#else
+	  fprintf (stderr, _("sorry - this program has been built without plugin support\n"));
+	  xexit (1);
+#endif
+// @LOCALMOD-END
+	  break;
         }
     }
 

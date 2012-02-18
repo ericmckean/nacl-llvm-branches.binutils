@@ -91,7 +91,7 @@ extern char *strrchr ();
 #endif
 
 #ifdef HAVE_DLFCN_H
-#include <dlfcn.h>
+#include <dlwrap.h> // @LOCALMOD
 #endif
 
 #ifndef O_RDONLY
