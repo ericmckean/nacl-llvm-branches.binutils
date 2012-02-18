@@ -30,7 +30,7 @@
 #include <set> // @LOCALMOD
 
 #ifdef ENABLE_PLUGINS
-#include <dlfcn.h>
+#include <dlwrap.h>   // @LOCALMOD
 #endif
 
 #include "parameters.h"
