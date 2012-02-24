@@ -853,7 +853,8 @@ static char **GetDefaultCommandLine(int is_shared_library,
   if (is_static_exe) {
     NACL_ADD_ARG("libgcc_eh.a");
   } else {
-    NACL_ADD_ARG("libgcc_s.so");
+    /* Resolve the symlink from libgcc_s -> this ourselves. */
+    NACL_ADD_ARG("libgcc_s.so.1");
   }
   NACL_ADD_ARG("libgcc.a");
   if (is_static_exe)
