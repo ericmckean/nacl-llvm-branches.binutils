@@ -266,8 +266,8 @@ class Plugin_manager
   { return this->in_replacement_phase_; }
 
   // @LOCALMOD-BEGIN
-  const char *get_soname() const {
-    return soname_.c_str();
+  const char *get_output_soname() const {
+    return output_soname_.c_str();
   }
 
   const char *get_needed(unsigned int index) const {
@@ -378,7 +378,7 @@ class Plugin_manager
 
   // @LOCALMOD-BEGIN
   // These are computed in all_symbols_read().
-  std::string soname_; // soname of the linker output
+  std::string output_soname_; // soname of the linker output
   std::vector<std::string> needed_; // List of needed dynamic libraries
   std::vector<std::string> wrapped_; // List of wrapped symbols
   // @LOCALMOD-END
@@ -433,6 +433,15 @@ class Pluginobj : public Object
   filesize()
   { return this->filesize_; }
 
+  // @LOCALMOD-BEGIN
+  // The soname of this shared object.
+  const char *soname() const
+  { return this->soname_.c_str(); }
+
+  void set_soname(const char *soname)
+  { this->soname_.assign(soname); }
+  // @LOCALMOD-END
+
  protected:
   // Return TRUE if this is an object claimed by a plugin.
   virtual Pluginobj*
@@ -455,6 +464,8 @@ class Pluginobj : public Object
   // group in this object with that key should be kept.
   typedef Unordered_map<std::string, bool> Comdat_map;
   Comdat_map comdat_map_;
+
+  std::string soname_; // @LOCALMOD
 };
 
 // A plugin object, size-specific version.

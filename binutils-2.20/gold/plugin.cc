@@ -66,7 +66,7 @@ register_cleanup(ld_plugin_cleanup_handler handler);
 
 static enum ld_plugin_status
 add_symbols(void *handle, int nsyms, const struct ld_plugin_symbol *syms,
-            int is_shared); // @LOCALMOD
+            int is_shared, const char *soname); // @LOCALMOD
 
 static enum ld_plugin_status
 get_input_file(const void *handle, struct ld_plugin_input_file *file);
@@ -79,7 +79,7 @@ release_input_file(const void *handle);
 
 // @LOCALMOD-BEGIN
 static const char*
-get_soname(void);
+get_output_soname(void);
 
 static const char*
 get_needed(unsigned int index);
@@ -226,8 +226,8 @@ Plugin::load()
 
   // @LOCALMOD-BEGIN
   ++i;
-  tv[i].tv_tag = LDPT_GET_SONAME;
-  tv[i].tv_u.tv_get_soname = get_soname;
+  tv[i].tv_tag = LDPT_GET_OUTPUT_SONAME;
+  tv[i].tv_u.tv_get_output_soname = get_output_soname;
 
   ++i;
   tv[i].tv_tag = LDPT_GET_NEEDED;
@@ -469,9 +469,9 @@ Plugin_manager::all_symbols_read(Workqueue* workqueue, Task* task,
   }
 
   if (parameters->options().soname())
-    this->soname_ = parameters->options().soname();
+    this->output_soname_ = parameters->options().soname();
   else
-    this->soname_ = "";
+    this->output_soname_ = "";
 
   // This ignores the --as-needed directive and simply lists
   // every dynamic object in the link. To do this correctly requires
@@ -848,10 +848,14 @@ Pluginobj::get_symbol_resolution_info(int nsyms, ld_plugin_symbol* syms) const
             res = (is_visible_from_outside(lsym)
                    ? LDPR_PREVAILING_DEF
                    : LDPR_PREVAILING_DEF_IRONLY);
-          else if (lsym->object()->pluginobj() != NULL)
-            res = LDPR_RESOLVED_IR;
+          // @LOCALMOD-BEGIN
+          // Place the is_dynamic() case first, so that symbols found
+          // in a dynamic pluginobj are marked LDPR_RESOLVED_DYN.
           else if (lsym->object()->is_dynamic())
             res = LDPR_RESOLVED_DYN;
+          else if (lsym->object()->pluginobj() != NULL)
+            res = LDPR_RESOLVED_IR;
+          // @LOCALMOD-END
           else
             res = LDPR_RESOLVED_EXEC;
         }
@@ -870,6 +874,23 @@ Pluginobj::get_symbol_resolution_info(int nsyms, ld_plugin_symbol* syms) const
                    : LDPR_PREEMPTED_REG);
         }
       isym->resolution = res;
+      // @LOCALMOD-BEGIN
+      // Set the resolved symbol version and source file soname.
+      isym->version = const_cast<char*>(lsym->version());
+      if (lsym->version())
+        isym->is_default = lsym->is_default() ? 1 : 0;
+      else
+        isym->is_default = 0;
+      isym->dynfile = NULL;
+      if (res == LDPR_RESOLVED_DYN) {
+        if (lsym->object()->dynobj())
+          isym->dynfile = lsym->object()->dynobj()->soname();
+        else if (lsym->object()->pluginobj())
+          isym->dynfile = lsym->object()->pluginobj()->soname();
+        else
+          gold_error(_("Unknown dynamic object type in plugin"));
+      }
+      // @LOCALMOD-END
     }
   return LDPS_OK;
 }
@@ -925,6 +946,32 @@ Sized_pluginobj<size, big_endian>::do_layout(Symbol_table*, Layout*,
   gold_unreachable();
 }
 
+// @LOCALMOD-BEGIN
+// Look up "ver" in the version map. If it already exists, return its index.
+// If not, create an entry for it, and return the new entry's index.
+// If ver is NULL, instead return one of the reserved indexes representing
+// an unversioned symbol. (VER_NDX_LOCAL or VER_NDX_GLOBAL)
+static elfcpp::Elf_Half GetOrCreateMapIndex(
+    std::vector<const char*> *version_map,
+    const char *ver, bool isUndef)
+{
+  // Handle unversioned symbol.
+  if (ver == NULL)
+    return isUndef ? elfcpp::VER_NDX_LOCAL : elfcpp::VER_NDX_GLOBAL;
+
+  // Search for an existing entry for this version
+  elfcpp::Elf_Half idx;
+  for (idx = 0; idx < version_map->size(); ++idx)
+  {
+    if (strcmp((*version_map)[idx], ver) == 0)
+      return idx;
+  }
+  // Create a new entry
+  version_map->push_back(ver);
+  return idx;
+}
+// @LOCALMOD-END
+
 // Add the symbols to the symbol table.
 
 template<int size, bool big_endian>
@@ -949,14 +996,27 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
   int sym_names_size = 0;
   int sym_names_index = 0;
   int symdata_index = 0;
+  // versym: List of symbol version indexes (2 bytes per entry)
+  // (equivalent to contents of .gnu.version)
+  // This assumes little-endian ELF.
+  elfcpp::Elf_Half *versym;
+  // Size of versym in bytes
+  size_t versym_size;
+  // version_map: Map the version index to the version name.
+  std::vector<const char*> version_map;
   if (this->is_dynamic())
     {
       for (int i = 0; i < this->nsyms_; ++i)
         sym_names_size += strlen(this->syms_[i].name) + 1;
       symdata = new unsigned char[this->nsyms_ * sym_size];
       sym_names = new char[sym_names_size];
-      if (!symdata || !sym_names)
+      versym_size = sizeof(elfcpp::Elf_Half)*this->nsyms_;
+      versym = new elfcpp::Elf_Half[this->nsyms_];
+      if (!symdata || !sym_names || !versym)
         gold_error(_("buffer allocation failed in plugin"));
+      // The first two entries of the version-map are reserved.
+      version_map.push_back("VER_NDX_LOCAL");
+      version_map.push_back("VER_NDX_GLOBAL");
     }
   // @LOCALMOD-END
 
@@ -964,7 +1024,9 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
     {
       const struct ld_plugin_symbol* isym = &this->syms_[i];
       const char* name = isym->name;
+      size_t namelen; // @LOCALMOD
       const char* ver = isym->version;
+      bool is_default_version = false; // @LOCALMOD
       elfcpp::Elf_Half shndx;
       elfcpp::STB bind;
       elfcpp::STV vis;
@@ -973,6 +1035,26 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
         name = NULL;
       if (ver != NULL && ver[0] == '\0')
         ver = NULL;
+
+      // @LOCALMOD-BEGIN
+      // Set the version and hidden-bit from the name.
+      // Name has the form sym@VER or sym@@VER.
+      ver = strchr(name, '@');
+      if (ver)
+        {
+          namelen = ver - name;
+          ++ver;
+          if (ver[0] == '@')
+            {
+              is_default_version = true;
+              ++ver;
+            }
+        }
+      else
+        {
+          namelen = strlen(name);
+        }
+      // @LOCALMOD-END
 
       switch (isym->def)
         {
@@ -1037,10 +1119,14 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
           osym.put_st_shndx(shndx);
 
           this->symbols_[i] =
-            symtab->add_from_pluginobj<size, big_endian>(this, name, ver, &sym);
+            symtab->add_from_pluginobj<size, big_endian>(this, name, namelen,
+                                                         ver,
+                                                         is_default_version,
+                                                         &sym);
         }
       else
         {
+          // Create a mock ELF symbol entry for this symbol.
           elfcpp::Sym_write<size, big_endian> dsym(symdata + symdata_index);
           dsym.put_st_name(sym_names_index);
           dsym.put_st_value(0);
@@ -1049,9 +1135,18 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
           dsym.put_st_info(bind, elfcpp::STT_NOTYPE);
           dsym.put_st_other(vis, 0);
           dsym.put_st_shndx(shndx);
-          strcpy(&sym_names[sym_names_index], name);
-          sym_names_index += strlen(name) + 1;
+
+          // Setup string table entry for this symbol
+          strncpy(&sym_names[sym_names_index], name, namelen);
+          sym_names[sym_names_index + namelen] = '\0';
+          sym_names_index += namelen + 1;
           symdata_index += sym_size;
+
+          // Setup versym entry for this symbol
+          versym[i] = GetOrCreateMapIndex(&version_map, ver,
+                                          shndx == elfcpp::SHN_UNDEF);
+          if (!is_default_version)
+            versym[i] |= elfcpp::VERSYM_HIDDEN;
         }
       // @LOCALMOD-END
     }
@@ -1059,13 +1154,18 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
   // @LOCALMOD-BEGIN
   if (this->is_dynamic()) {
     size_t defined;
-    // TODO(pdox): Handle symbol versions.
+    // NOTE: The strings in version_map are copied by add_from_dynobj().
+    // It does not retain pointers, which is good, because these strings
+    // are owned by the caller (and ultimately, the plugin).
     symtab->add_from_dynobj<size, big_endian>(this, symdata, this->nsyms_,
                                               sym_names, sym_names_size,
-                                              NULL, 0, NULL, &this->symbols_,
+                                              (unsigned char*)versym,
+                                              versym_size, &version_map,
+                                              &this->symbols_,
                                               &defined);
     delete [] symdata;
     delete [] sym_names;
+    delete [] versym;
   }
   // @LOCALMOD-END
 
@@ -1430,7 +1530,7 @@ register_cleanup(ld_plugin_cleanup_handler handler)
 
 static enum ld_plugin_status
 add_symbols(void* handle, int nsyms, const ld_plugin_symbol* syms,
-            int is_shared) // @LOCALMOD
+            int is_shared, const char *soname) // @LOCALMOD
 {
   gold_assert(parameters->options().has_plugins());
   Pluginobj* obj = parameters->options().plugins()->make_plugin_object(
@@ -1439,6 +1539,11 @@ add_symbols(void* handle, int nsyms, const ld_plugin_symbol* syms,
   if (obj == NULL)
     return LDPS_ERR;
   obj->store_incoming_symbols(nsyms, syms);
+  // @LOCALMOD-BEGIN
+  if (is_shared && soname) {
+    obj->set_soname(soname);
+  }
+  // @LOCALMOD-END
   return LDPS_OK;
 }
 
@@ -1517,10 +1622,10 @@ set_extra_library_path(const char* path)
 
 // @LOCALMOD-BEGIN
 static const char *
-get_soname(void)
+get_output_soname(void)
 {
   gold_assert(parameters->options().has_plugins());
-  return parameters->options().plugins()->get_soname();
+  return parameters->options().plugins()->get_output_soname();
 }
 
 static const char *

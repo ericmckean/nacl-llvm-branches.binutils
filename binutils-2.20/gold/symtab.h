@@ -1322,7 +1322,8 @@ class Symbol_table
   template<int size, bool big_endian>
   Symbol*
   add_from_pluginobj(Sized_pluginobj<size, big_endian>* obj,
-                     const char* name, const char* ver,
+                     const char* name, size_t namelen, // @LOCALMOD
+                     const char* ver, bool is_default_version, // @LOCALMOD
                      elfcpp::Sym<size, big_endian>* sym);
 
   // Add COUNT dynamic symbols from the dynamic object DYNOBJ to the

@@ -91,6 +91,11 @@ struct ld_plugin_symbol
   uint64_t size;
   char *comdat_key;
   int resolution;
+  // @LOCALMOD-BEGIN
+  char const *dynfile; /* For LDPR_RESOLVED_DYN, this is set to the
+                          soname of the file providing this symbol */
+  int is_default;      /* Is this the default version of this symbol? */
+  // @LOCALMOD-END
 };
 
 /* Whether the symbol is a definition, reference, or common, weak or not.  */
@@ -194,7 +199,7 @@ typedef
 enum ld_plugin_status
 (*ld_plugin_add_symbols) (void *handle, int nsyms,
                           const struct ld_plugin_symbol *syms,
-                          int is_shared); // @LOCALMOD
+                          int is_shared, const char *soname); // @LOCALMOD
 
 // @LOCALMOD-BEGIN
 
@@ -202,7 +207,7 @@ enum ld_plugin_status
 
 typedef
 const char *
-(*ld_plugin_get_soname) (void);
+(*ld_plugin_get_output_soname) (void);
 
 /* The linker's interface for getting the i'th needed
  * soname of the link output.
@@ -307,7 +312,7 @@ enum ld_plugin_tag
   LDPT_ADD_SYMBOLS,
   LDPT_GET_SYMBOLS,
   // @LOCALMOD-BEGIN
-  LDPT_GET_SONAME,
+  LDPT_GET_OUTPUT_SONAME,
   LDPT_GET_NEEDED,
   LDPT_GET_NUM_NEEDED,
   LDPT_GET_WRAPPED,
@@ -339,7 +344,7 @@ struct ld_plugin_tv
     ld_plugin_add_symbols tv_add_symbols;
     ld_plugin_get_symbols tv_get_symbols;
     // @LOCALMOD-BEGIN
-    ld_plugin_get_soname tv_get_soname;
+    ld_plugin_get_output_soname tv_get_output_soname;
     ld_plugin_get_needed tv_get_needed;
     ld_plugin_get_num_needed tv_get_num_needed;
     ld_plugin_get_wrapped tv_get_wrapped;

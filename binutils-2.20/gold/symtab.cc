@@ -1234,14 +1234,15 @@ Symbol*
 Symbol_table::add_from_pluginobj(
     Sized_pluginobj<size, big_endian>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD
     const char* ver,
+    bool is_default_version, // @LOCALMOD
     elfcpp::Sym<size, big_endian>* sym)
 {
   unsigned int st_shndx = sym->get_st_shndx();
   bool is_ordinary = st_shndx < elfcpp::SHN_LORESERVE;
 
   Stringpool::Key ver_key = 0;
-  bool is_default_version = false;
   bool is_forced_local = false;
 
   if (ver != NULL)
@@ -1278,7 +1279,12 @@ Symbol_table::add_from_pluginobj(
     }
 
   Stringpool::Key name_key;
-  name = this->namepool_.add(name, true, &name_key);
+  // @LOCALMOD-BEGIN
+  // Modified to use explicit name length, so that we can chop off
+  // the version suffix.
+  name = this->namepool_.add_with_length(name, namelen, true,
+                                         &name_key);
+  // @LOCALMOD-END
 
   Sized_symbol<size>* res;
   res = this->add_from_object(obj, name, name_key, ver, ver_key,
@@ -3385,7 +3391,9 @@ Symbol*
 Symbol_table::add_from_pluginobj<32, false>(
     Sized_pluginobj<32, false>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD
     const char* ver,
+    bool is_default_version, // @LOCALMOD
     elfcpp::Sym<32, false>* sym);
 #endif
 
@@ -3395,7 +3403,9 @@ Symbol*
 Symbol_table::add_from_pluginobj<32, true>(
     Sized_pluginobj<32, true>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD
     const char* ver,
+    bool is_default_version, // @LOCALMOD
     elfcpp::Sym<32, true>* sym);
 #endif
 
@@ -3405,7 +3415,9 @@ Symbol*
 Symbol_table::add_from_pluginobj<64, false>(
     Sized_pluginobj<64, false>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD
     const char* ver,
+    bool is_default_version, // @LOCALMOD
     elfcpp::Sym<64, false>* sym);
 #endif
 
@@ -3415,7 +3427,9 @@ Symbol*
 Symbol_table::add_from_pluginobj<64, true>(
     Sized_pluginobj<64, true>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD
     const char* ver,
+    bool is_default_version, // @LOCALMOD
     elfcpp::Sym<64, true>* sym);
 #endif
 
