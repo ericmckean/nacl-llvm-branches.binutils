@@ -37,7 +37,7 @@
 #include "ldmain.h"
 #include "libiberty.h"
 
-#include "nacl_file_hooks.h" /* @LOCALMOD hijack fopen, etc. */
+#include "../bfd/nacl_file_hooks.h" /* @LOCALMOD hijack fopen, etc. */
 
 /* The type of top-level parser input.
    yylex and yyparse (indirectly) both check this.  */

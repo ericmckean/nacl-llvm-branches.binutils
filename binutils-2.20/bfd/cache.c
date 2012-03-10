@@ -50,7 +50,7 @@ SUBSECTION
 #include <sys/mman.h>
 #endif
 
-#include "../ld/nacl_file_hooks.h"  /* @LOCALMOD hijack fopen, etc. */
+#include "nacl_file_hooks.h"  /* @LOCALMOD hijack fopen, etc. */
 
 /* In some cases we can optimize cache operation when reopening files.
    For instance, a flush is entirely unnecessary if the file is already

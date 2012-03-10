@@ -50,7 +50,8 @@
 #include "libbfd.h"
 #endif /* ENABLE_PLUGINS */
 
-#include "nacl_file_hooks.h" /* @LOCALMOD hijack fopen, etc. */
+#include "../bfd/nacl_file_hooks.h" /* @LOCALMOD hijack fopen, etc. */
+extern int NACL_FILE_ENABLED;
 
 /* Somewhere above, sys/stat.h got included.  */
 #if !defined(S_ISDIR) && defined(S_IFDIR)
@@ -603,12 +604,55 @@ ldmain (int argc, char **argv)
   return 0;
 }
 
+/* Join two argc/argv lists. Allocates new memory. */
+static void JoinArgs(size_t argc1,     char **argv1,
+                     size_t argc2,     char **argv2,
+                     size_t *argc_out, char ***argv_out) {
+  size_t new_argc = argc1 + argc2;
+  char **new_argv = (char**)malloc(sizeof(char*)*new_argc);
+  int i;
+  for (i = 0; i < argc1; i++)
+    new_argv[i] = argv1[i];
+  for (i = 0; i < argc2; i++)
+    new_argv[argc1 + i] = argv2[i];
+  *argc_out = new_argc;
+  *argv_out = new_argv;
+}
+
+// This is used by both main() and the SRPC invocation.
+static int DoLink(size_t argc, char **argv) {
+  int ret;
+
+  // The last two arguments may specify a metadata file.
+  if (argc > 2 && strcmp(argv[argc-2], "--metadata") == 0) {
+    const char *metadata_filename = argv[argc-1];
+    char **sonames;
+    size_t soname_count;
+    int i;
+    // Remove these arguments so ldmain doesn't see them.
+    argv[--argc] = NULL;
+    argv[--argc] = NULL;
+    //
+    // For now, these are commented out to disable the metadata files from
+    // being seen by ld.
+    // TODO(pdox): Enable this feature when the ELF stubs are valid
+    // and nacl_file can handle normal file I/O.
+    //
+    //ExpandMetadataFile(metadata_filename, &sonames, &soname_count);
+    // Add the new files to the end of the command-line.
+    //JoinArgs(argc, argv, soname_count, sonames, &argc, &argv);
+  }
+  ret = ldmain(argc, argv);
+  return ret;
+}
+
 #if !defined(NACL_SRPC)
 int
 main (int argc, char **argv) {
-  int ret_code = ldmain(argc, argv);
-  xexit (0);
-  return ret_code;
+  // TODO(pdox): Enable this once nacl_file can handle it correctly.
+  NACL_FILE_ENABLED = 0;
+  int ret_code = DoLink(argc, argv);
+  xexit (ret_code);
 }
 #elif defined(__native_client__)
 
@@ -670,12 +714,6 @@ static char **CommandLineFromArgz(char *command_line_string,
   }
   argv[*argc] = NULL;
   return argv;
-}
-
-static int DoLink(size_t argc, char **argv) {
-  int ret;
-  ret = ldmain(argc, argv);
-  return ret;
 }
 
 /** Run the link. */
@@ -986,6 +1024,7 @@ const struct NaClSrpcHandlerDesc srpc_methods[] = {
 
 int
 main() {
+  NACL_FILE_ENABLED = 1;
   if (!NaClSrpcModuleInit()) {
     return 1;
   }

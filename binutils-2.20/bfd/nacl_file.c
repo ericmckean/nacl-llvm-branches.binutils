@@ -11,22 +11,40 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/mman.h>
+#ifdef NACL_SRPC
 #include <sys/nacl_syscalls.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdarg.h>
+
+#ifdef NACL_SRPC
 #include <nacl/nacl_srpc.h>
+#endif
 
 #define FILE_TO_NACLFILE(f) file_to_naclfile((f), __FUNCTION__)
 
 const int NACL_FILE_MAGIC = 0xfadefade;
 const int NACL_INITIAL_BUFFER_SIZE = (16 * 1024);
-#define NACL_MAX_FILES 128
+#define NACL_MAX_FILES    128
+#define NACL_MAX_SONAMES  128
 #define MMAP_PAGE_SIZE 64 * 1024
 #define MMAP_ROUND_MASK (MMAP_PAGE_SIZE - 1)
 
+/* This has to be enabled explicitly in ld. */
+int NACL_FILE_ENABLED = 0;
+
+/* These macros should be at the top of every nacl_* wrapper function.
+   If NACL_FILE_ENABLE is false, they will be invoked instead. */
+#define PASSTHROUGH_WITH_RETURN(_expr) \
+  if (!NACL_FILE_ENABLED) { return _expr; }
+
+#define PASSTHROUGH_VOID_RETURN(_statement) \
+  if (!NACL_FILE_ENABLED) { _statement; return; }
 
 int global_debug_level = 0;
 
@@ -82,6 +100,9 @@ static NACL_FILE* file_to_naclfile(FILE* stream, const char* function) {
 static void load_whole_file(NACL_FILE* nf) {
   FILE* fp;
   fp = fopen(nf->filename, nf->mode);
+  if (!fp) {
+    fatal("%s: file open failed\n", nf->filename);
+  }
   fseek(fp, 0, SEEK_END);
   nf->size = (size_t) ftell(fp);
   nf->alloc_size = nf->size;
@@ -124,12 +145,21 @@ static NACL_FILE* find_descriptor_by_name(const char* filename) {
 }
 
 extern int NaClLookupFileByName(const char* filename);
+
+/* Add a virtual read-only file backed by memory 'data' with size 'size' */
+void AddFileForReading(const char* filename,
+                       const char *data,
+                       int size);
+#ifdef NACL_SRPC
 int NaClMapFileForReading(const char* filename,
                           NaClSrpcImcDescType shmem_fd,
                           int size);
 int NaClLoadFileForReading(const char* filename, NaClSrpcImcDescType fd);
+#endif
 
 FILE* nacl_fopen(const char* filename, const char* mode) {
+  PASSTHROUGH_WITH_RETURN(fopen(filename, mode));
+
   debug(1, "@@nacl_fopen(%s,%s)\n", filename, mode);
 #if defined(NACL_SRPC)
   if (mode[0] == 'r') {
@@ -150,6 +180,19 @@ FILE* nacl_fopen(const char* filename, const char* mode) {
     return (FILE*)nf;
   }
 #endif
+
+  /* See if there is an existing file map for a read-only file.
+     e.g. from a file inside the metadata file. */
+  if (mode[0] == 'r') {
+    NACL_FILE* nf = find_descriptor_by_name(filename);
+    if (nf && nf->opened == 0) {
+      nf->pos = 0;
+      nf->opened = 1;
+      return nf;
+    }
+  }
+
+  /* If not, open it for real. */
   NACL_FILE* nf = find_unused_descriptor();
   nf->filename = strdup(filename);
   nf->mode = strdup(mode);
@@ -175,12 +218,74 @@ FILE* nacl_fopen(const char* filename, const char* mode) {
   return (FILE*)nf;
 }
 
+/* Keep this structure a multiple of 8-bytes
+   This must match the same structure in llc.cpp */
+typedef struct {
+  uint32_t magic;        /* NACL_FILE_MAGIC */
+  uint32_t size;         /* Size of this file */
+  char     filename[64]; /* Padded with nulls */
+} FileEntry;
+
+/* The metadata file is actually a set of files (like an archive) */
+/* This makes each individual file available by filename from nacl_fopen */
+/* And also emits a list of sonames (filenames) */
+void ExpandMetadataFile(const char *filename,
+                        char ***sonames_out,
+                        size_t *sonames_count_out) {
+  char **sonames;
+  size_t sonames_count;
+  debug(1, "@@ExpandMetadataFile(%s)\n", filename);
+  NACL_FILE* nf = FILE_TO_NACLFILE(nacl_fopen(filename, "r"));
+
+  sonames_count = 0;
+  sonames = (char**)malloc(sizeof(char*) * NACL_MAX_SONAMES);
+  if (!sonames)
+    fatal("allocation failed\n");
+
+  if (sizeof(FileEntry) % 8 != 0)
+    fatal("metadata data is not aligned");
+
+  const char *p = nf->data;
+  const char *endp = nf->data + nf->size;
+  while (p < endp) {
+    uint32_t offset_to_next;
+    const FileEntry *FE = (FileEntry*)p;
+    if (((uintptr_t)p) % 8 != 0)
+      fatal("metadata file pointer has become misaligned!\n");
+    if (FE->magic != NACL_FILE_MAGIC)
+      fatal("metadata file magic doesn't match\n");
+    char *data_start = p + sizeof(FileEntry);
+    if (data_start + FE->size > endp)
+      fatal("metadata file ended prematurely\n");
+    if (FE->filename[sizeof(FE->filename) - 1] != '\0')
+      fatal("metadata filename is not null-terminated");
+
+    AddFileForReading(FE->filename, data_start, FE->size);
+    /* This points inside the file data for the metadata file.
+       So it should survive the entire ld call. (unless the
+       NACL_FILE and associated data are freed) */
+    if (sonames_count >= NACL_MAX_SONAMES)
+      fatal("Exceeded NACL_MAX_SONAMES\n");
+    sonames[sonames_count++] = FE->filename;
+
+    /* Align up to 8-bytes. */
+    offset_to_next = sizeof(FileEntry) + FE->size;
+    offset_to_next = 8*((offset_to_next + 7)/8);
+    p += offset_to_next;
+  }
+  if (p != endp)
+    fatal("junk at the end of metadata file");
+  *sonames_out = sonames;
+  *sonames_count_out = sonames_count;
+}
 
 int nacl_fclose(FILE *stream) {
+  PASSTHROUGH_WITH_RETURN(fclose(stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
-  debug(1, "@@ fclose(%s) -> %d\n", nf->filename, nf->size);
+  debug(1, "@@ fclose(%s) -> %d (mode %s)\n", nf->filename, nf->size, nf->mode);
   if (nf->mode[0] == 'w') {
-#if defined(TEST_NACL_FILE_HOOKS)
+#if !defined(NACL_SRPC)
     save_whole_file(nf);
 #endif
   }
@@ -188,8 +293,9 @@ int nacl_fclose(FILE *stream) {
   return 0;
 }
 
-
 int nacl_ferror(FILE *stream) {
+  PASSTHROUGH_WITH_RETURN(ferror(stream));
+
   const NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ ferror(%s)\n", nf->filename);
   return nf->error;
@@ -197,6 +303,8 @@ int nacl_ferror(FILE *stream) {
 
 
 void nacl_clearerr(FILE *stream) {
+  PASSTHROUGH_VOID_RETURN(clearerr(stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ clearerr(%s)\n", nf->filename);
   nf->error = 0;
@@ -205,6 +313,8 @@ void nacl_clearerr(FILE *stream) {
 
 
 int nacl_feof(FILE *stream) {
+  PASSTHROUGH_WITH_RETURN(feof(stream));
+
   const NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ feof(%s)\n", nf->filename);
   return nf->eof;
@@ -212,6 +322,8 @@ int nacl_feof(FILE *stream) {
 
 
 void nacl_rewind(FILE *stream) {
+  PASSTHROUGH_VOID_RETURN(rewind(stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ rewind(%s)\n", nf->filename);
 
@@ -222,6 +334,8 @@ void nacl_rewind(FILE *stream) {
 
 
 size_t nacl_fread(void *ptr, size_t size, size_t nmemb, FILE* stream) {
+  PASSTHROUGH_WITH_RETURN(fread(ptr, size, nmemb, stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ fread(%s, %uz, %uz)\n", nf->filename, size, nmemb);
   size_t total_size = size * nmemb;
@@ -238,6 +352,8 @@ size_t nacl_fread(void *ptr, size_t size, size_t nmemb, FILE* stream) {
 
 
 size_t nacl_fwrite(void *ptr, size_t size, size_t nmemb, FILE* stream) {
+  PASSTHROUGH_WITH_RETURN(fwrite(ptr, size, nmemb, stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ fwrite(%s, %uz, %uz)\n", nf->filename, size, nmemb);
   const size_t total_size = size * nmemb;
@@ -263,6 +379,8 @@ size_t nacl_fwrite(void *ptr, size_t size, size_t nmemb, FILE* stream) {
 
 
 size_t nacl_ftell (FILE *stream) {
+  PASSTHROUGH_WITH_RETURN(ftell(stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ ftell(%s)\n", nf->filename);
   return nf->pos;
@@ -270,6 +388,8 @@ size_t nacl_ftell (FILE *stream) {
 
 
 int nacl_fseek (FILE* stream, long offset, int whence) {
+  PASSTHROUGH_WITH_RETURN(fseek(stream, offset, whence));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ fseek(%s, %ld, %d)\n", nf->filename, offset, whence);
   switch (whence) {
@@ -295,6 +415,8 @@ int nacl_fseek (FILE* stream, long offset, int whence) {
 
 
 int nacl_fgetc(FILE* stream) {
+  PASSTHROUGH_WITH_RETURN(fgetc(stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ fgetc(%s)\n", nf->filename);
   if (nf->pos >= nf->size) {
@@ -309,12 +431,12 @@ int nacl_fgetc(FILE* stream) {
 
 
 int nacl_fflush(FILE* stream) {
+  PASSTHROUGH_WITH_RETURN(fflush(stream));
+
   NACL_FILE* nf = FILE_TO_NACLFILE(stream);
   debug(1, "@@ fflush(%s)\n", nf->filename);
   return 0;
 }
-
-#if defined(NACL_SRPC)
 
 static NACL_FILE* find_nacl_read_file(const char* filename,
                                       size_t size) {
@@ -327,9 +449,20 @@ static NACL_FILE* find_nacl_read_file(const char* filename,
   nf->alloc_size = size;
   nf->pos = 0;
   nf->data = NULL;
+  nf->opened = 0;
   return nf;
 }
 
+/* Add a virtual read-only file backed by memory 'data' with size 'size' */
+void AddFileForReading(const char* filename,
+                       const char *data,
+                       int size) {
+  debug(1, "@@ AddFileForReading(%s, %p, %d)\n", filename, data, size);
+  NACL_FILE* nf = find_nacl_read_file(filename, size);
+  nf->data = (char*)data;
+}
+
+#ifdef NACL_SRPC
 int NaClMapFileForReading(const char* filename,
                           NaClSrpcImcDescType shmem_fd,
                           int size) {
@@ -339,7 +472,9 @@ int NaClMapFileForReading(const char* filename,
   nf->data = (char *) mmap(NULL, count_up, PROT_READ, MAP_SHARED, shmem_fd, 0);
   return 0;
 }
+#endif
 
+#ifdef NACL_SRPC
 int NaClLoadFileForReading(const char* filename, NaClSrpcImcDescType fd) {
   struct stat stb;
   size_t size;
@@ -354,8 +489,10 @@ int NaClLoadFileForReading(const char* filename, NaClSrpcImcDescType fd) {
   read(fd, nf->data, size);
   return 0;
 }
+#endif
 
-
+/* This doesn't seem to be used anymore. */
+#if 0
 int NaClMakeFileAvailableViaShmem(const char* filename,
                                   NaClSrpcImcDescType* shmem_fd,
                                   int32_t* size) {
@@ -383,7 +520,9 @@ int NaClMakeFileAvailableViaShmem(const char* filename,
   *size = nf->size;
   return 0;
 }
+#endif
 
+#ifdef NACL_SRPC
 int NaClFlushFileToFd(const char* filename, NaClSrpcImcDescType fd) {
   NACL_FILE* nf = find_descriptor_by_name(filename);
   if (nf == NULL) {
@@ -409,9 +548,8 @@ int NaClFlushFileToFd(const char* filename, NaClSrpcImcDescType fd) {
 
   return 0;
 }
+#endif
 
 void NaClSetFileDebugLevel(int level) {
   global_debug_level = level;
 }
-
-#endif

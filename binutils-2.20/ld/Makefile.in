@@ -91,11 +91,7 @@ am_ld_new_OBJECTS = ldgram.$(OBJEXT) ldlex-wrapper.$(OBJEXT) \
 	ldexp.$(OBJEXT) ldemul.$(OBJEXT) ldver.$(OBJEXT) \
 	ldmisc.$(OBJEXT) ldfile.$(OBJEXT) ldcref.$(OBJEXT) \
 	$(am__objects_1)
-ifeq ($(NACL_SRPC),1)
-ld_new_OBJECTS = $(am_ld_new_OBJECTS) nacl_file.$(OBJEXT)
-else
 ld_new_OBJECTS = $(am_ld_new_OBJECTS)
-endif
 am__DEPENDENCIES_1 =
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/../depcomp
@@ -853,7 +849,7 @@ EXTRA_ld_new_SOURCES = deffilep.y ldlex.l pep-dll.c pe-dll.c \
 ifeq ($(NACL_SRPC),1)
 ld_new_SOURCES = ldgram.y ldlex-wrapper.c lexsup.c ldlang.c mri.c ldctor.c \
         ldmain.c ldwrite.c ldexp.c ldemul.c ldver.c ldmisc.c ldfile.c \
-        ldcref.c nacl_file.c
+        ldcref.c
 else 
 ld_new_SOURCES = ldgram.y ldlex-wrapper.c lexsup.c ldlang.c mri.c ldctor.c \
         ldmain.c ldwrite.c ldexp.c ldemul.c ldver.c ldmisc.c ldfile.c ldcref.c $(PLUGIN_C)
