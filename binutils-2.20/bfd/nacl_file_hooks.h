@@ -3,15 +3,6 @@
  * found in the LICENSE file.
  */
 
-#if defined(__native_client__) && !defined(NACL_SRPC)
- /* In the non-SRPC case, we don't have fcntl but bfdio.c uses it under 
-    HAVE_FILENO instead of HAVE_FCNTL */
-#undef HAVE_FILENO
-#endif
-
-#if (defined(__native_client__) && defined(NACL_SRPC)) \
-    || defined(TEST_NACL_FILE_HOOKS)
-
 /*
  * Just to be safe: undefine some macros for undesirable code paths
  * mostly in bfd/bfdio.h
@@ -84,4 +75,3 @@ extern int nacl_ferror(FILE *stream);
 extern void nacl_rewind(FILE *stream);
 extern int nacl_fgetc(FILE *stream);
 extern int nacl_fflush(FILE *stream);
-#endif

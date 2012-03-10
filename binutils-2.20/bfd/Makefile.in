@@ -107,7 +107,7 @@ am__objects_1 = archive.lo archures.lo bfd.lo bfdio.lo bfdwin.lo \
 	opncls.lo reloc.lo section.lo syms.lo targets.lo hash.lo \
 	linker.lo srec.lo binary.lo tekhex.lo ihex.lo stabs.lo \
 	stab-syms.lo merge.lo dwarf2.lo simple.lo compress.lo \
-	verilog.lo
+	verilog.lo nacl_file.lo
 am_libbfd_la_OBJECTS = $(am__objects_1)
 libbfd_la_OBJECTS = $(am_libbfd_la_OBJECTS)
 libbfd_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -354,7 +354,7 @@ BFD32_LIBS = \
 	format.lo init.lo libbfd.lo opncls.lo reloc.lo \
 	section.lo syms.lo targets.lo hash.lo linker.lo \
 	srec.lo binary.lo tekhex.lo ihex.lo stabs.lo stab-syms.lo \
-	merge.lo dwarf2.lo simple.lo compress.lo verilog.lo
+	merge.lo dwarf2.lo simple.lo compress.lo verilog.lo nacl_file.lo
 
 BFD64_LIBS = archive64.lo
 BFD32_LIBS_CFILES = \
@@ -363,7 +363,7 @@ BFD32_LIBS_CFILES = \
 	format.c init.c libbfd.c opncls.c reloc.c \
 	section.c syms.c targets.c hash.c linker.c \
 	srec.c binary.c tekhex.c ihex.c stabs.c stab-syms.c \
-	merge.c dwarf2.c simple.c compress.c verilog.c
+	merge.c dwarf2.c simple.c compress.c verilog.c nacl_file.lo
 
 BFD64_LIBS_CFILES = archive64.c
 
@@ -1493,6 +1493,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vaxbsd.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vaxnetbsd.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/verilog.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nacl_file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/versados.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vms-alpha.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vms-lib.Plo@am__quote@
