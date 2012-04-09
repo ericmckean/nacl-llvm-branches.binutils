@@ -850,14 +850,14 @@ static char **GetDefaultCommandLine(int is_shared_library,
       nacl_fatal("Found a soname (%s) for non-shared libraries", soname);
   }
 
+  NACL_ADD_ARG("crtbegin%s.o", is_shared_library ? "S" : "");
+  NACL_ADD_ARG(kObjFilename);
+
   if (!is_shared_library &&
       __builtin_nacl_target_arch() == PnaclTargetArchitectureX86_64) {
     NACL_ADD_ARG("--entry=_pnacl_wrapper_start");
     NACL_ADD_ARG("libpnacl_irt_shim.a");
   }
-
-  NACL_ADD_ARG("crtbegin%s.o", is_shared_library ? "S" : "");
-  NACL_ADD_ARG(kObjFilename);
 
   if (is_static_exe)
     NACL_ADD_ARG("--start-group");
