@@ -801,6 +801,9 @@ is_visible_from_outside(Symbol* lsym)
 {
   if (lsym->in_real_elf())
     return true;
+  // @LOCALMOD: Also visible_from_outside if ref'ed in PSO.
+  if (lsym->needed_by_pso())
+    return true;
   if (parameters->options().relocatable())
     return true;
   if (parameters->options().is_undefined(lsym->name()))
