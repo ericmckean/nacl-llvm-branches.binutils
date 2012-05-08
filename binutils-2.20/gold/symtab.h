@@ -328,6 +328,18 @@ class Symbol
   set_in_real_elf()
   { this->in_real_elf_ = true; }
 
+  // @LOCALMOD-BEGIN
+  // Return whether this symbol has been seen in an external
+  // plugin dynamic object.
+  bool
+  needed_by_pso() const
+  { return this->needed_by_pso_; }
+
+  void
+  set_needed_by_pso()
+  { this->needed_by_pso_ = true; }
+  // @LOCALMOD-END
+
   // Return whether this symbol was defined in a section that was
   // discarded from the link.  This is used to control some error
   // reporting.
@@ -992,6 +1004,9 @@ class Symbol
   // True if this symbol was a weak undef resolved by a dynamic def
   // (bit 33).
   bool undef_binding_weak_ : 1;
+  // @LOCALMOD
+  // True if we've seen this symbol in an external plugin dyn obj (bit 34).
+  bool needed_by_pso_ : 1;
 };
 
 // The parts of a symbol which are size specific.  Using a template
