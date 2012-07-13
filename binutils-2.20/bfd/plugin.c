@@ -25,7 +25,7 @@
 #if BFD_SUPPORTS_PLUGINS
 
 #include <assert.h>
-#include <dlwrap.h> // @LOCALMOD
+#include <dlfcn.h>
 #include <stdarg.h>
 #include "plugin-api.h"
 #include "sysdep.h"
